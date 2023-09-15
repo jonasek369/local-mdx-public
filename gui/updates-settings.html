@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Updates Settings</title>
+    <style>
+        .button {
+          display: inline-block;
+          padding: 8px 16px;
+          font-size: 14px;
+          font-weight: bold;
+          text-decoration: none;
+          background-color: #4CAF50;
+          color: #fff;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+        }
+        
+        .button:hover {
+          background-color: #45a049;
+        }
+        
+        .button:active {
+          background-color: #3e8e41;
+        }
+
+    </style>
+</head>
+    <body>
+        <button class="button" onClick="window.location.href='/updates';">Back</button>
+        <div class="updates" id="updates">
+
+        </div>
+
+
+        <script>
+          window.token = '{{ token }}';
+
+          function getMethods(obj) {
+            var result = [];
+            for (var id in obj) {
+              try {
+                if (typeof(obj[id]) == "function") {
+                  result.push(id + ": " + obj[id].toString());
+                }
+              } catch (err) {
+                result.push(id + ": inaccessible");
+              }
+            }
+            return result;
+          }
+
+          // From https://gist.github.com/dharmavir/936328
+          function getHttpRequestObject() {
+            // Define and initialize as false
+            var xmlHttpRequst = false;
+
+            // Mozilla/Safari/Non-IE
+            if (window.XMLHttpRequest) {
+              xmlHttpRequst = new XMLHttpRequest();
+            }
+            // IE
+            else if (window.ActiveXObject) {
+              xmlHttpRequst = new ActiveXObject("Microsoft.XMLHTTP");
+            }
+            return xmlHttpRequst;
+          }
+
+          // Does the AJAX call to URL specific with rest of the parameters
+          function doAjax(url, method, responseHandler, data) {
+            // Set the variables
+            url = url || "";
+            method = method || "GET";
+            async = true;
+            data = data || {};
+            data.token = window.token;
+
+            if (url == "") {
+              alert("URL can not be null/blank");
+              return false;
+            }
+            var xmlHttpRequest = getHttpRequestObject();
+
+            // If AJAX supported
+            if (xmlHttpRequest != false) {
+              xmlHttpRequest.open(method, url, async);
+              // Set request header (optional if GET method is used)
+              if (method == "POST") {
+                xmlHttpRequest.setRequestHeader("Content-Type", "application/json");
+              }
+              // Assign (or define) response-handler/callback when ReadyState is changed.
+              xmlHttpRequest.onreadystatechange = responseHandler;
+              // Send data
+              xmlHttpRequest.send(JSON.stringify(data));
+            } else {
+              alert("Please use browser with Ajax support.!");
+            }
+          }
+          
+
+          document.getElementsByClassName("manga-card").forEach((t) => {
+              var element = document.getElementById("test");
+              element.
+          });
+      </script>
+    </body>
+</html>

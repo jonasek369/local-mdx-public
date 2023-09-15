@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ name }}</title>
+    <style>
+	body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+    }
+
+    .container {
+      position: relative;
+      height: auto;
+      overflow: hidden;
+    }
+
+    .background-image {
+		position: absolute;
+      	top: 50%;
+      	left: 50%;
+      	transform: translate(-50%, -50%);
+      	width: 120%;
+      	height: 150%;
+      	background-image: url(data:image/jpeg;base64,{{coverart}});
+      	background-size: cover;
+      	filter: blur(5px);
+    }
+
+    .content {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
+      padding: 20px;
+      color: #fff;
+    }
+
+    .logo {
+		display: flex;
+      width: 200px;
+      height: 200px;
+      background-image: url(data:image/jpeg;base64,{{coverart}});
+      background-size: contain;
+      background-repeat: no-repeat;
+	  background-position: center;
+	  align-items:center;
+      margin-bottom: 20px;
+	  filter: drop-shadow(0px 0px 20px black);
+	}
+
+
+    .manga-name {
+      font-size: 48px;
+      text-align: center;
+      margin-bottom: 20px;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+    }
+
+	.manga-description {
+      font-size: 24px;
+      text-align: center;
+      margin-bottom: 20px;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+    }
+
+	.button {
+      display: inline-block;
+      padding: 8px 16px;
+      font-size: 14px;
+      font-weight: bold;
+      text-decoration: none;
+      background-color: #4CAF50;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .button:hover {
+      background-color: #45a049;
+    }
+
+    .button:active {
+      background-color: #3e8e41;
+    }
+
+	.image-container {
+  	  max-width: 500px; /* Set the maximum width you want for the image */
+  	  max-height: 300px; /* Set the maximum height you want for the image */
+  	  overflow: hidden; /* Hide any overflowing parts of the image */
+  	}
+
+  	.image-container img {
+  	  width: 100%; /* Make the image occupy 100% of the container's width */
+  	  height: auto; /* Automatically adjust the height to maintain the image's aspect ratio */
+  	  object-fit: contain; /* Maintain the aspect ratio while fitting the image within the container */
+  	}
+
+
+    .additional-button {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      padding: 10px;
+      background-color: rgba(0, 0, 0, 0.5);
+      color: #fff;
+      font-size: 14px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+	.chapters {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .chapters a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  width: 250px;
+  height: 50px;
+  margin-top: 10px;
+  color: #333333;
+  text-decoration: none;
+  background-color: #f2f2f2;
+  border: 2px solid #999999;
+  font-size: 20px;
+  font-weight: bold;
+  font-family: sans-serif;
+}
+
+.chapters a:hover {
+  background-color: #dcdcdc;
+  color: #000000;
+}
+
+.chapters a.read {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  width: 250px;
+  height: 50px;
+  margin-top: 10px;
+  color: #333333;
+  text-decoration: none;
+  background-color: #aaaaaa;
+  border: 2px solid #6e6e6e;
+  font-size: 20px;
+  font-weight: bold;
+  font-family: sans-serif;
+}
+
+.chapters a.read:hover {
+  background-color: #505050;
+  color: #000000;
+}
+
+.chapters a:hover {
+  background-color: #dcdcdc;
+  color: #000000;
+}
+
+.warning-box {
+    display: none;
+    border: 2px solid #ff9900;
+    background-color: #ffeecc;
+    padding: 10px;
+    border-radius: 5px;
+    width: 300px;
+    text-align: center;
+    margin: 20px auto;
+  }
+
+  .warning-text {
+    color: #ff9900;
+    font-weight: bold;
+  }
+		
+    </style>
+</head>
+<body>
+	<div class="container">
+		<div class="background-image"></div>
+		<div class="content">
+			<button class="additional-button" onClick="window.location.href='{{ back_redirect }}';">Back</button>
+		  	<div class="logo"></div>
+		  	<div class="manga-name">{{ name }}</div>
+		  	<div class="manga-description">{{ description }}</div>
+		  	<button type="button" onclick="push_job()" class="button">Push manga to download as job</button>
+		</div>
+	</div>
+	<br>
+	<div class="warning-box" id="warningBox">
+	</div>
+	<button class="button" id="order" onclick="reverse_div()">Descending</button>
+    <div id="content" class="chapters"></div>
+
+    <script>
+        window.token = '{{ token }}';
+        var ran = false;
+		var user_data = null;
+
+		var update_timeout = null;
+		var generated_buttons = false;
+
+        function getMethods(obj) {
+        	var result = [];
+        	for (var id in obj) {
+        		try {
+        			if (typeof(obj[id]) == "function") {
+        				result.push(id + ": " + obj[id].toString());
+        			}
+        		} catch (err) {
+        			result.push(id + ": inaccessible");
+        		}
+        	}
+        	return result;
+        }
+
+        // From https://gist.github.com/dharmavir/936328
+        function getHttpRequestObject() {
+        	// Define and initialize as false
+        	var xmlHttpRequst = false;
+
+        	// Mozilla/Safari/Non-IE
+        	if (window.XMLHttpRequest) {
+        		xmlHttpRequst = new XMLHttpRequest();
+        	}
+        	// IE
+        	else if (window.ActiveXObject) {
+        		xmlHttpRequst = new ActiveXObject("Microsoft.XMLHTTP");
+        	}
+        	return xmlHttpRequst;
+        }
+
+        // Does the AJAX call to URL specific with rest of the parameters
+        function doAjax(url, method, responseHandler, data) {
+        	// Set the variables
+        	url = url || "";
+        	method = method || "GET";
+        	async = true;
+        	data = data || {};
+        	data.token = window.token;
+
+        	if (url == "") {
+        		alert("URL can not be null/blank");
+        		return false;
+        	}
+        	var xmlHttpRequest = getHttpRequestObject();
+
+        	// If AJAX supported
+        	if (xmlHttpRequest != false) {
+        		xmlHttpRequest.open(method, url, async);
+        		// Set request header (optional if GET method is used)
+        		if (method == "POST") {
+        			xmlHttpRequest.setRequestHeader("Content-Type", "application/json");
+        		}
+        		// Assign (or define) response-handler/callback when ReadyState is changed.
+        		xmlHttpRequest.onreadystatechange = responseHandler;
+        		// Send data
+        		xmlHttpRequest.send(JSON.stringify(data));
+        	} else {
+        		alert("Please use browser with Ajax support.!");
+        	}
+        }
+		
+		function sortVolumesDescending(dictionary) {
+		  // Convert the dictionary into an array of objects
+		  const array = Object.entries(dictionary).map(([id, value]) => ({
+		    id: id,
+		    ...value
+		  }));
+	  
+		  // Sort the array in descending order based on volumes and chapters
+		  array.sort((a, b) => {
+		    if (a.volume === b.volume) {
+		      const chapterA = parseFloat(a.chapter);
+		      const chapterB = parseFloat(b.chapter);
+		      return chapterB - chapterA; // Sort chapters in descending order if volumes are the same
+		    } else {
+		      return b.volume - a.volume; // Sort volumes in descending order
+		    }
+		  });
+	  
+		  return array;
+		}
+
+        function get_manga_data() {
+        	var muuid = "{{ muuid }}";
+            doAjax("/manga/"+muuid+"/info", "GET", get_manga_data_handler);
+        }
+
+	    function get_manga_data_handler(response)
+	    {
+	        if(ran)
+	        {
+	            return
+	        }
+	    	if (this.responseText) {
+                var jsonData = JSON.parse(this.responseText);
+
+                if(jsonData.warning !== null){
+                	var message = "";
+					if(jsonData.warning == "NO_CONNECTION"){
+						message = "Connection could not be established. It was either refused or your internet connection is down. Could not load chapter and volume numbers (using cahce as fallback)";
+					}
+
+					var wb = document.getElementById("warningBox");
+
+					var warn_warn = document.createElement("p");
+					warn_warn.className = "warning-text";
+					warn_warn.innerText = "Warning!";
+					wb.appendChild(warn_warn);
+
+					var warn_text = document.createElement("p");
+					warn_text.className = "warning-text-custom";
+					warn_text.innerText = message;
+					wb.appendChild(warn_text);
+
+  					// Update warning message
+  					warn_text.textContent = message;
+
+  					// Show the warning box
+  					wb.style.display = "block";
+                }
+
+				var contdiv = document.getElementById("content");
+
+				var sortedChapter = sortVolumesDescending(jsonData.chapters);
+
+				sortedChapter.forEach((chapter) => {
+  					var a = document.createElement("a");
+
+  					// Customize the text content and style of the link
+  					a.textContent = "Volume " + chapter.volume + " Chapter " + chapter.chapter;
+					if(
+						user_data !== null &&
+						"read_manga" in user_data &&
+						"{{ muuid }}" in user_data.read_manga &&
+						 user_data["read_manga"]["{{ muuid }}"].indexOf(chapter.id) != -1
+					){
+						// add css class to differenciate
+						a.className="read";
+					}
+					a.addEventListener('contextmenu', function(ev) {
+					    ev.preventDefault();
+					    doAjax("/read-status/{{ muuid }}/"+chapter.id, "GET", function(e){
+							document.location.href="/manga/{{muuid}}"
+						});
+					    return false;
+					}, false);
+
+  					// Set the link's href attribute
+  					a.setAttribute('href', "/read/" + chapter.id);
+
+  					// Append the link and line break to the container div
+  					contdiv.appendChild(a);
+				});
+				
+
+                ran = true;
+	    	}
+	    }
+
+		function push_job()
+		{
+			doAjax("/manga/download/push-job", "POST", null, {"id": "{{ muuid }}"});
+		}
+
+		function reverse_div()
+		{
+			const orderButton = document.getElementById("order");
+			const contdiv = document.getElementById("content");
+
+
+			if (contdiv.childNodes.length !== 0) {
+				const firstElement = contdiv.firstChild;
+				const ElementText = firstElement.textContent;
+				if(firstElement.textContent.includes("Volume")){
+					if (parseInt(ElementText.slice(7, 8)) <= 1)
+					{
+						orderButton.innerHTML = "Descending";
+					}else{
+						orderButton.innerHTML = "Ascending";
+					}
+				}else{
+					if(parseInt(ElementText.slice(8, 9)) <= 1)
+					{
+						orderButton.innerHTML = "Descending";
+					}else{
+						orderButton.innerHTML = "Ascending";
+					}
+				}
+			} else {
+				return;
+			}
+
+			var elements = [];
+			while(contdiv.firstChild){
+				elements.push(contdiv.firstChild);
+                contdiv.removeChild(contdiv.firstChild);
+            }
+			elements.reverse();
+			for (var i = 0; i < elements.length; i++) {
+				if(i == 0 && elements[i].tagName.toLowerCase() == "br")
+				{
+					elements.push(elements[i]);
+					continue;
+				}
+			    contdiv.appendChild(elements[i])
+			}
+		}
+
+		function get_user_data(response){
+			if(this.responseText){
+				var jsonData = JSON.parse(this.responseText);
+				if("success" in jsonData){
+					user_data = jsonData.success;
+				}
+				console.log(user_data);
+				get_manga_data();
+			}
+		}
+
+		doAjax("/user/data", "GET", get_user_data);
+
+    </script>
+</body>
+</html>

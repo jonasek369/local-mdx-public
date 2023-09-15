@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+	<style>
+		body {
+			background-color: #333333;
+		}
+
+		.page-content {
+			display: flex;
+  			justify-content: center;
+  			align-items: flex-start;
+  			height: 100vh; /* Adjust the height as needed */
+		}
+
+		.page-content img {
+			object-fit: cover;
+		  	max-width: 100%;
+		  	max-height: 100%;
+			width: 550px;
+		}
+
+		.button {
+          display: inline-block;
+          padding: 8px 16px;
+          font-size: 14px;
+          font-weight: bold;
+          text-decoration: none;
+          background-color: #4CAF50;
+          color: #fff;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+        }
+        
+        .button:hover {
+          background-color: #45a049;
+        }
+        
+        .button:active {
+          background-color: #3e8e41;
+        }
+
+		#page-header {
+			display: flex;
+  			align-items: center;
+  			justify-content: center;
+			margin-left: calc(50% - 100px);
+			margin-bottom: 50px;
+			width: 200px;
+			height: 50px;
+  			text-align: center;
+  			color: #333333;
+  			text-decoration: none;
+  			background-color: #f2f2f2;
+  			border: 2px solid #999999;
+  			font-size: 30px;
+  			font-weight: bold;
+			font-family: sans-serif;
+		}
+	</style>
+</head>
+<body>
+	<button class="button" onClick="window.location.href='/manga/{{muuid}}';">Back</button>
+
+	<h1 id="page-header">1/{{ pages }} pages</h1>
+    <div id="content" class="page-content"></div>
+
+    <script>
+        window.token = '{{ token }}';
+        var ran = false;
+
+        function getMethods(obj) {
+        	var result = [];
+        	for (var id in obj) {
+        		try {
+        			if (typeof(obj[id]) == "function") {
+        				result.push(id + ": " + obj[id].toString());
+        			}
+        		} catch (err) {
+        			result.push(id + ": inaccessible");
+        		}
+        	}
+        	return result;
+        }
+
+        // From https://gist.github.com/dharmavir/936328
+        function getHttpRequestObject() {
+        	// Define and initialize as false
+        	var xmlHttpRequst = false;
+
+        	// Mozilla/Safari/Non-IE
+        	if (window.XMLHttpRequest) {
+        		xmlHttpRequst = new XMLHttpRequest();
+        	}
+        	// IE
+        	else if (window.ActiveXObject) {
+        		xmlHttpRequst = new ActiveXObject("Microsoft.XMLHTTP");
+        	}
+        	return xmlHttpRequst;
+        }
+
+            // Does the AJAX call to URL specific with rest of the parameters
+        function doAjax(url, method, responseHandler, data) {
+        	// Set the variables
+        	url = url || "";
+        	method = method || "GET";
+        	async = true;
+        	data = data || {};
+        	data.token = window.token;
+
+        	if (url == "") {
+        		alert("URL can not be null/blank");
+        		return false;
+        	}
+        	var xmlHttpRequest = getHttpRequestObject();
+
+        	// If AJAX supported
+        	if (xmlHttpRequest != false) {
+        		xmlHttpRequest.open(method, url, async);
+        		// Set request header (optional if GET method is used)
+        		if (method == "POST") {
+        			xmlHttpRequest.setRequestHeader("Content-Type", "application/json");
+        		}
+        		// Assign (or define) response-handler/callback when ReadyState is changed.
+        		xmlHttpRequest.onreadystatechange = responseHandler;
+        		// Send data
+        		xmlHttpRequest.send(JSON.stringify(data));
+        	} else {
+        		alert("Please use browser with Ajax support.!");
+        	}
+        }
+		
+		const content = document.getElementById('content');
+		const page_header = document.getElementById("page-header");
+
+		const nextChapter = "{{ next }}";
+		const prevChapter = "{{ prev }}";
+		// todo: end here
+		var nextPages = "{{ nextpage }}";
+		var prevPages = "{{ prevpage }}";
+        console.log(nextChapter);
+        console.log(prevChapter);
+
+		if(isNaN(nextPages) || isNaN(prevPages))
+		{
+			var nextPages = "1";
+			var prevPages = "1";
+		}
+
+		var pageCount = {{ pages }};
+		var page = {{page}};
+
+		function handle_click(event)
+		{
+			const image = document.getElementById('page-panel');
+			const boundingRect = image.getBoundingClientRect();
+  			const clickX = event.clientX - boundingRect.left;
+  			const imageWidth = boundingRect.width;
+
+  			// Calculate the midpoint of the image
+  			const midpoint = imageWidth / 2;
+
+  			// Determine if the click happened on the left or right side
+			var pageCopy = page;
+  			if (clickX < midpoint) {
+  				if(page-1 < 1 && prevChapter !== "None")
+				{
+					window.location.href = "/read/"+prevChapter+"/"+prevPages;
+				}
+				page = Math.max(1, Math.min(page-1, pageCount));
+				if(page == pageCopy){
+					return;
+				}
+  				set_page(page);
+  			} else {
+				if(page+1 > pageCount && nextChapter !== "None")
+				{
+					window.location.href = "/read/"+nextChapter+"/1";
+				}
+				page = Math.max(1, Math.min(page+1, pageCount));
+				if(page == pageCopy){
+					return;
+				}
+  				set_page(page);
+  			}
+		}
+
+		function set_page(pagenum)
+		{
+			var img = document.createElement("img");
+					
+			img.id = "page-panel";
+            img.src = "/page-image/{{cuuid}}/"+pagenum;
+
+			img.addEventListener("mousedown", handle_click);
+
+            // clear elements in div
+            while(content.firstChild){
+                content.removeChild(content.firstChild);
+            }
+            content.appendChild(img);
+			page_header.innerHTML = pagenum + "/"+ pageCount + " pages"
+		}
+
+	    set_page(page);
+
+        document.addEventListener('keydown', (event)=> {
+			var pageCopy = page;
+			switch(event.key)
+			{
+				case "ArrowRight":
+					if(page+1 > pageCount && nextChapter !== "None")
+					{
+						window.location.href = "/read/"+nextChapter+"/1";
+					}
+					page = Math.max(1, Math.min(page+1, pageCount));
+					if(page == pageCopy){
+						break;
+					}
+					set_page(page);
+                	
+					break;
+				case "ArrowLeft":
+					if(page-1 < 1 && prevChapter !== "None")
+					{
+						window.location.href = "/read/"+prevChapter+"/"+prevPages;
+					}
+					page = Math.max(1, Math.min(page-1, pageCount));
+					if(page == pageCopy){
+						break;
+					}
+                	set_page(page);
+					break;
+				default:
+					break;
+			}
+
+        });
+
+    </script>
+</body>
+</html>

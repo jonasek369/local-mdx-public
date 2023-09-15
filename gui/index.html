@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    <meta charset="UTF-8">
+    <title>My Landing Page</title>
+    <style>
+    body {
+      text-align: center;
+      padding: 50px;
+      font-family: Arial, sans-serif;
+    }
+
+    h1 {
+      margin-bottom: 30px;
+    }
+
+    #query {
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      font-size: 16px;
+      width: 250px;
+    }
+
+	.button {
+          display: inline-block;
+          padding: 8px 16px;
+          font-size: 14px;
+          font-weight: bold;
+          text-decoration: none;
+          background-color: #4CAF50;
+          color: #fff;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+        }
+        
+        .button:hover {
+          background-color: #45a049;
+        }
+        
+        .button:active {
+          background-color: #3e8e41;
+        }
+
+    </style>
+</head>
+    <body>
+        <h1>Welcome to Lmdx</h1>
+		{% block content %}
+		    {% if login == 1 %}
+		        <a>{{ name }}</a>
+		    {% else %}
+		        <button onClick="document.location.href='/login?from=/'" class="button">Log in</button>
+		    {% endif %}
+		{% endblock content %}
+        <input type="text" id="query" placeholder="Search manga">
+        <button onClick="searchManga()" class="button" type="submit">Search</button>
+		<button onClick="redirect_to_download_manager()" class="button">Download manager</button>
+		<button onClick="redirect_to_library()" class="button">Library</button>
+		<button onClick="redirect_to_updates()" class="button">Updates</button>
+		
+        <div id="searchResults">
+            <ul id="dropdownList"></ul>
+        </div>
+
+        <script>
+
+            window.token = '{{ token }}';
+            // Perform background initialization
+            doAjax("/init", "POST");
+			function getCookie(cname) {
+			  let name = cname + "=";
+			  let decodedCookie = decodeURIComponent(document.cookie);
+			  let ca = decodedCookie.split(';');
+			  for(let i = 0; i <ca.length; i++) {
+			    let c = ca[i];
+			    while (c.charAt(0) == ' ') {
+			      c = c.substring(1);
+			    }
+			    if (c.indexOf(name) == 0) {
+			      return c.substring(name.length, c.length);
+			    }
+			  }
+			  return "";
+			}
+
+			function CheckSession(){
+				if(getCookie("session") == "" && localStorage.getItem("lmdx-session") !== null){
+					document.cookie = "session="+localStorage.getItem("lmdx-session")
+					document.location.href = "/";
+				}
+			}
+			CheckSession();
+
+            function getMethods(obj) {
+            	var result = [];
+            	for (var id in obj) {
+            		try {
+            			if (typeof(obj[id]) == "function") {
+            				result.push(id + ": " + obj[id].toString());
+            			}
+            		} catch (err) {
+            			result.push(id + ": inaccessible");
+            		}
+            	}
+            	return result;
+            }
+
+            function searchMangaHandler(response) {
+            	if (this.responseText) {
+            		var searchResults = JSON.parse(this.responseText).result;
+
+            		var results = [];
+
+            		for (var i = 0; i < searchResults.length; i++) {
+            			results.push([searchResults[i].title, searchResults[i].id]);
+            		}
+
+            		var dropdownList = document.getElementById("dropdownList");
+
+            		dropdownList.innerHTML = "";
+
+            		if (Object.keys(searchResults).length != 0) {
+            			document.getElementById("searchResults").style.display = "block";
+            			for (var i = 0; i < results.length; i++) {
+							var a = document.createElement("a");
+							var br = document.createElement("br");
+													
+							// Customize the text content and style of the link
+							a.textContent = results[i][0];
+							a.style.color = "blue"; // Example color
+							a.style.textDecoration = "underline"; // Example underline style
+							a.style.fontWeight = "bold"; // Example font weight
+							a.style.fontFamily = "Arial, sans-serif"; // Example font family
+							a.style.fontSize = "16px"; // Example font size
+													
+							// Set the link's href attribute
+							a.setAttribute('href', "/manga/" + results[i][1]);
+													
+							// Customize the line break style
+							br.style.marginTop = "5px"; // Example margin top
+													
+							// Append the link and line break to the dropdown list
+							dropdownList.appendChild(a);
+							dropdownList.appendChild(br);
+            			}
+            		} else {
+            			// Hide the dropdown menu if the query is empty
+            			document.getElementById("searchResults").style.display = "none";
+            		}
+            	}
+            }
+
+            function searchManga() {
+            	var data = {};
+
+            	data["query"] = document.getElementById("query").value;
+
+            	doAjax("/search/manga", "POST", searchMangaHandler, data);
+            }
+
+            // From https://gist.github.com/dharmavir/936328
+            function getHttpRequestObject() {
+            	// Define and initialize as false
+            	var xmlHttpRequst = false;
+
+            	// Mozilla/Safari/Non-IE
+            	if (window.XMLHttpRequest) {
+            		xmlHttpRequst = new XMLHttpRequest();
+            	}
+            	// IE
+            	else if (window.ActiveXObject) {
+            		xmlHttpRequst = new ActiveXObject("Microsoft.XMLHTTP");
+            	}
+            	return xmlHttpRequst;
+            }
+
+            // Does the AJAX call to URL specific with rest of the parameters
+            function doAjax(url, method, responseHandler, data) {
+            	// Set the variables
+            	url = url || "";
+            	method = method || "GET";
+            	async = true;
+            	data = data || {};
+            	data.token = window.token;
+
+            	if (url == "") {
+            		alert("URL can not be null/blank");
+            		return false;
+            	}
+            	var xmlHttpRequest = getHttpRequestObject();
+
+            	// If AJAX supported
+            	if (xmlHttpRequest != false) {
+            		xmlHttpRequest.open(method, url, async);
+            		// Set request header (optional if GET method is used)
+            		if (method == "POST") {
+            			xmlHttpRequest.setRequestHeader("Content-Type", "application/json");
+            		}
+            		// Assign (or define) response-handler/callback when ReadyState is changed.
+            		xmlHttpRequest.onreadystatechange = responseHandler;
+            		// Send data
+            		xmlHttpRequest.send(JSON.stringify(data));
+            	} else {
+            		alert("Please use browser with Ajax support.!");
+            	}
+            }
+			
+			function redirect_to_download_manager(){
+				window.location.replace("/manga/download/manager");
+			}
+
+			function redirect_to_library(){
+				window.location.replace("/manga/library");
+			}
+
+			function redirect_to_updates(){
+				window.location.replace("/updates");
+			}
+
+
+        </script>
+    </body>
+</html>

@@ -1,0 +1,26 @@
+{
+    "LogLevel": 1,
+    "DownloadProcessor": {
+        "defaultSpeedMode": "NORMAL",
+        "settings": {
+            "silent_download": false
+        }
+    },
+    "MangadexConnection": {
+        "excludedGroups - comment": "Here add any official group because if MangadexConnection comes across official publication it most likely redirects to different website so the connection will fail",
+        "excludedGroups": [
+            "4f1de6a2-f0c5-4ac5-bce5-02c7dbb67deb"
+        ],
+        "cacheChapterInfoToDatabase": true
+    },
+    "AlertSystem": {
+        "discordWebhook": "",
+        "discordRecipient": -1,
+        "soundAlertOnRelease": false,
+        "downloadStartOnRelease": true,
+        "watchedMangas": [
+
+        ],
+        "cooldown": 600
+    }
+}

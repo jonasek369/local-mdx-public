@@ -1,0 +1,11 @@
+src/backend/manga.db
+.idea
+src/backend/test.a
+src/backend/dist
+src/backend/build
+src/backend/main.spec
+src/backend/.idea
+src/backend/__pycache__
+venv
+src/backend/logs
+src/backend/data

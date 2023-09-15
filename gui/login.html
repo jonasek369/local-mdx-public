@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        button {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: #fff;
+            font-size: 14px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .container {
+            width: 300px;
+            margin: 0 auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        input[type="text"], input[type="password"] {
+            width: 80%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            display: block;
+            margin: 0 auto;
+        }
+        input[type="submit"] {
+            background-color: #4CAF50;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            padding: 10px 20px;
+            cursor: pointer;
+        }
+
+        .button {
+            background-color: #4CAF50;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            padding: 10px 20px;
+            cursor: pointer;
+        }
+
+    </style>
+</head>
+<body>
+    <button class="button" onclick="document.location.href='{{back_redirect}}'">Back</button>
+    <div class="container">
+        <h2>Login</h2>
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" required><br>
+
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" required><br>
+
+        <input type="submit" value="Login" onclick="handle_login()">
+        <input type="submit" onclick="document.location.href='/signup?={{ back_redirect }}'" value="Sign up"></button>
+    </div>
+</body>
+<script>
+	async function sha256(message) {
+    // encode as UTF-8
+    const msgBuffer = new TextEncoder().encode(message);                    
+
+    // hash the message
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+
+    // convert ArrayBuffer to Array
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+
+    // convert bytes to hex string                  
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return hashHex;
+};
+
+    window.token = '{{ token }}';
+    var redirect = "{{ back_redirect }}";
+
+    function getMethods(obj) {
+      var result = [];
+      for (var id in obj) {
+        try {
+          if (typeof(obj[id]) == "function") {
+            result.push(id + ": " + obj[id].toString());
+          }
+        } catch (err) {
+          result.push(id + ": inaccessible");
+        }
+      }
+      return result;
+    }
+
+    // From https://gist.github.com/dharmavir/936328
+    function getHttpRequestObject() {
+      // Define and initialize as false
+      var xmlHttpRequst = false;
+
+      // Mozilla/Safari/Non-IE
+      if (window.XMLHttpRequest) {
+        xmlHttpRequst = new XMLHttpRequest();
+      }
+      // IE
+      else if (window.ActiveXObject) {
+        xmlHttpRequst = new ActiveXObject("Microsoft.XMLHTTP");
+      }
+      return xmlHttpRequst;
+    }
+
+    // Does the AJAX call to URL specific with rest of the parameters
+    function doAjax(url, method, responseHandler, data) {
+      // Set the variables
+      url = url || "";
+      method = method || "GET";
+      async = true;
+      data = data || {};
+      data.token = window.token;
+
+      if (url == "") {
+        alert("URL can not be null/blank");
+        return false;
+      }
+      var xmlHttpRequest = getHttpRequestObject();
+
+      // If AJAX suppo ýárted
+      if (xmlHttpRequest != false) {
+        xmlHttpRequest.open(method, url, async);
+        // Set request header (optional if GET method is used)
+        if (method == "POST") {
+          xmlHttpRequest.setRequestHeader("Content-Type", "application/json");
+        }
+        // Assign (or define) response-handler/callback when ReadyState is changed.
+        xmlHttpRequest.onreadystatechange = responseHandler;
+        // Send data
+        xmlHttpRequest.send(JSON.stringify(data));
+      } else {
+        alert("Please use browser with Ajax support.!");
+      }
+    }
+
+	function on_verify(returnValue){
+		if (this.responseText) {
+            var jsonData = JSON.parse(this.responseText);
+			if("success" in jsonData){
+        console.log(jsonData.success);
+				document.cookie = "session="+jsonData.session;
+        localStorage.setItem("lmdx-session", jsonData.session);
+        if(redirect !== null){
+          document.location.href = redirect;
+        }else{
+          document.location.href = "/";
+        }
+			}
+		}
+	}
+
+
+	function handle_login(){
+		var name = document.getElementById("username").value;
+		var password = document.getElementById("password").value;
+		var payload = {"username": name};
+		
+		sha256(password).then(function(result){
+			payload.password = result;
+			doAjax("/login/verify", "POST", on_verify, payload);
+		})
+	}
+
+</script>
+</html>
