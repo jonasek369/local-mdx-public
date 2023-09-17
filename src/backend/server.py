@@ -9,6 +9,7 @@ import webview
 from flask import Flask, jsonify, render_template, request, make_response
 
 import app
+from gzip import compress, decompress
 
 gui_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'gui')  # development path
 
@@ -114,7 +115,20 @@ def get_manga_info(mangauuid):
     chapters_ids = app.connection.get_chapter_list(mangauuid)
     rowid = app.database.get_rowid(mangauuid)
     chapters, warnings = app.database.get_chapters(chapters_ids, rowid)
-    return jsonify({"chapters": chapters, "warning": warnings})
+    for key in chapters.keys():
+        del chapters[key]["pages"]
+        try:
+            volume = float(chapters[key]["volume"])
+        except TypeError:
+            volume = None
+        chapter = float(chapters[key]["chapter"])
+        del chapters[key]["volume"]
+        del chapters[key]["chapter"]
+        chapters[key]["v"] = volume
+        chapters[key]["c"] = chapter
+    response = make_response(compress(json.dumps({"chapters": chapters, "warning": warnings}).encode()))
+    response.headers.set("Content-Encoding", "gzip")
+    return response
 
 
 @server.route("/chapter-links/<mangauuid>", methods=["GET"])
@@ -140,11 +154,12 @@ def get_chapter_image(identifier, page):
 @server.route("/manga/cover/<identifier>")
 def get_cover_art(identifier):
     app.initialize()
-    image_binary = app.database.get_cover(identifier)
+    image_binary = app.database.get_cover(identifier, small=bool(request.args.get('small')))
     if image_binary is not None:
-        response = make_response(image_binary)
+        response = make_response(compress(image_binary))
         response.headers.set('Content-Type', 'image/jpeg')
         response.headers.set('Content-Disposition', 'inline', filename=f'{identifier}.jpg')
+        response.headers.set("Content-Encoding", "gzip")
         return response
     return "Error: no image found"
 
@@ -247,14 +262,11 @@ def server_manga(mangauuid):
         back = "/"
 
     app.connection.set_manga_info(mangauuid)
-    _, name, description, coverart = app.database.get_info(mangauuid)
+    _, name, description, _, _ = app.database.get_info(mangauuid)
     if name is None:
         name = "Could not find name"
     if description is None:
         description = "Could not find description"
-    if coverart is None:
-        coverart = None
-
     try:
         if name is not None:
             webview.windows[0].set_title(name)
@@ -262,8 +274,7 @@ def server_manga(mangauuid):
     except Exception as e:
         pass
 
-    return render_template("manga.html", muuid=mangauuid, name=name, description=description,
-                           coverart=base64.b64encode(coverart).decode('utf-8'), back_redirect=back)
+    return render_template("manga.html", muuid=mangauuid, name=name, description=description, back_redirect=back)
 
 
 @server.route("/manga/download/status")
@@ -394,11 +405,13 @@ def library_data():
 
 @server.route("/updates/data")
 def updates_data():
+    app.initialize()
     return {"status": "ok", "response": app.database.get_updates()}
 
 
 @server.route("/updates")
 def update():
+    app.initialize()
     return render_template("updates.html")
 
 

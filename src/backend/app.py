@@ -6,6 +6,7 @@ import os
 import random
 import sqlite3
 import string
+import sys
 import threading
 import time
 from collections.abc import MutableSequence, Set, Generator
@@ -25,6 +26,8 @@ from custom_logger import Logger, info, warn, erro
 from pydub import AudioSegment
 from pydub.playback import play as PlaySound
 from hashlib import sha256
+from PIL import Image
+import io
 
 # for testing the offline mode
 DISABLE_INTERNET_CONNECTION = 0
@@ -55,7 +58,6 @@ else:
 COMPILED = False
 LOGGING = False
 
-lock = threading.Lock()
 
 
 def try_to_get(json, path):
@@ -102,59 +104,66 @@ def get_file_content_chrome(driver, uri):
 class Database:
     def __init__(self):
         self.conn = sqlite3.connect("manga.db", check_same_thread=False, )
-        self.c = self.conn.cursor()
-        self.c.execute(
+        cursor = self.conn.cursor()
+        cursor.execute(
             """CREATE TABLE IF NOT EXISTS "mangas" (identifier TEXT NOT NULL,page INTEGER NOT NULL,data BLOB,
             info_id INTEGER,FOREIGN KEY (info_id) REFERENCES info(rowid));""")
-        self.c.execute(
+        cursor.execute(
             """CREATE TABLE IF NOT EXISTS "records" ("identifier" TEXT NOT NULL UNIQUE, "pages" INTEGER NOT NULL)""")
-        self.c.execute(
+        cursor.execute(
             """CREATE TABLE IF NOT EXISTS "info" ("identifier" TEXT NOT NULL, "name" TEXT NOT NULL, "description" 
             TEXT, cover BLOB)""")
-        self.c.execute(
+        cursor.execute(
             """CREATE TABLE IF NOT EXISTS "updates" ("identifier"	TEXT NOT NULL,"old_chapter"	REAL NOT NULL,
             "new_chapter"	REAL NOT NULL,"timestamp"	REAL NOT NULL);""")
-        self.c.execute(
+        cursor.execute(
             """CREATE TABLE IF NOT EXISTS "chapter_info" ("identifier"	TEXT NOT NULL, "json_data"	BLOB NOT NULL);""")
-        self.c.execute(
+        cursor.execute(
             """CREATE TABLE IF NOT EXISTS "users" ("name"	TEXT NOT NULL UNIQUE,"password"	BLOB NOT NULL,"data" BLOB);""")
-        self.c.execute(
+        cursor.execute(
             """CREATE TABLE IF NOT EXISTS "sessions" ("sessionid"	TEXT UNIQUE,"expire"	REAL,"owner"	TEXT)""")
         self.conn.commit()
 
     def get_session(self, sessionid):
-        self.c.execute("SELECT * FROM sessions WHERE sessionid=:si", {"si": sessionid})
-        return self.c.fetchone()
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM sessions WHERE sessionid=:si", {"si": sessionid})
+        return cursor.fetchone()
 
     def set_session(self, sessionid, expire, owner):
-        self.c.execute("INSERT INTO sessions VALUES (:si, :exp, :ow)", {"si": sessionid, "exp": expire, "ow": owner})
+        cursor = self.conn.cursor()
+        cursor.execute("INSERT INTO sessions VALUES (:si, :exp, :ow)", {"si": sessionid, "exp": expire, "ow": owner})
         self.conn.commit()
 
     def remove_session(self, sessionid):
-        self.c.execute("DELETE FROM sessions WHERE sessionid=:si", {"si": sessionid})
+        cursor = self.conn.cursor()
+        cursor.execute("DELETE FROM sessions WHERE sessionid=:si", {"si": sessionid})
         self.conn.commit()
 
     def get_sessions(self):
-        self.c.execute("SELECT * FROM sessions")
-        return self.c.fetchall()
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM sessions")
+        return cursor.fetchall()
 
     def add_user(self, name: str, pwd_hash: str) -> bool:
         try:
-            self.c.execute("INSERT INTO users VALUES (:name, :pwd, '')", {"name": name, "pwd": pwd_hash})
+            cursor = self.conn.cursor()
+            cursor.execute("INSERT INTO users VALUES (:name, :pwd, '')", {"name": name, "pwd": pwd_hash})
             self.conn.commit()
             return True
         except Exception as e:
             return False
 
     def get_user_uuid(self, name: str) -> Optional[str]:
-        self.c.execute("SELECT name FROM users WHERE name=:name", {"name": name})
-        if self.c.fetchall() is not None:
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT name FROM users WHERE name=:name", {"name": name})
+        if cursor.fetchall() is not None:
             return sha256(name).hexdigest()
         return None
 
     def get_user_data(self, name: str) -> dict:
-        self.c.execute("SELECT data FROM users  WHERE name=:name", {"name": name})
-        fetch = self.c.fetchone()[0]
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT data FROM users  WHERE name=:name", {"name": name})
+        fetch = cursor.fetchone()[0]
         if not fetch:
             return {}
         decompressed = decompress(fetch)
@@ -164,154 +173,140 @@ class Database:
             return json.loads(decompressed)
 
     def set_user_data(self, name, user_data: Union[str, dict]) -> None:
-        try:
-            lock.acquire(True)
-            if isinstance(user_data, dict):
-                user_data = json.dumps(user_data)
-            compressed_data = compress(user_data.encode())
-            self.c.execute("UPDATE users SET data=:udata WHERE name=:name", {"udata": compressed_data, "name": name})
-            self.conn.commit()
-        finally:
-            lock.release()
+        if isinstance(user_data, dict):
+            user_data = json.dumps(user_data)
+        compressed_data = compress(user_data.encode())
+        cursor = self.conn.cursor()
+        cursor.execute("UPDATE users SET data=:udata WHERE name=:name", {"udata": compressed_data, "name": name})
+        self.conn.commit()
 
     def login_user(self, name: str, pwd_hash: str) -> bool:
-        self.c.execute("SELECT name FROM users WHERE name=:name AND password=:pwd", {"name": name, "pwd": pwd_hash})
-        fetch = self.c.fetchone()
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT name FROM users WHERE name=:name AND password=:pwd", {"name": name, "pwd": pwd_hash})
+        fetch = cursor.fetchone()
         if fetch is not None:
             return True
         return False
 
     def add_chapter_info(self, identifier: str, str_json: str | bytes) -> None:
-        self.c.execute("INSERT OR REPLACE INTO chapter_info VALUES (:cuuid, :str_json)",
+        cursor = self.conn.cursor()
+        cursor.execute("INSERT OR REPLACE INTO chapter_info VALUES (:cuuid, :str_json)",
                        {"cuuid": identifier, "str_json": str_json})
         self.conn.commit()
 
     def get_chapter_info(self, identifier: str) -> Optional[Sequence]:
-        self.c.execute("SELECT * FROM chapter_info WHERE identifier=:cuuid", {"cuuid": identifier})
-        fetch = self.c.fetchone()
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM chapter_info WHERE identifier=:cuuid", {"cuuid": identifier})
+        fetch = cursor.fetchone()
         return fetch if fetch is not None else (None, None)
 
     def add_update(self, identifier: str, chapter_old: int, chapter_new: int, timestamp: float = None) -> None:
         if not timestamp:
             timestamp = time.time()
-        self.c.execute("INSERT INTO updates VALUES (:ide, :cold, :cnew, :ts)",
+        cursor = self.conn.cursor()
+        cursor.execute("INSERT INTO updates VALUES (:ide, :cold, :cnew, :ts)",
                        {"ide": identifier, "cold": chapter_old, "cnew": chapter_new, "ts": timestamp})
         self.conn.commit()
 
     def set_record(self, identifier: str, pages: int) -> None:
         try:
-            self.c.execute("INSERT INTO records VALUES (:ide, :page)", {"ide": identifier, "page": pages})
+            cursor = self.conn.cursor()
+            cursor.execute("INSERT INTO records VALUES (:ide, :page)", {"ide": identifier, "page": pages})
             self.conn.commit()
         except sqlite3.IntegrityError:
             Plogger.log(warn, f"{identifier} already in database")
 
     def get_record(self, identifier: str) -> Optional[int]:
-        self.c.execute("SELECT pages FROM records WHERE identifier=:ide", {"ide": identifier})
-        fetch = self.c.fetchone()
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT pages FROM records WHERE identifier=:ide", {"ide": identifier})
+        fetch = cursor.fetchone()
         return None if fetch is None else fetch[0]
 
     def manga_in_db(self):
-        self.c.execute(
+        cursor = self.conn.cursor()
+        cursor.execute(
             "SELECT i.identifier, i.name, i.description FROM info i WHERE i.ROWID IN (SELECT info_id FROM mangas);")
-        fetch = self.c.fetchall()
+        fetch = cursor.fetchall()
         return fetch
 
     def set_info(self, identifier: str, name: str, description: str, cover) -> None:
-        self.c.execute("SELECT identifier FROM info WHERE identifier=:ide", {"ide": identifier})
-        fetch = self.c.fetchone()
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT identifier FROM info WHERE identifier=:ide", {"ide": identifier})
+        fetch = cursor.fetchone()
         if fetch:
             return
-        self.c.execute("INSERT INTO info VALUES (:ide, :name, :desc, :cover)",
+        cursor.execute("INSERT INTO info VALUES (:ide, :name, :desc, :cover)",
                        {"ide": identifier, "name": name, "desc": description, "cover": cover})
         self.conn.commit()
 
     def get_info(self, identifier: str):
-        fetch = None
-        try:
-            lock.acquire(True)
-            self.c.execute("SELECT * FROM info WHERE identifier=:ide", {"ide": identifier})
-            fetch = self.c.fetchone()
-        finally:
-            lock.release()
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM info WHERE identifier=:ide", {"ide": identifier})
+        fetch = cursor.fetchone()
         return fetch if fetch is not None else None
 
     def get_title(self, identifier: str):
-        fetch = None
-        try:
-            lock.acquire(True)
-            self.c.execute("SELECT name FROM info WHERE identifier=:ide", {"ide": identifier})
-            fetch = self.c.fetchone()
-        finally:
-            lock.release()
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT name FROM info WHERE identifier=:ide", {"ide": identifier})
+        fetch = cursor.fetchone()
         return fetch if fetch is not None else None
 
     def change_cover(self, identifier, cover):
-        self.c.execute("UPDATE info SET cover=:cover WHERE identifier=:ide", {"ide": identifier, "cover": cover})
+        cursor = self.conn.cursor()
+        cursor.execute("UPDATE info SET cover=:cover WHERE identifier=:ide", {"ide": identifier, "cover": cover})
+        self.conn.commit()
+
+    def change_small_cover(self, identifier, cover):
+        cursor = self.conn.cursor()
+        cursor.execute("UPDATE info SET small_cover=:cover WHERE identifier=:ide", {"ide": identifier, "cover": cover})
         self.conn.commit()
 
     def get_rowid(self, muuid):
-        rowid = None
-        try:
-            lock.acquire(True)
-            self.c.execute("SELECT rowid FROM info WHERE identifier =:ide", {"ide": muuid})
-            rowid = self.c.fetchone()
-        finally:
-            lock.release()
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT rowid FROM info WHERE identifier =:ide", {"ide": muuid})
+        rowid = cursor.fetchone()
         return rowid[0] if rowid is not None else None
 
     def from_rowid(self, rowid):
-        self.c.execute("SELECT identifier FROM info WHERE ROWID=:rowid", {"rowid": rowid})
-        fetch = self.c.fetchone()
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT identifier FROM info WHERE ROWID=:rowid", {"rowid": rowid})
+        fetch = cursor.fetchone()
         return fetch[0] if fetch is not None else None
 
     def save_page(self, identifier: str, page: int, muuid: str, data: bytes) -> None:
-        fetch = None
-        try:
-            lock.acquire(True)
-            self.c.execute("SELECT identifier FROM mangas WHERE identifier=:ide AND page=:page",
-                           {"ide": identifier, "page": page})
-            fetch = self.c.fetchone()
-            if not fetch:
-                rowid = self.get_rowid(muuid)
-                self.c.execute("INSERT INTO mangas VALUES (:ide, :page, :data, :info_id)",
-                               {"ide": identifier, "page": page, "data": data, "info_id": rowid})
-                self.conn.commit()
-        finally:
-            lock.release()
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT identifier FROM mangas WHERE identifier=:ide AND page=:page",
+                       {"ide": identifier, "page": page})
+        fetch = cursor.fetchone()
+        if not fetch:
+            rowid = self.get_rowid(muuid)
+            cursor.execute("INSERT INTO mangas VALUES (:ide, :page, :data, :info_id)",
+                           {"ide": identifier, "page": page, "data": data, "info_id": rowid})
+            self.conn.commit()
 
     def get_page(self, identifier: str, page: int) -> Optional[bytes]:
-        fetch = None
-        try:
-            lock.acquire(True)
-            self.c.execute("SELECT data FROM mangas WHERE identifier=:ide AND page=:page",
-                           {"ide": identifier, "page": page})
-            fetch = self.c.fetchone()
-        finally:
-            lock.release()
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT data FROM mangas WHERE identifier=:ide AND page=:page",
+                       {"ide": identifier, "page": page})
+        fetch = cursor.fetchone()
         return None if fetch is None else fetch[0]
 
     def get_chapter_images(self, identifier: str) -> Optional[MutableSequence[Set[int, bytes]]]:
-        self.c.execute("SELECT page, data FROM mangas WHERE identifier=:ide", {"ide": identifier})
-        fetch = self.c.fetchall()
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT page, data FROM mangas WHERE identifier=:ide", {"ide": identifier})
+        fetch = cursor.fetchall()
         return fetch
 
     def contains_chapter(self, identifier: str) -> bool:
-        try:
-            lock.acquire(True)
-            self.c.execute("SELECT identifier FROM mangas WHERE identifier=:ide", {"ide": identifier})
-            fetch = self.c.fetchone()
-        finally:
-            lock.release()
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT identifier FROM mangas WHERE identifier=:ide", {"ide": identifier})
+        fetch = cursor.fetchone()
         return False if fetch is None else True
 
     def get_chapter_pages(self, identifier: str) -> Optional[Sequence]:
-        fetch = []
-        try:
-            lock.acquire(True)
-            self.c.execute("SELECT page FROM mangas WHERE identifier=:ide ORDER BY page DESC", {"ide": identifier})
-            fetch = self.c.fetchall()
-        finally:
-            lock.release()
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT page FROM mangas WHERE identifier=:ide ORDER BY page DESC", {"ide": identifier})
+        fetch = cursor.fetchall()
         return [] if fetch is None else [page[0] for page in fetch]
 
     def get_chapters(self, chapters_ids: Sequence[dict], manga_row_id: int = None, muuid: str = None) -> Tuple[
@@ -372,33 +367,30 @@ class Database:
             return downloaded_chapters, "NO_CONNECTION"
         return downloaded_chapters, None
 
-    def get_cover(self, identifier):
-        fetch = None
-        try:
-            lock.acquire(True)
-            self.c.execute("SELECT cover FROM info WHERE identifier=:ide", {"ide": identifier})
-            fetch = self.c.fetchone()
-        finally:
-            lock.release()
+    def get_cover(self, identifier, small=False):
+        cursor = self.conn.cursor()
+        if small:
+            cursor.execute("SELECT small_cover FROM info WHERE identifier=:ide", {"ide": identifier})
+        else:
+            cursor.execute("SELECT cover FROM info WHERE identifier=:ide", {"ide": identifier})
+        fetch = cursor.fetchone()
         return None if fetch is None else fetch[0]
 
     def get_updates(self, timestamp_lim=0):
-        fetch = None
-        try:
-            lock.acquire(True)
-            self.c.execute("SELECT * FROM updates WHERE timestamp > :tslim ORDER BY timestamp DESC",
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM updates WHERE timestamp > :tslim ORDER BY timestamp DESC",
                            {"tslim": timestamp_lim})
-            fetch = self.c.fetchall()
-        finally:
-            lock.release()
+        fetch = cursor.fetchall()
         if fetch:
             fetch = [list(i) for i in fetch]
         return None if fetch is None else [[*update, self.get_title(update[0])[0]] for update in fetch]
 
     def get_chapter_uuids_from_rowid(self, rowid: int):
-        self.c.execute("SELECT DISTINCT identifier FROM mangas WHERE info_id = :rowid", {"rowid": rowid})
-        fetch = self.c.fetchall()
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT DISTINCT identifier FROM mangas WHERE info_id = :rowid", {"rowid": rowid})
+        fetch = cursor.fetchall()
         return [] if not fetch else [i[0] for i in fetch]
+
 
 
 class MangadexConnection:
@@ -439,8 +431,8 @@ class MangadexConnection:
             cache["search"][name]["result"] = return_array
         return return_array
 
-    def coverart_change(self, identifier):
-        _, _, _, old_image = database.get_info(identifier)
+    def coverart_update(self, identifier):
+        _, _, _, old_image, _ = database.get_info(identifier)
 
         manga_info_nonagr = self.session.get(
             f"{self.API}/manga/{identifier}?includes%5B%5D=cover_art").json()
@@ -457,9 +449,19 @@ class MangadexConnection:
 
         if cover_url is None:
             Plogger.log(warn, "coverurl is none. Parsing failed or manga dose not have any cover")
-        image = requests.get(cover_url).content
-        if image != old_image:
-            database.change_cover(identifier, image)
+        image_data = requests.get(cover_url).content
+        image = Image.open(io.BytesIO(image_data))
+        width = 51
+        height = 80
+        small_cover = image.resize((width, height))
+        with io.BytesIO() as image_webp:
+            image.save(image_webp, 'WEBP')
+            image_webp_bytes = image_webp.getvalue()
+        with io.BytesIO() as small_cover_webp:
+            small_cover.save(small_cover_webp, 'WEBP')
+            small_cover_webp_bytes = small_cover_webp.getvalue()
+        database.change_cover(identifier, image_webp_bytes)
+        database.change_small_cover(identifier, small_cover_webp_bytes)
 
     def set_manga_info(self, identifier: str) -> None:
         if not database.get_info(identifier):
@@ -1090,8 +1092,9 @@ def download_manga(manga):
 
 
 def create_chapter_to_manga_cache():
-    database.c.execute("SELECT * FROM chapter_info")
-    fetch = database.c.fetchall()
+    cursor = database.conn.cursor()
+    cursor.execute("SELECT * FROM chapter_info")
+    fetch = cursor.fetchall()
     for muuid, chapter_info_str in fetch:
         cache["chapter_to_manga"][muuid] = [i["id"] for i in json.loads(decompress(chapter_info_str).decode())]
 
@@ -1107,4 +1110,12 @@ if __name__ == "__main__":
     database = Database()
     connection = MangadexConnection()
     DlProcessor = DownloadProcessor()
+    # update cover arts
+    #database.c.execute("SELECT identifier FROM info")
+    #for i in database.c.fetchall():
+    #    _id = i[0]
+    #    connection.coverart_update(_id)
+    #    time.sleep(1)
+
+
 

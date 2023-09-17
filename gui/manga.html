@@ -22,7 +22,7 @@
       	transform: translate(-50%, -50%);
       	width: 120%;
       	height: 150%;
-      	background-image: url(data:image/jpeg;base64,{{coverart}});
+      	background-image: url("/manga/cover/{{ muuid }}");
       	background-size: cover;
       	filter: blur(5px);
     }
@@ -308,6 +308,19 @@
 	        }
 	    	if (this.responseText) {
                 var jsonData = JSON.parse(this.responseText);
+				console.log(jsonData);
+				for (let key in jsonData.chapters) {
+  				  const v = jsonData.chapters[key]["v"];
+  				  const c = jsonData.chapters[key]["c"];
+  				  delete jsonData.chapters[key]["v"];
+  				  delete jsonData.chapters[key]["c"];
+				  try{
+  						jsonData.chapters[key]["volume"] = v.toString();
+				  }catch{
+					jsonData.chapters[key]["volume"] = null;
+				  }
+  				  jsonData.chapters[key]["chapter"] = c.toString();
+  				}
 
                 if(jsonData.warning !== null){
                 	var message = "";

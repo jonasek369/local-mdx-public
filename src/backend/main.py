@@ -1,9 +1,7 @@
-import json
 import logging
 import sys
 
 from server import server, app
-import os
 
 import webview
 
