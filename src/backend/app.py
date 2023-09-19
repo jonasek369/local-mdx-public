@@ -229,14 +229,14 @@ class Database:
         fetch = cursor.fetchall()
         return fetch
 
-    def set_info(self, identifier: str, name: str, description: str, cover) -> None:
+    def set_info(self, identifier: str, name: str, description: str, cover: bytes, small_cover: bytes) -> None:
         cursor = self.conn.cursor()
         cursor.execute("SELECT identifier FROM info WHERE identifier=:ide", {"ide": identifier})
         fetch = cursor.fetchone()
         if fetch:
             return
-        cursor.execute("INSERT INTO info VALUES (:ide, :name, :desc, :cover)",
-                       {"ide": identifier, "name": name, "desc": description, "cover": cover})
+        cursor.execute("INSERT INTO info VALUES (:ide, :name, :desc, :cover, :sc)",
+                       {"ide": identifier, "name": name, "desc": description, "cover": cover, "sc": small_cover})
         self.conn.commit()
 
     def get_info(self, identifier: str):
@@ -479,12 +479,22 @@ class MangadexConnection:
 
             if cache[identifier]["coverurl"] is None:
                 Plogger.log(warn, "coverurl is none. Parsing failed or manga dose not have any cover")
-            image = requests.get(cache[identifier]["coverurl"]).content
-
+            image_data = requests.get(cache[identifier]["coverurl"]).content
+            image = Image.open(io.BytesIO(image_data))
+            width = 51
+            height = 80
+            small_cover = image.resize((width, height))
+            with io.BytesIO() as image_webp:
+                image.save(image_webp, 'WEBP')
+                image_webp_bytes = image_webp.getvalue()
+            with io.BytesIO() as small_cover_webp:
+                small_cover.save(small_cover_webp, 'WEBP')
+                small_cover_webp_bytes = small_cover_webp.getvalue()
             database.set_info(identifier=identifier,
                               name=try_to_get(manga_info_nonagr, ["data", "attributes", "title", "en"]),
                               description=try_to_get(manga_info_nonagr, ["data", "attributes", "description", "en"]),
-                              cover=image
+                              cover=image_webp_bytes,
+                              small_cover=small_cover_webp_bytes
                               )
 
     def get_last_chapter_num(self, identifier: str) -> dict:
@@ -505,12 +515,23 @@ class MangadexConnection:
                     # download cover and put into db cover url in cache
                     if cache[identifier]["coverurl"] is None:
                         Plogger.log(warn, "coverurl is none. Parsing failed or manga dose not have any cover")
-                    image = requests.get(cache[identifier]["coverurl"]).content
+                    image_data = requests.get(cache[identifier]["coverurl"]).content
+                    image = Image.open(io.BytesIO(image_data))
+                    width = 51
+                    height = 80
+                    small_cover = image.resize((width, height))
+                    with io.BytesIO() as image_webp:
+                        image.save(image_webp, 'WEBP')
+                        image_webp_bytes = image_webp.getvalue()
+                    with io.BytesIO() as small_cover_webp:
+                        small_cover.save(small_cover_webp, 'WEBP')
+                        small_cover_webp_bytes = small_cover_webp.getvalue()
                     database.set_info(identifier=identifier,
                                       name=try_to_get(manga_info_nonagr, ["data", "attributes", "title", "en"]),
                                       description=try_to_get(manga_info_nonagr,
                                                              ["data", "attributes", "description", "en"]),
-                                      cover=image
+                                      cover=image_webp_bytes,
+                                      small_cover=small_cover_webp_bytes
                                       )
         except Exception as e:
 
@@ -612,7 +633,6 @@ class MangadexConnection:
 
     def get_next_and_prev(self, cuuid) -> dict:
         muuid = self.get_manga_uuid_from_chapter(cuuid)
-        print(muuid)
         next_prev = {"next": None, "prev": None, "current": {}}
         chapter_list = self.get_chapter_list(muuid)
         if chapter_list is None:
@@ -740,7 +760,6 @@ class DownloadProcessor:
                 self.waiting_for_job = False
             try:
                 chapter_list = connection.get_chapter_list(job["id"])
-                print(chapter_list)
                 job_finished = False
                 try:
                     # best case scenario the volume is set and ordered

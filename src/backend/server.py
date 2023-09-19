@@ -4,8 +4,14 @@ import os
 import sys
 import uuid
 from functools import wraps
-
-import webview
+try:
+    import webview
+except ImportError:
+    class wv:
+        def __init__(self):
+            self.windows = []
+            self.token = -1
+    webview = wv()
 from flask import Flask, jsonify, render_template, request, make_response
 
 import app
@@ -30,29 +36,10 @@ def is_valid_uuid(val):
         return False
 
 
-def verify_token(function):
-    @wraps(function)
-    def wrapper(*args, **kwargs):
-        data = json.loads(request.data)
-        token = data.get('token')
-        if token == webview.token:
-            return function(*args, **kwargs)
-        else:
-            raise Exception('Authentication error')
-
-    return wrapper
-
-
 def close_threads():
     app.Plogger.log(app.info, "Shutting down threads")
     app.DlProcessor.stop()
     app.alert_sys.stop()
-
-
-@server.after_request
-def add_header(response):
-    response.headers['Cache-Control'] = 'no-store'
-    return response
 
 
 @server.route('/')
@@ -62,6 +49,10 @@ def landing():
     """
     app.initialize()
     visitor_login = render_template('index.html', token=webview.token, login=0)
+    try:
+        webview.windows[0].set_title("Lmdx")
+    except IndexError:
+        pass
 
     if request.cookies.get("session"):
         if app.session_manager.validate_session(request.cookies.get("session")):
@@ -75,7 +66,6 @@ def landing():
 
 
 @server.route('/init', methods=['POST'])
-@verify_token
 def initialize():
     """
     Perform heavy-lifting initialization asynchronously.
@@ -94,7 +84,6 @@ def initialize():
 
 
 @server.route('/search/manga', methods=['POST'])
-@verify_token
 def search():
     app.initialize()
     data = request.json
@@ -270,10 +259,8 @@ def server_manga(mangauuid):
     try:
         if name is not None:
             webview.windows[0].set_title(name)
-    # TODO: Change broad exception to IndexError and add shadow class if webview is not installed
-    except Exception as e:
+    except IndexError:
         pass
-
     return render_template("manga.html", muuid=mangauuid, name=name, description=description, back_redirect=back)
 
 

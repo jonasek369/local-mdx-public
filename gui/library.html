@@ -171,6 +171,7 @@
 				const info = document.createElement("div");
 
                 const cover = document.createElement("img");
+				cover.setAttribute("alt", value[0]+" cover art");
                 cover.src = "/manga/cover/"+key+"?small=1";
                 const name = document.createElement("a");
                 name.innerText = value[0];
