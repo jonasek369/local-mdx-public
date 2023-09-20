@@ -9,3 +9,4 @@ src/backend/__pycache__
 venv
 src/backend/logs
 src/backend/data
+src/backend/tests.py

@@ -308,7 +308,6 @@
 	        }
 	    	if (this.responseText) {
                 var jsonData = JSON.parse(this.responseText);
-				console.log(jsonData);
 				for (let key in jsonData.chapters) {
   				  const v = jsonData.chapters[key]["v"];
   				  const c = jsonData.chapters[key]["c"];
@@ -440,7 +439,6 @@
 				if("success" in jsonData){
 					user_data = jsonData.success;
 				}
-				console.log(user_data);
 				get_manga_data();
 			}
 		}

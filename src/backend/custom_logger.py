@@ -11,15 +11,19 @@ def colored(rgb, text):
 
 class LogType(Enum):
     INFO = 1
-    WARNING = 2
-    ERROR = 3
-    CRITICAL = 4
+    SUCCESSS = 2
+    WARNING = 3
+    ERROR = 4
+    CRITICAL = 5
+    TRACEBACK = 6
 
 
 info = LogType.INFO
+succ = LogType.SUCCESSS
 warn = LogType.WARNING
 erro = LogType.ERROR
 crit = LogType.CRITICAL
+trcb = LogType.TRACEBACK
 
 
 class Logger:
@@ -38,12 +42,16 @@ class Logger:
             match ll:
                 case LogType.INFO:
                     print(colored([0, 100, 255], "Info: " + text))
+                case LogType.SUCCESSS:
+                    print(colored([0, 255, 0], "Success: " + text))
                 case LogType.WARNING:
                     print(colored([255, 255, 0], "Warning: " + text))
                 case LogType.ERROR:
                     print(colored([255, 60, 60], "Error: " + text))
                 case LogType.CRITICAL:
                     print(colored([255, 0, 0], "Critical: " + text))
+                case LogType.TRACEBACK:
+                    print(colored([255, 255, 255], "Traceback: " + text))
                 case _:
                     raise Exception("Unknown log level")
 

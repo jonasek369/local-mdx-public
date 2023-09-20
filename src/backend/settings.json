@@ -1,7 +1,9 @@
 {
     "LogLevel": 1,
+    "OnStart": {
+        "cacheMangas": true
+    },
     "DownloadProcessor": {
-        "defaultSpeedMode": "NORMAL",
         "settings": {
             "silent_download": false
         }

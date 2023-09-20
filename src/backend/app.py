@@ -11,6 +11,7 @@ import threading
 import time
 from collections.abc import MutableSequence, Set, Generator
 from gzip import compress, decompress
+from pstats import SortKey
 from typing import Callable, Tuple, Optional, Sequence, Union
 # ALERT SYSTEM
 from uuid import UUID
@@ -47,17 +48,67 @@ if DISABLE_INTERNET_CONNECTION:
 else:
     import requests
 
-if os.path.isfile("settings.json"):
-    with open("settings.json", "r") as file:
-        settings = json.load(file)
-if settings.get("LogLeveL"):
-    Plogger = Logger(int(settings.get("LogLeveL")))
+
+class Settings:
+    def __init__(self):
+        default: dict = {"LogLevel": 1, "OnStart": {"cacheMangas": True},
+                         "DownloadProcessor": {"defaultSpeedMode": "FAST", "settings": {"silent_download": False}},
+                         "MangadexConnection": {
+                             "excludedGroups": ["4f1de6a2-f0c5-4ac5-bce5-02c7dbb67deb"],
+                             "cacheChapterInfoToDatabase": True},
+                         "AlertSystem": {"discordWebhook": "", "discordRecipient": -1, "soundAlertOnRelease": False,
+                                         "downloadStartOnRelease": True, "watchedMangas": [], "cooldown": 600}}
+        try:
+            with open("settings.json") as file:
+                self.__data: dict = json.load(file)
+        except Exception as e:
+            self.__data: dict = {}
+
+        self.__data = self.fill_default_settings(self.__data, default)
+
+    def fill_missing_info(self, input_dict, default_dict):
+        for key, value in default_dict.items():
+            if isinstance(value, dict):
+                input_dict[key] = self.fill_missing_info(input_dict.get(key, {}), value)
+            else:
+                input_dict[key] = input_dict.get(key, value)
+        return input_dict
+
+    def fill_default_settings(self, input_dict, default_dict):
+        filled_dict = default_dict.copy()
+        filled_dict = self.fill_missing_info(input_dict, filled_dict)
+        return filled_dict
+
+    @property
+    def OnStart(self):
+        return self.__data["OnStart"]
+
+    @property
+    def DownloadProcessor(self):
+        return self.__data["DownloadProcessor"]
+
+    @property
+    def MangadexConnection(self):
+        return self.__data["MangadexConnection"]
+
+    @property
+    def AlertSystem(self):
+        return self.__data["AlertSystem"]
+
+    @property
+    def Global(self):
+        return self.__data
+
+
+settings = Settings()
+
+if settings.Global.get("LogLeveL"):
+    Plogger = Logger(int(settings.Global.get("LogLeveL")))
 else:
     Plogger = Logger(1)
 
 COMPILED = False
 LOGGING = False
-
 
 
 def try_to_get(json, path):
@@ -155,9 +206,9 @@ class Database:
 
     def get_user_uuid(self, name: str) -> Optional[str]:
         cursor = self.conn.cursor()
-        cursor.execute("SELECT name FROM users WHERE name=:name", {"name": name})
+        cursor.execute("SELECT name FROM users WHERE name=:nm", {"nm": name})
         if cursor.fetchall() is not None:
-            return sha256(name).hexdigest()
+            return sha256(name.encode()).hexdigest()
         return None
 
     def get_user_data(self, name: str) -> dict:
@@ -222,7 +273,7 @@ class Database:
         fetch = cursor.fetchone()
         return None if fetch is None else fetch[0]
 
-    def manga_in_db(self):
+    def manga_in_db(self, allow_empty_entry=False):
         cursor = self.conn.cursor()
         cursor.execute(
             "SELECT i.identifier, i.name, i.description FROM info i WHERE i.ROWID IN (SELECT info_id FROM mangas);")
@@ -312,10 +363,13 @@ class Database:
     def get_chapters(self, chapters_ids: Sequence[dict], manga_row_id: int = None, muuid: str = None) -> Tuple[
         dict, Optional[str]]:
         downloaded_chapters = {}
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT identifier FROM mangas")
+        db_chapters = [i[0] for i in cursor.fetchall()]
         try:
             for chapter in chapters_ids:
                 _id = chapter["id"]
-                if not self.contains_chapter(_id):
+                if not _id in db_chapters:
                     continue
 
                 pages = self.get_record(_id)
@@ -328,7 +382,7 @@ class Database:
                 downloaded_chapters[_id]["pages"] = pages
                 downloaded_chapters[_id]["volume"] = try_to_get(chapter, ["attributes", "volume"])
                 downloaded_chapters[_id]["chapter"] = try_to_get(chapter, ["attributes", "chapter"])
-        except TypeError:
+        except TypeError as e:
             if not muuid and not manga_row_id:
                 raise Exception("Cannot figure out manga uuid you must set manga_row_id or muuid")
             elif muuid:
@@ -379,7 +433,7 @@ class Database:
     def get_updates(self, timestamp_lim=0):
         cursor = self.conn.cursor()
         cursor.execute("SELECT * FROM updates WHERE timestamp > :tslim ORDER BY timestamp DESC",
-                           {"tslim": timestamp_lim})
+                       {"tslim": timestamp_lim})
         fetch = cursor.fetchall()
         if fetch:
             fetch = [list(i) for i in fetch]
@@ -392,21 +446,14 @@ class Database:
         return [] if not fetch else [i[0] for i in fetch]
 
 
-
 class MangadexConnection:
     def __init__(self):
         self.session = requests.Session()
         self.API = "https://api.mangadex.org"
         self.ROUTE = "https://mangadex.org"
 
-        if os.path.isfile("settings.json"):
-            with open("settings.json", "r") as file:
-                raw_settings = json.load(file)
-            self.exclude_groups = raw_settings["MangadexConnection"].get("excludedGroups")
-            self.cached_chapter_info = raw_settings["MangadexConnection"].get("cacheChapterInfoToDatabase")
-        else:
-            self.exclude_groups = ["4f1de6a2-f0c5-4ac5-bce5-02c7dbb67deb"]
-            self.cached_chapter_info = True
+        self.exclude_groups = settings.MangadexConnection.get("excludedGroups")
+        self.cached_chapter_info = settings.MangadexConnection.get("cacheChapterInfoToDatabase")
 
     def search_manga(self, name: str, limit: int = 1) -> Optional[MutableSequence[dict]]:
         if name in cache["search"]:
@@ -559,7 +606,7 @@ class MangadexConnection:
 
     def get_chapter_list(self, identifier: str, lang: str = "en", cache_only: bool = False) -> Optional[Sequence[dict]]:
         if identifier in cache["get_chapter_list"]:
-            if not time.time() <= cache["get_chapter_list"][identifier]["expire"]:
+            if time.time() >= cache["get_chapter_list"][identifier]["expire"]:
                 del cache[identifier]
             else:
                 return cache["get_chapter_list"][identifier]["list"]
@@ -608,8 +655,7 @@ class MangadexConnection:
             downloaded_pages.append((page_count + 1, page.content))
             if page_download_cb:
                 page_download_cb(muuid, page_count + 1, pages)
-
-            time.sleep(0.2)
+            time.sleep(timeouts[DlProcessor.mode + "_PAGE_TIMEOUT"])
         if not silent:
             Plogger.log(info, f"Finished downloading {identifier}. Took {(time.perf_counter() - start) * 1000}ms")
         return downloaded_pages
@@ -673,29 +719,18 @@ timeouts = {
 
     "FAST_ON_ERROR": 5,
     "NORMAL_ON_ERROR": 15,
-    "SLOW_ON_ERROR": 30
+    "SLOW_ON_ERROR": 30,
+
+    "FAST_PAGE_TIMEOUT": 0,
+    "NORMAL_PAGE_TIMEOUT": 0.125,
+    "SLOW_PAGE_TIMEOUT": 0.25
 }
 
 
 class DownloadProcessor:
     def __init__(self):
-        # get settings or set default
-        if os.path.isfile("settings.json"):
-            with open("settings.json", "r") as file:
-                raw_settings = json.load(file)
-            self.mode = raw_settings["DownloadProcessor"].get("defaultSpeedMode")
-            self.settings = raw_settings["DownloadProcessor"].get("settings")
-            if not self.mode:
-                self.mode = "NORMAL"
-            if not self.settings:
-                self.settings = {
-                    "silent_download": True,
-                }
-        else:
-            self.mode = "NORMAL"
-            self.settings = {
-                "silent_download": True,
-            }
+        self.mode = settings.DownloadProcessor.get("defaultSpeedMode")
+        self.settings = settings.DownloadProcessor.get("settings")
         self.queue = []
         self.currently_working_on = []
         self.in_progress = False
@@ -838,22 +873,16 @@ FIRST_ITER = -1
 
 class AlertSystem:
     def __init__(self):
-        if os.path.isfile("settings.json"):
-            with open("settings.json", "r") as file:
-                raw_settings = json.load(file)
-            self.webhook = raw_settings["AlertSystem"].get("discordWebhook")
-            self.recipient = raw_settings["AlertSystem"].get("discordRecipient")
-            self.start_on_release = raw_settings["AlertSystem"].get("downloadStartOnRelease")
-            self.watched_mangas = raw_settings["AlertSystem"].get("watchedMangas")
-            self.cooldown = float(raw_settings["AlertSystem"].get("cooldown"))
-            self.sound_alert = raw_settings["AlertSystem"].get("soundAlertOnRelease")
-            if self.sound_alert:
-                # TODO: FIX
-                self.audio = None
-                # self.audio = AudioSegment().from_wav(os.getcwd()+"\\res\\notification.wav")
-        else:
-            Plogger.log(erro, "Could not load settings thus could not start AlertSystem")
-            return
+        self.webhook = settings.AlertSystem.get("discordWebhook")
+        self.recipient = settings.AlertSystem.get("discordRecipient")
+        self.start_on_release = settings.AlertSystem.get("downloadStartOnRelease")
+        self.watched_mangas = settings.AlertSystem.get("watchedMangas")
+        self.cooldown = settings.AlertSystem.get("cooldown")
+        self.sound_alert = settings.AlertSystem.get("soundAlertOnRelease")
+        if self.sound_alert:
+            # TODO: Implement sound alert
+            pass
+
         if not os.path.isdir("data"):
             os.mkdir("data")
 
@@ -1074,6 +1103,10 @@ def initialize():
         alert_sys = AlertSystem()
         session_manager = SessionManager()
         create_chapter_to_manga_cache()
+        if settings.OnStart.get("cacheMangas"):
+            # start on diffrent thread so it dose not block it takes quite a lot of time
+            t = threading.Thread(target=preload_mangas)
+            t.start()
     return True
 
 
@@ -1125,16 +1158,23 @@ def chapter_to_manga_from_cache(cuuid):
                 return muuid
 
 
+def preload_mangas() -> None:
+    mangas = database.manga_in_db()
+    for mangauuid, _, _ in mangas:
+        chapters_ids = connection.get_chapter_list(mangauuid)
+        rowid = database.get_rowid(mangauuid)
+        database.get_chapters(chapters_ids, rowid)
+        Plogger.log(info, f"Finished cahing {mangauuid}")
+        time.sleep(5)
+
+
 if __name__ == "__main__":
     database = Database()
     connection = MangadexConnection()
     DlProcessor = DownloadProcessor()
     # update cover arts
-    #database.c.execute("SELECT identifier FROM info")
-    #for i in database.c.fetchall():
-    #    _id = i[0]
-    #    connection.coverart_update(_id)
-    #    time.sleep(1)
-
-
-
+    # database.c.execute("SELECT identifier FROM info")
+    # for i in database.c.fetchall():
+    #     _id = i[0]
+    #     connection.coverart_update(_id)
+    #     time.sleep(1)
