@@ -163,7 +163,7 @@ class Database:
             """CREATE TABLE IF NOT EXISTS "records" ("identifier" TEXT NOT NULL UNIQUE, "pages" INTEGER NOT NULL)""")
         cursor.execute(
             """CREATE TABLE IF NOT EXISTS "info" ("identifier" TEXT NOT NULL, "name" TEXT NOT NULL, "description" 
-            TEXT, cover BLOB)""")
+            TEXT, cover BLOB, small_cover BLOB)""")
         cursor.execute(
             """CREATE TABLE IF NOT EXISTS "updates" ("identifier"	TEXT NOT NULL,"old_chapter"	REAL NOT NULL,
             "new_chapter"	REAL NOT NULL,"timestamp"	REAL NOT NULL);""")
@@ -730,12 +730,24 @@ timeouts = {
 class DownloadProcessor:
     def __init__(self):
         self.mode = settings.DownloadProcessor.get("defaultSpeedMode")
-        self.settings = settings.DownloadProcessor.get("settings")
-        self.queue = []
+        self.silent_download = settings.DownloadProcessor.get("silentDownload")
+        self.save_queue = settings.DownloadProcessor.get("saveQueueOnExit")
+        if not os.path.isdir("data"):
+            os.mkdir("data")
+
+        if self.save_queue and os.path.isfile(f"{os.getcwd()}\data\queue.json"):
+            with open(f"{os.getcwd()}\data\queue.json", "r") as file:
+                self.queue = json.load(file)
+            with open(f"{os.getcwd()}\data\queue.json", "w") as file:
+                json.dump([], file)
+        else:
+            self.queue = []
         self.currently_working_on = []
         self.in_progress = False
         self.thread_finished = True
         self.waiting_for_job = False
+        if settings.DownloadProcessor.get("runOnStart"):
+            self.start()
 
     def start(self):
         self.in_progress = True
@@ -743,6 +755,18 @@ class DownloadProcessor:
         t.start()
 
     def stop(self):
+        if self.save_queue:
+            if self.currently_working_on:
+                for cwo in self.currently_working_on:
+                    found = False
+                    for q in self.queue:
+                        if q["id"] == cwo["id"]:
+                            found = True
+                            break
+                    if not found:
+                        self.queue.append({"id": cwo["id"]})
+            with open(f"{os.getcwd()}\data\queue.json", "w") as file:
+                json.dump(self.queue, file)
         self.in_progress = False
 
     def change_mode(self, mode):
@@ -779,6 +803,7 @@ class DownloadProcessor:
         while self.in_progress:
             if self.queue:
                 try:
+
                     job = self.queue.pop(0)
                 except IndexError:
                     self.waiting_for_job = True
@@ -835,7 +860,7 @@ class DownloadProcessor:
                         continue
                     # generate is for instant stop of manga downloading until now it just stops
                     for page_value, page in connection.get_chapter_pages(_id, pages_in_db,
-                                                                         silent=self.settings["silent_download"],
+                                                                         silent=self.silent_download,
                                                                          generate=self.running,
                                                                          page_download_cb=self.page_download_callback,
                                                                          muuid=job["id"]):
@@ -1164,8 +1189,26 @@ def preload_mangas() -> None:
         chapters_ids = connection.get_chapter_list(mangauuid)
         rowid = database.get_rowid(mangauuid)
         database.get_chapters(chapters_ids, rowid)
-        Plogger.log(info, f"Finished cahing {mangauuid}")
+        Plogger.log(info, f"Finished caching {mangauuid}")
         time.sleep(5)
+
+
+def threaded_downloader():
+    """
+    concept (because not much time and my memory is bad):
+    list that all threads can access (to install from start to end not random from 1-N chapter)
+
+    list that will store downloaded content and save it to database so the threadeds don't race each other
+    or in the case of sqlite throw exception (not handling that or SystemError that escapes try/except for some reason
+
+    make sure threads dont save record so it won't intefere with main thread (save on main thread)
+
+    some fail safeties:
+        stop all threads and warn user when rate limit is reached (maybe some couter so it dosent actually hit it)
+        limit threads to some reasonal number that i will find while testing
+
+    dont get too silly and overload/get banned from mangadex servers
+    """
 
 
 if __name__ == "__main__":

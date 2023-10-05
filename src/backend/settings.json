@@ -1,12 +1,13 @@
 {
     "LogLevel": 1,
     "OnStart": {
-        "cacheMangas": true
+        "cacheMangas": false
     },
     "DownloadProcessor": {
-        "settings": {
-            "silent_download": false
-        }
+        "defaultSpeedMode": "SLOW",
+        "silentDownload": true,
+        "saveQueueOnExit": true,
+        "runOnStart": true
     },
     "MangadexConnection": {
         "excludedGroups - comment": "Here add any official group because if MangadexConnection comes across official publication it most likely redirects to different website so the connection will fail",
