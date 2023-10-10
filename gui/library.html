@@ -155,7 +155,8 @@
         }
 
         function set_library(response)
-        {
+        {	
+			console.log("setting library")
             if(!this.responseText)
                 return; 
             const data = JSON.parse(this.responseText).response;
@@ -209,15 +210,8 @@
             }
 
         }
-
-
-        function get_library()
-        {
-            doAjax("/manga/library/data", "GET", set_library, null);
-        }
-
-        get_library();
 		
+		doAjax("/manga/library/data", "GET", set_library, null);
         </script>
     </body>
 </html>

@@ -5,6 +5,7 @@
     },
     "DownloadProcessor": {
         "defaultSpeedMode": "SLOW",
+        "useThreading": true,
         "silentDownload": true,
         "saveQueueOnExit": true,
         "runOnStart": true

@@ -12,7 +12,7 @@ import time
 from collections.abc import MutableSequence, Set, Generator
 from gzip import compress, decompress
 from pstats import SortKey
-from typing import Callable, Tuple, Optional, Sequence, Union
+from typing import Callable, Tuple, Optional, Sequence, Union, List
 # ALERT SYSTEM
 from uuid import UUID
 
@@ -29,6 +29,7 @@ from pydub.playback import play as PlaySound
 from hashlib import sha256
 from PIL import Image
 import io
+import concurrent.futures
 
 # for testing the offline mode
 DISABLE_INTERNET_CONNECTION = 0
@@ -173,6 +174,17 @@ class Database:
             """CREATE TABLE IF NOT EXISTS "users" ("name"	TEXT NOT NULL UNIQUE,"password"	BLOB NOT NULL,"data" BLOB);""")
         cursor.execute(
             """CREATE TABLE IF NOT EXISTS "sessions" ("sessionid"	TEXT UNIQUE,"expire"	REAL,"owner"	TEXT)""")
+
+        try:
+            # needed for huge performance boost
+            # this little code actually speedup /manga/library/data from 11000ms to 3ms pretty neat
+            cursor.execute("CREATE INDEX idx_info_id ON mangas(info_id)")
+        except Exception as e:
+            if "already exists" in e.__str__():
+                Plogger.log(info, "mangas(info_id) index already exists")
+            else:
+                Plogger.log(warn, f"Exception when trying to create index for performance benefit: {e}")
+
         self.conn.commit()
 
     def get_session(self, sessionid):
@@ -604,7 +616,7 @@ class MangadexConnection:
                 Plogger.log(warn, str(e))
         return chapters_dict
 
-    def get_chapter_list(self, identifier: str, lang: str = "en", cache_only: bool = False) -> Optional[Sequence[dict]]:
+    def get_chapter_list(self, identifier: str, lang: str = "en", cache_only: bool = False) -> Optional[List[dict]]:
         if identifier in cache["get_chapter_list"]:
             if time.time() >= cache["get_chapter_list"][identifier]["expire"]:
                 del cache[identifier]
@@ -635,12 +647,20 @@ class MangadexConnection:
         return sorted_chapters
 
     def get_chapter_pages(self, identifier: str, db_pages: Sequence, silent=False, generate: Callable = None,
-                          page_download_cb: Callable = None, muuid: str = None) -> Sequence[Tuple[int, bytes]]:
+                          page_download_cb: Callable = None, muuid: str = None, threaded: bool = False,
+                          threaded_callback: Callable = None, stop_callback: Callable = None) -> Sequence[
+        Tuple[int, bytes]]:
         metadata = requests.get(f"https://api.mangadex.org/at-home/server/{identifier}").json()
+        if metadata["result"] != "ok":
+            print("reached rate limit")
+            stop_callback()
         _hash = metadata["chapter"]["hash"]
         baseUrl = metadata['baseUrl']
         pages = len(metadata["chapter"]["data"])
-        database.set_record(identifier, pages)
+        if not threaded:
+            database.set_record(identifier, pages)
+        else:
+            threaded_callback(identifier, pages)
         if not silent:
             start = time.perf_counter()
         downloaded_pages = []
@@ -659,6 +679,39 @@ class MangadexConnection:
         if not silent:
             Plogger.log(info, f"Finished downloading {identifier}. Took {(time.perf_counter() - start) * 1000}ms")
         return downloaded_pages
+
+    def threaded_get_chapter_page(selfself, identifier: str, db_pages: Sequence, silent=False,
+                                  generate: Callable = None,
+                                  page_download_cb: Callable = None, muuid: str = None):
+        metadata = requests.get(f"https://api.mangadex.org/at-home/server/{identifier}").json()
+        if metadata["result"] != "ok":
+            print("reached rate limit")
+            return
+        _hash = metadata["chapter"]["hash"]
+        baseUrl = metadata['baseUrl']
+        pages = len(metadata["chapter"]["data"])
+
+        def download_page(page_count, page_digest):
+            page = requests.get(f"{baseUrl}/data/{_hash}/{page_digest}")
+            Plogger.log(info, f"Getting {page_digest}")
+            return page_count + 1, page.content
+
+        downloaded_pages = []
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            futures = [executor.submit(download_page, page_count, page_digest)
+                       for page_count, page_digest in enumerate(metadata["chapter"]["data"])
+                       if page_count + 1 not in db_pages and (generate() if generate else True)]
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    downloaded_pages.append(future.result())
+                    if page_download_cb:
+                        page_download_cb(muuid, downloaded_pages[-1][0], pages)
+                except Exception as e:
+                    print(f"An error occurred: {e}")
+
+        if not silent:
+            Plogger.log(info, f"Finished downloading {identifier}. Took {time.perf_counter() * 1000}ms")
+        return sorted(downloaded_pages, key=lambda x: x[0])
 
     def get_manga_uuid_from_chapter(self, chapter_uuid):
         muuid = chapter_to_manga_from_cache(chapter_uuid)
@@ -732,6 +785,7 @@ class DownloadProcessor:
         self.mode = settings.DownloadProcessor.get("defaultSpeedMode")
         self.silent_download = settings.DownloadProcessor.get("silentDownload")
         self.save_queue = settings.DownloadProcessor.get("saveQueueOnExit")
+        self.use_threadiing = settings.DownloadProcessor.get("useThreading")
         if not os.path.isdir("data"):
             os.mkdir("data")
 
@@ -859,11 +913,16 @@ class DownloadProcessor:
                                     f"already in database {chapter['attributes']['volume']} Volume {chapter['attributes']['chapter']} Chapter")
                         continue
                     # generate is for instant stop of manga downloading until now it just stops
-                    for page_value, page in connection.get_chapter_pages(_id, pages_in_db,
-                                                                         silent=self.silent_download,
-                                                                         generate=self.running,
-                                                                         page_download_cb=self.page_download_callback,
-                                                                         muuid=job["id"]):
+                    if self.use_threadiing:
+                        download_func = connection.threaded_get_chapter_page
+                    else:
+                        download_func = connection.get_chapter_pages
+
+                    for page_value, page in download_func(_id, pages_in_db,
+                                                          silent=self.silent_download,
+                                                          generate=self.running,
+                                                          page_download_cb=self.page_download_callback,
+                                                          muuid=job["id"]):
                         database.save_page(_id, page_value, job["id"], page)
                     if not self.running():
                         Plogger.log(info, "stopping thread " + str(self.in_progress))
@@ -1193,31 +1252,7 @@ def preload_mangas() -> None:
         time.sleep(5)
 
 
-def threaded_downloader():
-    """
-    concept (because not much time and my memory is bad):
-    list that all threads can access (to install from start to end not random from 1-N chapter)
-
-    list that will store downloaded content and save it to database so the threadeds don't race each other
-    or in the case of sqlite throw exception (not handling that or SystemError that escapes try/except for some reason
-
-    make sure threads dont save record so it won't intefere with main thread (save on main thread)
-
-    some fail safeties:
-        stop all threads and warn user when rate limit is reached (maybe some couter so it dosent actually hit it)
-        limit threads to some reasonal number that i will find while testing
-
-    dont get too silly and overload/get banned from mangadex servers
-    """
-
-
 if __name__ == "__main__":
     database = Database()
     connection = MangadexConnection()
     DlProcessor = DownloadProcessor()
-    # update cover arts
-    # database.c.execute("SELECT identifier FROM info")
-    # for i in database.c.fetchall():
-    #     _id = i[0]
-    #     connection.coverart_update(_id)
-    #     time.sleep(1)
