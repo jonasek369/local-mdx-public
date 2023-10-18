@@ -136,19 +136,11 @@
 		const content = document.getElementById('content');
 		const page_header = document.getElementById("page-header");
 
-		const nextChapter = "{{ next }}";
-		const prevChapter = "{{ prev }}";
+		var nextChapter = null;
+		var prevChapter = null;
 		// todo: end here
-		var nextPages = "{{ nextpage }}";
-		var prevPages = "{{ prevpage }}";
-        console.log(nextChapter);
-        console.log(prevChapter);
-
-		if(isNaN(nextPages) || isNaN(prevPages))
-		{
-			var nextPages = "1";
-			var prevPages = "1";
-		}
+		var nextPages = null;
+		var prevPages = null;
 
 		var pageCount = {{ pages }};
 		var page = {{page}};
@@ -166,25 +158,9 @@
   			// Determine if the click happened on the left or right side
 			var pageCopy = page;
   			if (clickX < midpoint) {
-  				if(page-1 < 1 && prevChapter !== "None")
-				{
-					window.location.href = "/read/"+prevChapter+"/"+prevPages;
-				}
-				page = Math.max(1, Math.min(page-1, pageCount));
-				if(page == pageCopy){
-					return;
-				}
-  				set_page(page);
+  				page_sub();
   			} else {
-				if(page+1 > pageCount && nextChapter !== "None")
-				{
-					window.location.href = "/read/"+nextChapter+"/1";
-				}
-				page = Math.max(1, Math.min(page+1, pageCount));
-				if(page == pageCopy){
-					return;
-				}
-  				set_page(page);
+				page_add();
   			}
 		}
 
@@ -212,33 +188,73 @@
 			switch(event.key)
 			{
 				case "ArrowRight":
-					if(page+1 > pageCount && nextChapter !== "None")
-					{
-						window.location.href = "/read/"+nextChapter+"/1";
-					}
-					page = Math.max(1, Math.min(page+1, pageCount));
-					if(page == pageCopy){
-						break;
-					}
-					set_page(page);
-                	
+					page_add();
 					break;
 				case "ArrowLeft":
-					if(page-1 < 1 && prevChapter !== "None")
-					{
-						window.location.href = "/read/"+prevChapter+"/"+prevPages;
-					}
-					page = Math.max(1, Math.min(page-1, pageCount));
-					if(page == pageCopy){
-						break;
-					}
-                	set_page(page);
+					page_sub();
 					break;
 				default:
 					break;
 			}
 
         });
+
+
+		function page_add(){
+			var pageCopy = page;
+			if(page+1 > pageCount && nextChapter !== null)
+			{
+				window.location.href = "/read/"+nextChapter+"/1";
+			}
+			page = Math.max(1, Math.min(page+1, pageCount));
+			if(page == pageCopy){
+				return;
+			}
+			set_page(page);
+    	}
+
+		function page_sub(){
+			var pageCopy = page;
+			if(page-1 < 1 && prevChapter !== null)
+			{
+				window.location.href = "/read/"+prevChapter+"/"+prevPages;
+			}
+			page = Math.max(1, Math.min(page-1, pageCount));
+			if(page == pageCopy){
+				return;
+			}
+            set_page(page);
+		}
+
+		function parse_next_prev(response){
+			if(!this.responseText)
+                return;
+			const data = JSON.parse(this.responseText);
+			
+			if(data.next !== null){
+				nextChapter = data.next.id;
+				nextPages = data.next.attributes.pages;
+			}
+			
+			if(data.prev !== null){
+				prevChapter = data.prev.id;
+				prevPages = data.prev.attributes.pages;
+			}
+
+
+			// clears the interval if we already have both next and prev			
+			if((prevChapter !== null || data.current.chapter == "1") &&  nextChapter !== null){
+				clearInterval(next_prev_interval);
+				console.log("clearing interval");
+			}
+
+		}
+
+		function get_next_prev(){
+			doAjax("/read/next-prev/{{cuuid}}", "GET", parse_next_prev);
+		}
+		get_next_prev();
+		next_prev_interval =  setInterval(get_next_prev, 1000)
 
     </script>
 </body>

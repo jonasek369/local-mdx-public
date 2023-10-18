@@ -219,6 +219,11 @@
 				window.location.replace("/updates");
 			}
 
+            document.getElementById('query').onkeydown = function(event) {
+                if (event.keyCode == 13) {
+                    searchManga();
+                }
+            }
 
         </script>
     </body>

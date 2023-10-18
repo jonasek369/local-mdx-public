@@ -5,6 +5,7 @@ import sys
 import time
 import uuid
 from functools import wraps
+
 try:
     import webview
 except ImportError:
@@ -12,6 +13,8 @@ except ImportError:
         def __init__(self):
             self.windows = []
             self.token = -1
+
+
     webview = wv()
 from flask import Flask, jsonify, render_template, request, make_response
 
@@ -136,7 +139,7 @@ def get_chapter_image(identifier, page):
     if image_binary is not None:
         response = make_response(image_binary)
         response.headers.set('Content-Type', 'image/jpeg')
-        response.headers.set('Content-Disposition', 'inline', filename=f'{identifier}-{page}.jpg')
+        response.headers.set('Content-Disposition', 'inline', filename=f'{identifier}-{page}.png')
         return response
     return "Error: no image found"
 
@@ -154,14 +157,27 @@ def get_cover_art(identifier):
     return "Error: no image found"
 
 
-@server.route("/read/<chapteruuid>", methods=["GET"])
-def read_manga(chapteruuid):
+@server.route("/read/next-prev/<chapteruuid>")
+def chapter_next_previous(chapteruuid):
     app.initialize()
     try:
         next_prev = app.connection.get_next_and_prev(chapteruuid)
     except Exception as e:
         app.Plogger.log(app.erro, f"Could not get next and prev: {e}")
         next_prev = {}
+    return next_prev
+
+
+@server.route("/read/<chapteruuid>", methods=["GET"], defaults={"page": 1})
+@server.route("/read/<chapteruuid>/<page>", methods=["GET"])
+def read_manga(chapteruuid, page):
+    try:
+        page = int(page)
+        if not app.database.get_page(chapteruuid, page):
+            page = 1
+    except ValueError:
+        page = 1
+    next_prev = chapter_next_previous(chapteruuid)
     chapter = app.try_to_get(next_prev, ["current", "chapter"])
     volume = app.try_to_get(next_prev, ["current", "volume"])
     try:
@@ -185,11 +201,7 @@ def read_manga(chapteruuid):
     return render_template("read.html", cuuid=chapteruuid,
                            pages=app.database.get_chapters([{"id": chapteruuid}], rowid)[0][chapteruuid]["pages"],
                            muuid=muuid,
-                           next=app.try_to_get(next_prev, ["next", "id"]),
-                           nextpage=app.try_to_get(next_prev, ["next", "attributes", "pages"]),
-                           prev=app.try_to_get(next_prev, ["prev", "id"]),
-                           prevpage=app.try_to_get(next_prev, ["prev", "attributes", "pages"]),
-                           page=1
+                           page=page
                            )
 
 
@@ -201,47 +213,6 @@ def user_data():
         return {"success": app.database.get_user_data(name)}
     else:
         return {"error": "invalid session"}
-
-
-@server.route("/read/<chapteruuid>/<page>", methods=["GET"])
-def read_manga_pages(chapteruuid, page):
-    app.initialize()
-    try:
-        page = int(page)
-        if not app.database.get_page(chapteruuid, page):
-            page = 1
-    except ValueError:
-        page = 1
-    next_prev = app.connection.get_next_and_prev(chapteruuid)
-    chapter = app.try_to_get(next_prev, ["current", "chapter"])
-    volume = app.try_to_get(next_prev, ["current", "volume"])
-    try:
-        webview.windows[0].set_title(f"Volume {volume} Chapter {chapter}")
-    except IndexError:
-        pass
-    muuid = app.connection.get_manga_uuid_from_chapter(chapteruuid)
-    rowid = app.database.get_rowid(muuid)
-    session = request.cookies.get("session")
-    if app.session_manager.validate_session(session):
-        name = app.session_manager.get_session_name(session)
-        data = app.database.get_user_data(name)
-        if "read_manga" not in data:
-            data["read_manga"] = {}
-        if muuid not in data["read_manga"]:
-            data["read_manga"][muuid] = []
-
-        if chapteruuid not in data["read_manga"][muuid]:
-            data["read_manga"][muuid].append(chapteruuid)
-            app.database.set_user_data(name, data)
-    return render_template("read.html", cuuid=chapteruuid,
-                           pages=app.database.get_chapters([{"id": chapteruuid}], rowid)[0][chapteruuid]["pages"],
-                           muuid=muuid,
-                           next=app.try_to_get(next_prev, ["next", "id"]),
-                           nextpage=app.try_to_get(next_prev, ["next", "attributes", "pages"]),
-                           prev=app.try_to_get(next_prev, ["prev", "id"]),
-                           prevpage=app.try_to_get(next_prev, ["prev", "attributes", "pages"]),
-                           page=page
-                           )
 
 
 @server.route("/manga/<mangauuid>", methods=["GET"])
