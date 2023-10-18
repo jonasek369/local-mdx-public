@@ -10,6 +10,7 @@ import sys
 import threading
 import time
 from collections.abc import MutableSequence, Set, Generator
+from datetime import datetime
 from gzip import compress, decompress
 from pstats import SortKey
 from typing import Callable, Tuple, Optional, Sequence, Union, List
@@ -182,6 +183,15 @@ class Database:
         except Exception as e:
             if "already exists" in e.__str__():
                 Plogger.log(info, "mangas(info_id) index already exists")
+            else:
+                Plogger.log(warn, f"Exception when trying to create index for performance benefit: {e}")
+
+        try:
+            # can make downloading faster
+            cursor.execute("CREATE INDEX idx_identifier_page ON mangas (identifier, page);")
+        except Exception as e:
+            if "already exists" in e.__str__():
+                Plogger.log(info, "mangas (identifier, page) index already exists")
             else:
                 Plogger.log(warn, f"Exception when trying to create index for performance benefit: {e}")
 
@@ -381,10 +391,15 @@ class Database:
         try:
             for chapter in chapters_ids:
                 _id = chapter["id"]
-                if not _id in db_chapters:
+
+                if _id not in db_chapters:
                     continue
 
                 pages = self.get_record(_id)
+
+                # record dose not exist so it is not in database
+                if not pages:
+                    continue
 
                 # assert pages == self.get_chapter_pages(
                 #    _id), f"Not all pages have been downloaded {pages} {self.get_chapter_pages(_id)}"
@@ -616,7 +631,8 @@ class MangadexConnection:
                 Plogger.log(warn, str(e))
         return chapters_dict
 
-    def get_chapter_list(self, identifier: str, lang: str = "en", cache_only: bool = False) -> Optional[List[dict]]:
+    def get_chapter_list(self, identifier: str, lang: str = "en", cache_only: bool = False, remove_duplicates=True) -> \
+    Optional[List[dict]]:
         if identifier in cache["get_chapter_list"]:
             if time.time() >= cache["get_chapter_list"][identifier]["expire"]:
                 del cache[identifier]
@@ -644,23 +660,19 @@ class MangadexConnection:
         if self.cached_chapter_info:
             data = compress(json.dumps(sorted_chapters).encode())
             database.add_chapter_info(identifier, data)
-        return sorted_chapters
+
+        return remove_duplicate_chapters(sorted_chapters)
 
     def get_chapter_pages(self, identifier: str, db_pages: Sequence, silent=False, generate: Callable = None,
-                          page_download_cb: Callable = None, muuid: str = None, threaded: bool = False,
-                          threaded_callback: Callable = None, stop_callback: Callable = None) -> Sequence[
+                          page_download_cb: Callable = None, muuid: str = None) -> Sequence[
         Tuple[int, bytes]]:
         metadata = requests.get(f"https://api.mangadex.org/at-home/server/{identifier}").json()
         if metadata["result"] != "ok":
             print("reached rate limit")
-            stop_callback()
         _hash = metadata["chapter"]["hash"]
         baseUrl = metadata['baseUrl']
         pages = len(metadata["chapter"]["data"])
-        if not threaded:
-            database.set_record(identifier, pages)
-        else:
-            threaded_callback(identifier, pages)
+        database.set_record(identifier, pages)
         if not silent:
             start = time.perf_counter()
         downloaded_pages = []
@@ -680,16 +692,18 @@ class MangadexConnection:
             Plogger.log(info, f"Finished downloading {identifier}. Took {(time.perf_counter() - start) * 1000}ms")
         return downloaded_pages
 
-    def threaded_get_chapter_page(selfself, identifier: str, db_pages: Sequence, silent=False,
+    def threaded_get_chapter_page(self, identifier: str, db_pages: Sequence, silent=False,
                                   generate: Callable = None,
                                   page_download_cb: Callable = None, muuid: str = None):
         metadata = requests.get(f"https://api.mangadex.org/at-home/server/{identifier}").json()
         if metadata["result"] != "ok":
-            print("reached rate limit")
+            Plogger.log(erro, f"reached rate limit while downlaoding {identifier}")
+            Plogger.log(erro, f"Mangadex response: {metadata}")
             return
         _hash = metadata["chapter"]["hash"]
         baseUrl = metadata['baseUrl']
         pages = len(metadata["chapter"]["data"])
+        database.set_record(identifier, pages)
 
         def download_page(page_count, page_digest):
             page = requests.get(f"{baseUrl}/data/{_hash}/{page_digest}")
@@ -697,7 +711,8 @@ class MangadexConnection:
             return page_count + 1, page.content
 
         downloaded_pages = []
-        with concurrent.futures.ThreadPoolExecutor() as executor:
+        # this is for mangas that have 1-4 pages per chapter because im not sure if ThreadPoolExecutor handles that
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(pages, (os.cpu_count() or 1) + 4)) as executor:
             futures = [executor.submit(download_page, page_count, page_digest)
                        for page_count, page_digest in enumerate(metadata["chapter"]["data"])
                        if page_count + 1 not in db_pages and (generate() if generate else True)]
@@ -707,10 +722,11 @@ class MangadexConnection:
                     if page_download_cb:
                         page_download_cb(muuid, downloaded_pages[-1][0], pages)
                 except Exception as e:
-                    print(f"An error occurred: {e}")
+                    Plogger.log(erro, f"An error occurred: {e}")
 
         if not silent:
             Plogger.log(info, f"Finished downloading {identifier}. Took {time.perf_counter() * 1000}ms")
+        # so the data in database is stored sequentially
         return sorted(downloaded_pages, key=lambda x: x[0])
 
     def get_manga_uuid_from_chapter(self, chapter_uuid):
@@ -718,9 +734,7 @@ class MangadexConnection:
         if muuid:
             return muuid
         req = self.session.get(self.API + f"/chapter/{chapter_uuid}")
-        if not req:
-            return None
-        if req.status_code != 200:
+        if req.status_code != 200 or not req:
             return None
         chapter_info = req.json()
         if chapter_info["result"] != "ok":
@@ -789,9 +803,12 @@ class DownloadProcessor:
         if not os.path.isdir("data"):
             os.mkdir("data")
 
+        self.queue = []
+
         if self.save_queue and os.path.isfile(f"{os.getcwd()}\data\queue.json"):
             with open(f"{os.getcwd()}\data\queue.json", "r") as file:
-                self.queue = json.load(file)
+                for manga in json.load(file):
+                    self.add_chapter(manga["id"])
             with open(f"{os.getcwd()}\data\queue.json", "w") as file:
                 json.dump([], file)
         else:
@@ -818,7 +835,7 @@ class DownloadProcessor:
                             found = True
                             break
                     if not found:
-                        self.queue.append({"id": cwo["id"]})
+                        self.push_queue({"id": cwo["id"]})
             with open(f"{os.getcwd()}\data\queue.json", "w") as file:
                 json.dump(self.queue, file)
         self.in_progress = False
@@ -830,6 +847,21 @@ class DownloadProcessor:
 
     def running(self):
         return self.in_progress
+
+    def push_queue(self, job):
+        for job_queue in self.queue:
+            if job_queue["id"] == job["id"]:
+                return {"status": "job_in_queue", "message": "job already in queue"}
+        for job_working in self.currently_working_on:
+            if job_working["id"] == job["id"]:
+                return {"status": "job_in_queue", "message": "job already in queue"}
+        self.queue.append(job)
+        return {"status": "ok"}
+
+    def remove_queue(self, data):
+        if 0 > int(data.get("index")) > len(self.queue) - 1:
+            return {"status": "error"}
+        return self.queue.pop(int(data.get("index")))
 
     def page_download_callback(self, identifier, at_page, page_total):
         for cwo_index, task in enumerate(self.currently_working_on):
@@ -929,7 +961,7 @@ class DownloadProcessor:
                         if not job_finished:
                             _, task = find_by_id_in_list(self.currently_working_on, job["id"])
                             if task["status"][0][0] < task["status"][0][1]:
-                                self.queue.append(job)
+                                self.push_queue(job)
                         return
 
                     # finished downloading chapter add
@@ -941,8 +973,6 @@ class DownloadProcessor:
                 self.currently_working_on.remove(task)
             except Exception as e:
                 Plogger.log(erro, "Dlerror" + str(e))
-                # could not find element or timedout
-                time.sleep(timeouts[self.mode + "_ON_ERROR"])
                 # set job back to front
                 self.queue.insert(0, job)
         Plogger.log(info, "stopping download from worker and exiting thread")
@@ -1084,7 +1114,7 @@ class AlertSystem:
                     "recipient": self.dcRecipient
                 })
 
-                DlProcessor.queue.append({"id": manga, "chapter_start": chapter_before[manga]})
+                DlProcessor.push_queue({"id": manga, "chapter_start": chapter_before[manga]})
                 change = True
 
         with open(os.getcwd() + "\\data\\watched-manga.json", "w") as file:
@@ -1250,6 +1280,23 @@ def preload_mangas() -> None:
         database.get_chapters(chapters_ids, rowid)
         Plogger.log(info, f"Finished caching {mangauuid}")
         time.sleep(5)
+
+
+def convert_to_datetime(timestamp_str):
+    return datetime.strptime(timestamp_str, '%Y-%m-%dT%H:%M:%S+00:00')
+
+
+def remove_duplicate_chapters(chapters):
+    chapter_dict = {}
+
+    for chapter in chapters:
+        key = (chapter['attributes']['volume'], chapter['attributes']['chapter'])
+        publish_at = convert_to_datetime(chapter['attributes']['publishAt'])
+        if key not in chapter_dict or publish_at > convert_to_datetime(chapter_dict[key]['attributes']['publishAt']):
+            chapter_dict[key] = chapter
+
+    return sorted(list(chapter_dict.values()),
+                  key=lambda x: (try_and_conv(x['attributes']['volume']), try_and_conv(x['attributes']['chapter'])))
 
 
 if __name__ == "__main__":

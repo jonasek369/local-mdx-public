@@ -288,15 +288,7 @@ def push_job():
         return {"status": "error"}
     if not is_valid_uuid(data.get("id")):
         return {"status": "error"}
-    job = {"id": data.get("id")}
-    for job_queue in app.DlProcessor.queue:
-        if job_queue["id"] == job["id"]:
-            return {"status": "job_in_queue", "message": "job already in queue"}
-    for job_working in app.DlProcessor.currently_working_on:
-        if job_working["id"] == job["id"]:
-            return {"status": "job_in_queue", "message": "job already in queue"}
-    app.DlProcessor.queue.append(job)
-    return {"status": "ok"}
+    return app.DlProcessor.push_queue({"id": data.get("id")})
 
 
 @server.route("/manga/download/pop-job", methods=["POST"])
@@ -309,9 +301,7 @@ def pop_job():
         int(data.get("index"))
     except ValueError:
         return {"status": "error"}
-    if 0 > int(data.get("index")) > len(app.DlProcessor.queue) - 1:
-        return {"status": "error"}
-    return app.DlProcessor.queue.pop(int(data.get("index")))
+    return app.DlProcessor.remove_queue(data)
 
 
 @server.route("/manga/download/push-to-top", methods=["POST"])
