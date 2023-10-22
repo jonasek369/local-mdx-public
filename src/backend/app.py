@@ -1,32 +1,25 @@
 import asyncio
-import base64
-import io
 import json
 import os
 import random
 import sqlite3
 import string
-import sys
 import threading
 import time
 from collections.abc import MutableSequence, Set, Generator
 from datetime import datetime
 from gzip import compress, decompress
-from pstats import SortKey
 from typing import Callable, Tuple, Optional, Sequence, Union, List
 # ALERT SYSTEM
 from uuid import UUID
 
 import aiohttp
 import discord
-import tqdm
 from discord import File
 from discord import Webhook, Member
 from discord.abc import MISSING
 
 from custom_logger import Logger, info, warn, erro
-from pydub import AudioSegment
-from pydub.playback import play as PlaySound
 from hashlib import sha256
 from PIL import Image
 import io
@@ -113,11 +106,11 @@ COMPILED = False
 LOGGING = False
 
 
-def try_to_get(json, path):
+def try_to_get(_json, path):
     try:
         for element in path:
-            json = json[element]
-        return json
+            _json = _json[element]
+        return _json
     except (KeyError, TypeError):
         return None
 
@@ -135,23 +128,6 @@ def try_and_conv(value):
         return float(value)
     except (ValueError, TypeError):
         return -1
-
-
-def get_file_content_chrome(driver, uri):
-    result = driver.execute_async_script("""
-    var uri = arguments[0];
-    var callback = arguments[1];
-    var toBase64 = function(buffer){for(var r,n=new Uint8Array(buffer),t=n.length,a=new Uint8Array(4*Math.ceil(t/3)),i=new Uint8Array(64),o=0,c=0;64>c;++c)i[c]="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".charCodeAt(c);for(c=0;t-t%3>c;c+=3,o+=4)r=n[c]<<16|n[c+1]<<8|n[c+2],a[o]=i[r>>18],a[o+1]=i[r>>12&63],a[o+2]=i[r>>6&63],a[o+3]=i[63&r];return t%3===1?(r=n[t-1],a[o]=i[r>>2],a[o+1]=i[r<<4&63],a[o+2]=61,a[o+3]=61):t%3===2&&(r=(n[t-2]<<8)+n[t-1],a[o]=i[r>>10],a[o+1]=i[r>>4&63],a[o+2]=i[r<<2&63],a[o+3]=61),new TextDecoder("ascii").decode(a)};
-    var xhr = new XMLHttpRequest();
-    xhr.responseType = 'arraybuffer';
-    xhr.onload = function(){ callback(toBase64(xhr.response)) };
-    xhr.onerror = function(){ callback(xhr.status) };
-    xhr.open('GET', uri);
-    xhr.send();
-    """, uri)
-    if type(result) == int:
-        raise Exception("Request failed with status %s" % result)
-    return base64.b64decode(result)
 
 
 class Database:
@@ -224,6 +200,7 @@ class Database:
             self.conn.commit()
             return True
         except Exception as e:
+            Plogger.log(erro, f"Encountered exception while adding user: {e}")
             return False
 
     def get_user_uuid(self, name: str) -> Optional[str]:
@@ -295,7 +272,7 @@ class Database:
         fetch = cursor.fetchone()
         return None if fetch is None else fetch[0]
 
-    def manga_in_db(self, allow_empty_entry=False):
+    def manga_in_db(self):
         cursor = self.conn.cursor()
         cursor.execute(
             "SELECT i.identifier, i.name, i.description FROM info i WHERE i.ROWID IN (SELECT info_id FROM mangas);")
@@ -382,8 +359,7 @@ class Database:
         fetch = cursor.fetchall()
         return [] if fetch is None else [page[0] for page in fetch]
 
-    def get_chapters(self, chapters_ids: Sequence[dict], manga_row_id: int = None, muuid: str = None) -> Tuple[
-        dict, Optional[str]]:
+    def get_chapters(self, chapters_ids: Sequence[dict], manga_row_id: int = None, muuid: str = None) -> Tuple[dict, Optional[str]]:
         downloaded_chapters = {}
         cursor = self.conn.cursor()
         cursor.execute("SELECT identifier FROM mangas")
@@ -397,7 +373,7 @@ class Database:
 
                 pages = self.get_record(_id)
 
-                # record dose not exist so it is not in database
+                # record does not exist so it is not in database
                 if not pages:
                     continue
 
@@ -632,7 +608,7 @@ class MangadexConnection:
         return chapters_dict
 
     def get_chapter_list(self, identifier: str, lang: str = "en", cache_only: bool = False, remove_duplicates=True) -> \
-    Optional[List[dict]]:
+            Optional[List[dict]]:
         if identifier in cache["get_chapter_list"]:
             if time.time() >= cache["get_chapter_list"][identifier]["expire"]:
                 del cache[identifier]
@@ -668,7 +644,7 @@ class MangadexConnection:
         Tuple[int, bytes]]:
         metadata = requests.get(f"https://api.mangadex.org/at-home/server/{identifier}").json()
         if metadata["result"] != "ok":
-            print("reached rate limit")
+            Plogger.log(warn, "Reached rate limit")
         _hash = metadata["chapter"]["hash"]
         baseUrl = metadata['baseUrl']
         pages = len(metadata["chapter"]["data"])
@@ -697,7 +673,7 @@ class MangadexConnection:
                                   page_download_cb: Callable = None, muuid: str = None):
         metadata = requests.get(f"https://api.mangadex.org/at-home/server/{identifier}").json()
         if metadata["result"] != "ok":
-            Plogger.log(erro, f"reached rate limit while downlaoding {identifier}")
+            Plogger.log(erro, f"reached rate limit while downloading {identifier}")
             Plogger.log(erro, f"Mangadex response: {metadata}")
             return
         _hash = metadata["chapter"]["hash"]
@@ -799,7 +775,7 @@ class DownloadProcessor:
         self.mode = settings.DownloadProcessor.get("defaultSpeedMode")
         self.silent_download = settings.DownloadProcessor.get("silentDownload")
         self.save_queue = settings.DownloadProcessor.get("saveQueueOnExit")
-        self.use_threadiing = settings.DownloadProcessor.get("useThreading")
+        self.use_threading = settings.DownloadProcessor.get("useThreading")
         if not os.path.isdir("data"):
             os.mkdir("data")
 
@@ -945,7 +921,7 @@ class DownloadProcessor:
                                     f"already in database {chapter['attributes']['volume']} Volume {chapter['attributes']['chapter']} Chapter")
                         continue
                     # generate is for instant stop of manga downloading until now it just stops
-                    if self.use_threadiing:
+                    if self.use_threading:
                         download_func = connection.threaded_get_chapter_page
                     else:
                         download_func = connection.get_chapter_pages
@@ -1010,11 +986,13 @@ class AlertSystem:
             return
         if self.cooldown < 60:
             Plogger.log(erro,
-                        "AlertSystem cooldown is set lower that 60! anything lower that atlest 300-600 could get your ip restriced. Please keep that in mind")
+                        "AlertSystem cooldown is set lower that 60! anything lower that at least 300-600 could get your"
+                        "ip restricted. Please keep that in mind")
             return
         if self.cooldown <= 300:
             Plogger.log(warn,
-                        "AlertSystem cooldown. anything lower that atlest 300-600 could get your ip restriced. Please keep that in mind")
+                        "AlertSystem cooldown. anything lower that at least 300-600 could get your ip restricted. "
+                        "Please keep that in mind")
         if self.webhook is None:
             Plogger.log(erro, "Discord webhook is None. Cannot start AlertSystem")
             return
@@ -1041,17 +1019,12 @@ class AlertSystem:
         while True:
             if close_event.is_set():
                 break
-            if time.time() > start + self.cooldown:
+            if time.time() > (start + self.cooldown):
                 self.track()
                 start = time.time()
             time.sleep(0.5)
 
     def send_alert(self, data):
-        if self.sound_alert:
-            try:
-                PlaySound(self.audio)
-            except Exception as e:
-                Plogger.log(erro, f"Could not play sound due to: {e}")
         asyncio.run(send_webhook(
             webhook=self.webhook,
             identifier=data.get("identifier"),
@@ -1247,7 +1220,7 @@ def download_manga(manga):
         print(f"downloading {_id}")
         pages_in_db = database.get_chapter_pages(_id)
 
-        # chapter already in database. No need to download
+        # Chapter already in database. No need to download
         if len(pages_in_db) == database.get_record(_id):
             print(f"{_id} already in database")
             continue

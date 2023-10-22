@@ -60,6 +60,12 @@
   			font-weight: bold;
 			font-family: sans-serif;
 		}
+
+        .hidden {
+            visibility: hidden;
+            display: none;
+            pointer-events: none;
+        }
 	</style>
 </head>
 <body>
@@ -136,18 +142,18 @@
 		const content = document.getElementById('content');
 		const page_header = document.getElementById("page-header");
 
-		var nextChapter = null;
-		var prevChapter = null;
-		// todo: end here
-		var nextPages = null;
-		var prevPages = null;
+		let nextChapter = null;
+		let prevChapter = null;
 
-		var pageCount = {{ pages }};
-		var page = {{page}};
+		let nextPages = null;
+		let prevPages = null;
+
+		let pageCount = {{ pages }};
+		let page = {{page}};
 
 		function handle_click(event)
 		{
-			const image = document.getElementById('page-panel');
+			const image = document.querySelector('#page-panel:not(.hidden)');
 			const boundingRect = image.getBoundingClientRect();
   			const clickX = event.clientX - boundingRect.left;
   			const imageWidth = boundingRect.width;
@@ -155,8 +161,8 @@
   			// Calculate the midpoint of the image
   			const midpoint = imageWidth / 2;
 
-  			// Determine if the click happened on the left or right side
-			var pageCopy = page;
+            console.log(clickX, midpoint);
+
   			if (clickX < midpoint) {
   				page_sub();
   			} else {
@@ -164,27 +170,36 @@
   			}
 		}
 
-		function set_page(pagenum)
+		function full_load()
 		{
-			var img = document.createElement("img");
-					
-			img.id = "page-panel";
-            img.src = "/page-image/{{cuuid}}/"+pagenum;
+            for(let i = 1; i < pageCount+1; i++){
+                const img = document.createElement("img");
 
-			img.addEventListener("mousedown", handle_click);
+                img.id = "page-panel";
+                img.src = "/page-image/{{cuuid}}/"+i;
+                img.classList.add("hidden");
 
-            // clear elements in div
-            while(content.firstChild){
-                content.removeChild(content.firstChild);
+                content.appendChild(img);
             }
-            content.appendChild(img);
-			page_header.innerHTML = pagenum + "/"+ pageCount + " pages"
+            page_header.innerHTML = page + "/"+ pageCount + " pages"
+            set_page(page);
 		}
 
-	    set_page(page);
+        // TODO: Ended here chapters multiply on click
+        function set_page(to_page){
+            let current_page = content.children.item(page-1);
+            let set_page = content.children.item(to_page-1);
+
+            current_page.classList.add("hidden");
+            current_page.removeEventListener("mousedown", handle_click);
+            set_page.classList.remove("hidden")
+            set_page.addEventListener("mousedown", handle_click);
+            page_header.innerHTML = to_page + "/"+ pageCount + " pages"
+        }
+
+	    full_load();
 
         document.addEventListener('keydown', (event)=> {
-			var pageCopy = page;
 			switch(event.key)
 			{
 				case "ArrowRight":
@@ -196,7 +211,6 @@
 				default:
 					break;
 			}
-
         });
 
 
@@ -206,11 +220,12 @@
 			{
 				window.location.href = "/read/"+nextChapter+"/1";
 			}
-			page = Math.max(1, Math.min(page+1, pageCount));
-			if(page == pageCopy){
+			var new_page = Math.max(1, Math.min(page+1, pageCount));
+			if(new_page === pageCopy){
 				return;
 			}
-			set_page(page);
+			set_page(new_page);
+            page = new_page;
     	}
 
 		function page_sub(){
@@ -219,11 +234,12 @@
 			{
 				window.location.href = "/read/"+prevChapter+"/"+prevPages;
 			}
-			page = Math.max(1, Math.min(page-1, pageCount));
-			if(page == pageCopy){
+			var new_page = Math.max(1, Math.min(page-1, pageCount));
+			if(new_page === pageCopy){
 				return;
 			}
-            set_page(page);
+			set_page(new_page);
+            page = new_page;
 		}
 
 		function parse_next_prev(response){
@@ -242,8 +258,9 @@
 			}
 
 
-			// clears the interval if we already have both next and prev			
-			if((prevChapter !== null || data.current.chapter == "1") &&  nextChapter !== null){
+			// clears the interval if we already have both next and prev
+            // the parseFloat is a bit of bandaid fix for mangas that dose not have starting chapter 1 but
+			if((prevChapter !== null || (data.current.chapter === "1" || parseFloat(data.current.chapter) <= 1)) &&  nextChapter !== null){
 				clearInterval(next_prev_interval);
 				console.log("clearing interval");
 			}

@@ -437,4 +437,10 @@ def read_status(muuid, cuuid):
 
 
 if __name__ == "__main__":
-    server.run()
+    USE_SERVER = 1
+    if not USE_SERVER:
+        server.run()
+    else:
+        # testing performance on other devices
+        from waitress import serve
+        serve(server, listen="192.168.0.17:5000")
