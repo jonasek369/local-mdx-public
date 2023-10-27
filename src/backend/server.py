@@ -240,14 +240,13 @@ def server_manga(mangauuid):
 def download_status():
     app.initialize()
 
-    status = app.DlProcessor.currently_working_on.copy()
+    cwo = app.DlProcessor.currently_working_on
+    if cwo is None:
+        return {"status": {},
+                "in_progress": app.DlProcessor.is_running(),
+                "speed_mode": app.DlProcessor.mode}
 
-    for idx, job in enumerate(status):
-        njob = job
-        njob["name"] = app.database.get_info(job["id"])[1]
-        status[idx] = njob
-
-    return {"status": status, "in_progress": app.DlProcessor.in_progress,
+    return {"status": {cwo["id"]: {"name": cwo["name"], "page_status": cwo["page_status"], "chapter_status": cwo["chapter_status"]}}, "in_progress": app.DlProcessor.is_running(),
             "speed_mode": app.DlProcessor.mode}
 
 
@@ -259,20 +258,18 @@ def push_job():
         return {"status": "error"}
     if not is_valid_uuid(data.get("id")):
         return {"status": "error"}
-    return app.DlProcessor.push_queue({"id": data.get("id")})
+    app.DlProcessor.queue.add_job(app.MangaDownloadJob(_id=data.get("id")))
+    return {"status": "success"}
 
 
 @server.route("/manga/download/pop-job", methods=["POST"])
 def pop_job():
     app.initialize()
     data = request.json
-    if "index" not in data:
+    if "id" not in data:
         return {"status": "error"}
-    try:
-        int(data.get("index"))
-    except ValueError:
-        return {"status": "error"}
-    return app.DlProcessor.remove_queue(data)
+    app.DlProcessor.queue.remove_job(_id=data.get("id"))
+    return {"status": "success"}
 
 
 @server.route("/manga/download/push-to-top", methods=["POST"])
@@ -289,7 +286,7 @@ def push_to_top():
         return {"status": "error"}
     if len(app.DlProcessor.queue) == 1:
         return {"status": "success"}
-    app.DlProcessor.queue.insert(0, app.DlProcessor.queue.pop(int(data.get("index"))))
+    app.DlProcessor.queue.push_to_top(int(data.get("index")))
     return {"status": "success"}
 
 
@@ -310,12 +307,15 @@ def stop_download():
 @server.route("/manga/download/queue", methods=["GET"])
 def get_queue():
     app.initialize()
-    queue = app.DlProcessor.queue.copy()
 
-    for idx, job in enumerate(queue):
-        njob = job
-        njob["name"] = app.database.get_info(job["id"])[1]
-        queue[idx] = njob
+    queue = {}
+
+    for idx, job in enumerate(app.DlProcessor.queue):
+        if job.id == app.DlProcessor.currently_working_on["id"] and app.DlProcessor.is_running():
+            continue
+        queue[idx] = {
+            "name": job.name
+        }
 
     return {"queue": queue}
 
@@ -443,4 +443,5 @@ if __name__ == "__main__":
     else:
         # testing performance on other devices
         from waitress import serve
-        serve(server, listen="192.168.0.17:5000")
+
+        serve(server, listen="127.0.0.1:5000")

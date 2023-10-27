@@ -247,9 +247,18 @@
                     a.className = "cell"
                     for (let status in resp.status) {
 					    const value = resp.status[status];
-                        console.log(value);
-					    a.innerHTML = `downloading ${value.name} currently at chapter (${value.status[0][0]}/${value.status[0][1]}) page (${value.status[1][0]}/${value.status[1][1]})`;
-				    }
+                        // Old way of showing the progress keeping it here if i change my mind but i think percentages
+                        // are better for now
+					    // a.innerHTML = `downloading ${value.name} currently at chapter (${value.chapter_status[0]}/${value.chapter_status[1]}) page (${value.page_status[0]}/${value.page_status[1]})`;
+				    	let chapter_perc = Math.round((100 * value.chapter_status[0]) / value.chapter_status[1]);
+                        let page_perc = 0;
+                        if(value.page_status[0] === "?" || value.page_status[1] === "?"){
+                            page_perc = NaN;
+                        }else{
+                            page_perc = Math.round((100 * value.page_status[0]) / value.page_status[1]);
+                        }
+                        a.innerHTML = `downloading ${value.name} chapter progress ${chapter_perc}% page progress ${page_perc}%`;
+                    }
                     divRow.appendChild(a);
                     divUpdates.append(divRow);
                 }

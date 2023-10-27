@@ -76,7 +76,6 @@
 
     <script>
         window.token = '{{ token }}';
-        var ran = false;
 
         function getMethods(obj) {
         	var result = [];
@@ -185,7 +184,6 @@
             set_page(page);
 		}
 
-        // TODO: Ended here chapters multiply on click
         function set_page(to_page){
             let current_page = content.children.item(page-1);
             let set_page = content.children.item(to_page-1);

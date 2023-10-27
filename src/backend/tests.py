@@ -2,7 +2,7 @@ import sys
 import traceback
 
 from custom_logger import Logger, info, succ, warn, erro, trcb
-from app import MangadexConnection, DownloadProcessor, Database, AlertSystem
+from app import MangadexConnection, MangaDownloader, Database, AlertSystem
 
 from hashlib import sha256
 

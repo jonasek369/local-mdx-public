@@ -359,7 +359,8 @@ class Database:
         fetch = cursor.fetchall()
         return [] if fetch is None else [page[0] for page in fetch]
 
-    def get_chapters(self, chapters_ids: Sequence[dict], manga_row_id: int = None, muuid: str = None) -> Tuple[dict, Optional[str]]:
+    def get_chapters(self, chapters_ids: Sequence[dict], manga_row_id: int = None, muuid: str = None) -> Tuple[
+        dict, Optional[str]]:
         downloaded_chapters = {}
         cursor = self.conn.cursor()
         cursor.execute("SELECT identifier FROM mangas")
@@ -640,8 +641,7 @@ class MangadexConnection:
         return remove_duplicate_chapters(sorted_chapters)
 
     def get_chapter_pages(self, identifier: str, db_pages: Sequence, silent=False, generate: Callable = None,
-                          page_download_cb: Callable = None, muuid: str = None) -> Sequence[
-        Tuple[int, bytes]]:
+                          page_download_cb: Callable = None, muuid: str = None) -> Sequence[Tuple[int, bytes]]:
         metadata = requests.get(f"https://api.mangadex.org/at-home/server/{identifier}").json()
         if metadata["result"] != "ok":
             Plogger.log(warn, "Reached rate limit")
@@ -670,7 +670,7 @@ class MangadexConnection:
 
     def threaded_get_chapter_page(self, identifier: str, db_pages: Sequence, silent=False,
                                   generate: Callable = None,
-                                  page_download_cb: Callable = None, muuid: str = None):
+                                  page_download_cb: Callable = None, muuid: str = None) -> Sequence[Tuple[int, bytes]]:
         metadata = requests.get(f"https://api.mangadex.org/at-home/server/{identifier}").json()
         if metadata["result"] != "ok":
             Plogger.log(erro, f"reached rate limit while downloading {identifier}")
@@ -688,7 +688,9 @@ class MangadexConnection:
 
         downloaded_pages = []
         # this is for mangas that have 1-4 pages per chapter because im not sure if ThreadPoolExecutor handles that
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(pages, (os.cpu_count() or 1) + 4)) as executor:
+        THREAD_COUNT = 8
+        with concurrent.futures.ThreadPoolExecutor(
+                max_workers=min(min(pages, (os.cpu_count() or 1) + 4), THREAD_COUNT)) as executor:
             futures = [executor.submit(download_page, page_count, page_digest)
                        for page_count, page_digest in enumerate(metadata["chapter"]["data"])
                        if page_count + 1 not in db_pages and (generate() if generate else True)]
@@ -770,192 +772,166 @@ timeouts = {
 }
 
 
-class DownloadProcessor:
+class MangaDownloadJob:
+    def __init__(self, _id: str, chapter_start: Optional[float] = None, chapter_end: Optional[float] = None):
+        self.id = _id
+        self.chapter_start = chapter_start
+        self.chapter_end = chapter_end
+        self.downloaded = False
+
+        self.__chapter_info = connection.get_chapter_list(self.id)
+        # not a mdx api call so it should not fail
+        self.name = database.get_info(self.id)[1]
+
+    @property
+    def chapter_list(self):
+        if self.__chapter_info is None:
+            self.__chapter_info = connection.get_chapter_list(self.id)
+        return self.__chapter_info
+
+    def __eq__(self, other):
+        if isinstance(other, MangaDownloadJob):
+            return self.id == other.id
+        return False
+
+    # to currently working on (json struct with info about state of download)
+    def to_cwo(self):
+        chapter_list = self.chapter_list
+
+        return {
+            "id": self.id,
+            "name": self.name,
+            "chapter_status": [1, len(chapter_list)],
+            "page_status": ["?", "?"]
+        }
+
+
+class MangaQueue:
+    def __init__(self):
+        self.__queue: [MangaDownloadJob] = []
+
+    @property
+    def first(self) -> Optional[MangaDownloadJob]:
+        if len(self.__queue) == 0:
+            return None
+        return self.__queue[0]
+
+    def add_job(self, job: MangaDownloadJob) -> bool:
+        if job not in self.__queue:
+            self.__queue.append(job)
+            return True
+        return False
+
+    def remove_job(self, _id: str):
+        for index, job in enumerate(self.__queue):
+            if job.downloaded or job.id == _id:
+                self.__queue.pop(index)
+
+    def in_queue(self, _id: str):
+        return _id in self.__queue
+
+    def push_to_top(self, index):
+        self.__queue.insert(0, self.__queue.pop(index))
+
+    def __iter__(self):
+        return self.__queue.__iter__()
+
+    def __len__(self):
+        return self.__queue.__len__()
+
+
+class MangaDownloader:
     def __init__(self):
         self.mode = settings.DownloadProcessor.get("defaultSpeedMode")
         self.silent_download = settings.DownloadProcessor.get("silentDownload")
         self.save_queue = settings.DownloadProcessor.get("saveQueueOnExit")
         self.use_threading = settings.DownloadProcessor.get("useThreading")
-        if not os.path.isdir("data"):
-            os.mkdir("data")
 
-        self.queue = []
+        self.queue = MangaQueue()
+        self.currently_working_on = None
+        self.stop_event = threading.Event()
 
-        if self.save_queue and os.path.isfile(f"{os.getcwd()}\data\queue.json"):
-            with open(f"{os.getcwd()}\data\queue.json", "r") as file:
-                for manga in json.load(file):
-                    self.add_chapter(manga["id"])
-            with open(f"{os.getcwd()}\data\queue.json", "w") as file:
-                json.dump([], file)
-        else:
-            self.queue = []
-        self.currently_working_on = []
-        self.in_progress = False
-        self.thread_finished = True
-        self.waiting_for_job = False
         if settings.DownloadProcessor.get("runOnStart"):
             self.start()
 
     def start(self):
-        self.in_progress = True
+        self.stop_event.clear()
         t = threading.Thread(target=self.__download, args=())
         t.start()
 
     def stop(self):
         if self.save_queue:
             if self.currently_working_on:
-                for cwo in self.currently_working_on:
-                    found = False
-                    for q in self.queue:
-                        if q["id"] == cwo["id"]:
-                            found = True
-                            break
-                    if not found:
-                        self.push_queue({"id": cwo["id"]})
+                self.queue.add_job(MangaDownloadJob(_id=self.currently_working_on["id"]))
             with open(f"{os.getcwd()}\data\queue.json", "w") as file:
-                json.dump(self.queue, file)
-        self.in_progress = False
+                json.dump([i.to_cwo() for i in self.queue], file)
+        self.stop_event.set()
 
-    def change_mode(self, mode):
-        if mode not in ["FAST", "NORMAL", "SLOW"]:
-            return
-        self.mode = mode
-
-    def running(self):
-        return self.in_progress
-
-    def push_queue(self, job):
-        for job_queue in self.queue:
-            if job_queue["id"] == job["id"]:
-                return {"status": "job_in_queue", "message": "job already in queue"}
-        for job_working in self.currently_working_on:
-            if job_working["id"] == job["id"]:
-                return {"status": "job_in_queue", "message": "job already in queue"}
-        self.queue.append(job)
-        return {"status": "ok"}
-
-    def remove_queue(self, data):
-        if 0 > int(data.get("index")) > len(self.queue) - 1:
-            return {"status": "error"}
-        return self.queue.pop(int(data.get("index")))
+    def is_running(self) -> bool:
+        return not self.stop_event.is_set()
 
     def page_download_callback(self, identifier, at_page, page_total):
-        for cwo_index, task in enumerate(self.currently_working_on):
-            if task["id"] == identifier:
-                self.currently_working_on[cwo_index]["status"][1][0] = at_page
-                self.currently_working_on[cwo_index]["status"][1][1] = page_total
+        if self.currently_working_on["page_status"] == ["?", "?"]:
+            self.currently_working_on["page_status"] = [1, page_total]
+        self.currently_working_on["page_status"][0] += 1
 
-    def add_chapter(self, job):
-        for cwo_index, task in enumerate(self.currently_working_on):
-            if task["id"] == job["id"]:
-                self.currently_working_on[cwo_index]["status"][0][0] += 1
-
-    def try_conv(self, v):
-        try:
-            return float(v)
-        except (TypeError, ValueError):
-            return 1
+    def add_chapter(self):
+        self.currently_working_on["chapter_status"][0] += 1
+        self.currently_working_on["page_status"] = ["?", "?"]
 
     def __download(self):
-        while not self.thread_finished:
-            Plogger.log(info, "waiting for thread finish")
-            time.sleep(0.25)
-            continue
-        self.thread_finished = False
-        while self.in_progress:
-            if self.queue:
-                try:
+        while not self.stop_event.is_set():
+            while not self.queue.first:
+                time.sleep(0.01)
+            job = self.queue.first
+            reached_end = False
+            self.currently_working_on = job.to_cwo()
 
-                    job = self.queue.pop(0)
-                except IndexError:
-                    self.waiting_for_job = True
-                    # pause execution no jobs in queue
-                    time.sleep(0.25)
-                    continue
+            if self.use_threading:
+                download_func = connection.threaded_get_chapter_page
             else:
-                self.waiting_for_job = True
-                time.sleep(0.25)
-                continue
-            if not job:
-                continue
-            else:
-                self.waiting_for_job = False
-            try:
-                chapter_list = connection.get_chapter_list(job["id"])
-                job_finished = False
-                try:
-                    # best case scenario the volume is set and ordered
-                    chapter_list = sorted(chapter_list,
-                                          key=lambda x: (
-                                              float(x["attributes"]['volume']),
-                                              float(x["attributes"]['chapter'])))
-                except TypeError:
-                    # normal case it will go from 1-N chapters as the usual
-                    chapter_list = sorted(chapter_list,
-                                          key=lambda x: float(x["attributes"]['chapter']))
+                download_func = connection.get_chapter_pages
 
-                self.currently_working_on.append({"id": job["id"], "status": [[0, len(chapter_list)], ["?", "?"]]})
-                for chapter in chapter_list:
-                    if job.get("chapter_start"):
-                        last_manga_chapter = try_to_get(chapter_list[-1], ["attributes", "chapter"])
-                        if float(last_manga_chapter) < job.get("chapter_start"):
-                            Plogger.log(warn,
-                                        f"cannot download any manga because no scanlation was found. Start {job.get('chapter_start')}. Found {last_manga_chapter}")
-                            break
-                        chapter_value = try_to_get(chapter, ["attributes", "chapter"])
-                        if chapter_value is not None and float(chapter_value) < job.get("chapter_start"):
-                            self.add_chapter(job)
-                            continue
-                    if job.get("chapter_end"):
-                        if float(try_to_get(chapter, ["attributes", "chapter"])) >= job.get("chapter_end"):
-                            job_finished = True
-                            break
-                    _id = chapter["id"]
-                    Plogger.log(info,
-                                f"downloading {chapter['attributes']['volume']} Volume Chapter {chapter['attributes']['chapter']}")
-                    pages_in_db = database.get_chapter_pages(_id)
-                    # chapter already in database. No need to download
-                    if len(pages_in_db) == database.get_record(_id):
-                        self.add_chapter(job)
-                        Plogger.log(info,
-                                    f"already in database {chapter['attributes']['volume']} Volume {chapter['attributes']['chapter']} Chapter")
+            for chapter in job.chapter_list:
+                if self.stop_event.is_set():
+                    break
+                if job.chapter_start:
+                    last_manga_chapter = try_to_get(job.chapter_list[-1], ["attributes", "chapter"])
+                    if float(last_manga_chapter) < job.chapter_start:
+                        Plogger.log(warn,
+                                    f"cannot download any manga because no scanlation was found. Start {job.chapter_start}. Found {last_manga_chapter}")
+                        break
+                    chapter_value = try_to_get(chapter, ["attributes", "chapter"])
+                    if chapter_value is not None and float(chapter_value) < job.chapter_start:
+                        self.add_chapter()
                         continue
-                    # generate is for instant stop of manga downloading until now it just stops
-                    if self.use_threading:
-                        download_func = connection.threaded_get_chapter_page
-                    else:
-                        download_func = connection.get_chapter_pages
+                if job.chapter_end:
+                    if float(try_to_get(chapter, ["attributes", "chapter"])) >= job.chapter_end:
+                        reached_end = True
+                        break
+                if reached_end:
+                    break
+                cuuid = chapter["id"]
+                pages_in_db = database.get_chapter_pages(cuuid)
 
-                    for page_value, page in download_func(_id, pages_in_db,
-                                                          silent=self.silent_download,
-                                                          generate=self.running,
-                                                          page_download_cb=self.page_download_callback,
-                                                          muuid=job["id"]):
-                        database.save_page(_id, page_value, job["id"], page)
-                    if not self.running():
-                        Plogger.log(info, "stopping thread " + str(self.in_progress))
-                        if not job_finished:
-                            _, task = find_by_id_in_list(self.currently_working_on, job["id"])
-                            if task["status"][0][0] < task["status"][0][1]:
-                                self.push_queue(job)
-                        return
+                if len(pages_in_db) == database.get_record(cuuid):
+                    self.add_chapter()
+                    Plogger.log(info,
+                                f"already in database {chapter['attributes']['volume']} Volume {chapter['attributes']['chapter']} Chapter")
+                    continue
 
-                    # finished downloading chapter add
-                    self.add_chapter(job)
-                    Plogger.log(info, "saved to database")
-                    time.sleep(timeouts[self.mode + "_CHAPTER_FINISH"])
-                # finished downloading remove from currently_working_on
-                _, task = find_by_id_in_list(self.currently_working_on, job["id"])
-                self.currently_working_on.remove(task)
-            except Exception as e:
-                Plogger.log(erro, "Dlerror" + str(e))
-                # set job back to front
-                self.queue.insert(0, job)
-        Plogger.log(info, "stopping download from worker and exiting thread")
-        self.thread_finished = True
-
-    def test(self):
-        self.__download()
+                for page_value, page in download_func(cuuid, pages_in_db,
+                                                      silent=self.silent_download,
+                                                      generate=self.is_running,
+                                                      page_download_cb=self.page_download_callback,
+                                                      muuid=job.id):
+                    database.save_page(cuuid, page_value, job.id, page)
+                self.add_chapter()
+                Plogger.log(info,
+                            f"saved to database {chapter['attributes']['volume']} Volume {chapter['attributes']['chapter']} Chapter")
+            if not self.stop_event.is_set():
+                job.downloaded = True
+                self.queue.remove_job(job.id)
 
 
 FIRST_ITER = -1
@@ -1154,7 +1130,7 @@ class SessionManager:
 
 database: Database = None
 connection: MangadexConnection = None
-DlProcessor: DownloadProcessor = None
+DlProcessor: MangaDownloader = None
 alert_sys: AlertSystem = None
 session_manager: SessionManager = None
 cache: dict = {"search": {}, "chapter_to_manga": {}, "get_chapter_list": {}}
@@ -1186,7 +1162,7 @@ def initialize():
     if database is None or connection is None or DlProcessor is None or alert_sys is None or session_manager is None:
         database = Database()
         connection = MangadexConnection()
-        DlProcessor = DownloadProcessor()
+        DlProcessor = MangaDownloader()
         alert_sys = AlertSystem()
         session_manager = SessionManager()
         create_chapter_to_manga_cache()
@@ -1275,4 +1251,9 @@ def remove_duplicate_chapters(chapters):
 if __name__ == "__main__":
     database = Database()
     connection = MangadexConnection()
-    DlProcessor = DownloadProcessor()
+    DlProcessor = MangaDownloader()
+    # md = MangaDownloader()
+    # md.start()
+    # md.queue.add_job(MangaDownloadJob("66bf1d91-1cd9-47e3-a2c5-ef38a594594c"))
+    # while md.is_running():
+    #    pass
