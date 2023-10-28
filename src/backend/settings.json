@@ -4,11 +4,12 @@
         "cacheMangas": false
     },
     "DownloadProcessor": {
-        "defaultSpeedMode": "SLOW",
+        "defaultSpeedMode": "NO_LIMIT",
         "useThreading": true,
         "silentDownload": true,
         "saveQueueOnExit": true,
-        "runOnStart": true
+        "runOnStart": true,
+        "haltOnRateLimitReach": true
     },
     "MangadexConnection": {
         "excludedGroups - comment": "Here add any official group because if MangadexConnection comes across official publication it most likely redirects to different website so the connection will fail",

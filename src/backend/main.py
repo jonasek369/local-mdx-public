@@ -1,11 +1,8 @@
-import logging
 import sys
 
 from server import server, app
 
 import webview
-
-logger = logging.getLogger(__name__)
 
 
 def close_threads():

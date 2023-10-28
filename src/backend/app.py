@@ -541,8 +541,13 @@ class MangadexConnection:
             with io.BytesIO() as small_cover_webp:
                 small_cover.save(small_cover_webp, 'WEBP')
                 small_cover_webp_bytes = small_cover_webp.getvalue()
+
+            if try_to_get(manga_info_nonagr, ["data", "attributes", "title", "en"]) is None:
+                title = list(try_to_get(manga_info_nonagr, ["data", "attributes", "title"]).values())[0]
+            else:
+                title = try_to_get(manga_info_nonagr, ["data", "attributes", "title", "en"])
             database.set_info(identifier=identifier,
-                              name=try_to_get(manga_info_nonagr, ["data", "attributes", "title", "en"]),
+                              name=title,
                               description=try_to_get(manga_info_nonagr, ["data", "attributes", "description", "en"]),
                               cover=image_webp_bytes,
                               small_cover=small_cover_webp_bytes
@@ -641,10 +646,16 @@ class MangadexConnection:
         return remove_duplicate_chapters(sorted_chapters)
 
     def get_chapter_pages(self, identifier: str, db_pages: Sequence, silent=False, generate: Callable = None,
-                          page_download_cb: Callable = None, muuid: str = None) -> Sequence[Tuple[int, bytes]]:
-        metadata = requests.get(f"https://api.mangadex.org/at-home/server/{identifier}").json()
-        if metadata["result"] != "ok":
-            Plogger.log(warn, "Reached rate limit")
+                          page_download_cb: Callable = None, muuid: str = None, rate_limit_callback: Callable = None) -> \
+    Sequence[Tuple[int, bytes]]:
+        metadata = requests.get(f"https://api.mangadex.org/at-home/server/{identifier}")
+        remaining = metadata.headers.get("X-RateLimit-Remaining")
+        retry_after = metadata.headers.get("X-RateLimit-Retry-After")
+        if int(remaining) <= 0:
+            Plogger.log(warn, "Reached Rate Limit while downloading")
+            if rate_limit_callback(float(retry_after)):
+                return []
+        metadata = metadata.json()
         _hash = metadata["chapter"]["hash"]
         baseUrl = metadata['baseUrl']
         pages = len(metadata["chapter"]["data"])
@@ -670,12 +681,19 @@ class MangadexConnection:
 
     def threaded_get_chapter_page(self, identifier: str, db_pages: Sequence, silent=False,
                                   generate: Callable = None,
-                                  page_download_cb: Callable = None, muuid: str = None) -> Sequence[Tuple[int, bytes]]:
-        metadata = requests.get(f"https://api.mangadex.org/at-home/server/{identifier}").json()
-        if metadata["result"] != "ok":
-            Plogger.log(erro, f"reached rate limit while downloading {identifier}")
-            Plogger.log(erro, f"Mangadex response: {metadata}")
-            return
+                                  page_download_cb: Callable = None, muuid: str = None,
+                                  rate_limit_callback: Callable = None) -> Sequence[Tuple[int, bytes]]:
+        metadata = requests.get(f"https://api.mangadex.org/at-home/server/{identifier}")
+        remaining = metadata.headers.get("X-RateLimit-Remaining")
+        retry_after = metadata.headers.get("X-RateLimit-Retry-After")
+        if int(remaining) <= 0:
+            Plogger.log(warn, "Reached Rate Limit while downloading")
+            if rate_limit_callback(float(retry_after)):
+                return []
+            else:
+                metadata = requests.get(f"https://api.mangadex.org/at-home/server/{identifier}")
+        metadata = metadata.json()
+        print(metadata)
         _hash = metadata["chapter"]["hash"]
         baseUrl = metadata['baseUrl']
         pages = len(metadata["chapter"]["data"])
@@ -688,9 +706,8 @@ class MangadexConnection:
 
         downloaded_pages = []
         # this is for mangas that have 1-4 pages per chapter because im not sure if ThreadPoolExecutor handles that
-        THREAD_COUNT = 8
         with concurrent.futures.ThreadPoolExecutor(
-                max_workers=min(min(pages, (os.cpu_count() or 1) + 4), THREAD_COUNT)) as executor:
+                max_workers=min(pages, (os.cpu_count() or 1) + 4)) as executor:
             futures = [executor.submit(download_page, page_count, page_digest)
                        for page_count, page_digest in enumerate(metadata["chapter"]["data"])
                        if page_count + 1 not in db_pages and (generate() if generate else True)]
@@ -758,17 +775,15 @@ def find_by_id_in_list(lst, _id):
 
 
 timeouts = {
-    "FAST_CHAPTER_FINISH": 2.5,
-    "NORMAL_CHAPTER_FINISH": 5.0,
-    "SLOW_CHAPTER_FINISH": 10.0,
+    "NO_LIMIT_CHAPTER_FINISH": 0,
+    "FAST_CHAPTER_FINISH": 1.5,
+    "NORMAL_CHAPTER_FINISH": 2.5,
+    "SLOW_CHAPTER_FINISH": 5,
 
-    "FAST_ON_ERROR": 5,
-    "NORMAL_ON_ERROR": 15,
-    "SLOW_ON_ERROR": 30,
-
-    "FAST_PAGE_TIMEOUT": 0,
-    "NORMAL_PAGE_TIMEOUT": 0.125,
-    "SLOW_PAGE_TIMEOUT": 0.25
+    "NO_LIMIT_ON_RATE_LIMIT": 0,
+    "FAST_ON_RATE_LIMIT": 30,
+    "NORMAL_ON_ERROR": 60,
+    "SLOW_ON_ERROR": 120,
 }
 
 
@@ -796,12 +811,10 @@ class MangaDownloadJob:
 
     # to currently working on (json struct with info about state of download)
     def to_cwo(self):
-        chapter_list = self.chapter_list
-
         return {
             "id": self.id,
             "name": self.name,
-            "chapter_status": [1, len(chapter_list)],
+            "chapter_status": [0, len(self.chapter_list)],
             "page_status": ["?", "?"]
         }
 
@@ -846,6 +859,7 @@ class MangaDownloader:
         self.silent_download = settings.DownloadProcessor.get("silentDownload")
         self.save_queue = settings.DownloadProcessor.get("saveQueueOnExit")
         self.use_threading = settings.DownloadProcessor.get("useThreading")
+        self.halt_on_ratelimit = settings.DownloadProcessor.get("haltOnRateLimitReach")
 
         self.queue = MangaQueue()
         self.currently_working_on = None
@@ -872,17 +886,36 @@ class MangaDownloader:
 
     def page_download_callback(self, identifier, at_page, page_total):
         if self.currently_working_on["page_status"] == ["?", "?"]:
-            self.currently_working_on["page_status"] = [1, page_total]
+            self.currently_working_on["page_status"] = [0, page_total]
         self.currently_working_on["page_status"][0] += 1
 
     def add_chapter(self):
         self.currently_working_on["chapter_status"][0] += 1
         self.currently_working_on["page_status"] = ["?", "?"]
 
+    def change_mode(self, mode):
+        self.mode = mode
+
+    def rate_limit_callback(self, retry_after) -> bool:
+        if self.halt_on_ratelimit:
+            Plogger.log(warn, "Halting execution of downloader")
+            # pause execution until we can try again
+            time.sleep((retry_after + 30) - time.time())
+            return False
+        else:
+            self.stop()
+            return True
+
     def __download(self):
+        exited = False
         while not self.stop_event.is_set():
             while not self.queue.first:
+                if self.stop_event.is_set():
+                    exited = True
+                    break
                 time.sleep(0.01)
+            if exited:
+                continue
             job = self.queue.first
             reached_end = False
             self.currently_working_on = job.to_cwo()
@@ -924,14 +957,19 @@ class MangaDownloader:
                                                       silent=self.silent_download,
                                                       generate=self.is_running,
                                                       page_download_cb=self.page_download_callback,
-                                                      muuid=job.id):
+                                                      muuid=job.id,
+                                                      rate_limit_callback=self.rate_limit_callback):
+                    if page_value is None or page is None:
+                        continue
                     database.save_page(cuuid, page_value, job.id, page)
                 self.add_chapter()
                 Plogger.log(info,
                             f"saved to database {chapter['attributes']['volume']} Volume {chapter['attributes']['chapter']} Chapter")
+                time.sleep(timeouts[self.mode + "_CHAPTER_FINISH"])
             if not self.stop_event.is_set():
                 job.downloaded = True
                 self.queue.remove_job(job.id)
+                self.currently_working_on = None
 
 
 FIRST_ITER = -1
@@ -1180,7 +1218,7 @@ def search_manga(name):
 
 
 def download_manga(manga):
-    # raise DeprecationWarning("Dont use pls")
+    # raise DeprecationWarning("Use Dlprocessor")
     print("Use DownloadProcessor")
     if isinstance(manga, str):
         manga_id = connection.search_manga(manga)[0]["id"]
@@ -1196,7 +1234,7 @@ def download_manga(manga):
         print(f"downloading {_id}")
         pages_in_db = database.get_chapter_pages(_id)
 
-        # Chapter already in database. No need to download
+        # Chapter already in a database. No need to download
         if len(pages_in_db) == database.get_record(_id):
             print(f"{_id} already in database")
             continue
@@ -1252,8 +1290,3 @@ if __name__ == "__main__":
     database = Database()
     connection = MangadexConnection()
     DlProcessor = MangaDownloader()
-    # md = MangaDownloader()
-    # md.start()
-    # md.queue.add_job(MangaDownloadJob("66bf1d91-1cd9-47e3-a2c5-ef38a594594c"))
-    # while md.is_running():
-    #    pass

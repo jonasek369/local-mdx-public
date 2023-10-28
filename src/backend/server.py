@@ -325,7 +325,7 @@ def set_speed():
     data = request.json
     if data.get("speed") is None:
         return {"status": "error"}
-    if data.get("speed").upper() not in ["FAST", "NORMAL", "SLOW"]:
+    if data.get("speed").upper() not in ["NO_LIMIT", "FAST", "NORMAL", "SLOW"]:
         return {"status": "error"}
     app.DlProcessor.change_mode(data.get("speed").upper())
     return {"status": "ok"}
@@ -439,7 +439,7 @@ def read_status(muuid, cuuid):
 if __name__ == "__main__":
     USE_SERVER = 1
     if not USE_SERVER:
-        server.run()
+        server.run(host="127.0.0.1", port=5000)
     else:
         # testing performance on other devices
         from waitress import serve

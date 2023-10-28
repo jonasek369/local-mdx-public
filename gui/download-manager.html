@@ -71,6 +71,7 @@
     <button onclick="stop_download()" class="button">Stop download</button>
     <fieldset>
         <legend>Select speed</legend>
+        <input type="radio" name="speed-change" onchange="change_speed()" id="speed-no-limit"/><a>No limit</a>
         <input type="radio" name="speed-change" onchange="change_speed()" id="speed-fast"/><a>Fast</a>
         <input type="radio" name="speed-change" onchange="change_speed()" id="speed-normal"/><a>Normal</a>
         <input type="radio" name="speed-change" onchange="change_speed()" id="speed-slow"/><a>Slow</a>
@@ -88,11 +89,14 @@
 
         function change_speed()
         {
+            const no_limit = document.getElementById("speed-no-limit");
             const fast = document.getElementById("speed-fast");
             const normal = document.getElementById("speed-normal");
             const slow = document.getElementById("speed-slow");
             var reply = "NORMAL"; // default
-            if(fast.checked){
+            if(no_limit.checked){
+                reply = "NO_LIMIT";
+            } else if(fast.checked){
                 reply = "FAST";
             }else if(normal.checked){
                 reply = "NORMAL";
