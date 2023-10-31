@@ -1,230 +1,295 @@
 <!DOCTYPE html>
-<html>
-<head lang="en">
+<html lang="en">
+
+<head>
     <meta charset="UTF-8">
-    <title>My Landing Page</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Navbar with Login Button and Search Bar</title>
     <style>
-    body {
-      text-align: center;
-      padding: 50px;
-      font-family: Arial, sans-serif;
-    }
-
-    h1 {
-      margin-bottom: 30px;
-    }
-
-    #query {
-      padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      font-size: 16px;
-      width: 250px;
-    }
-
-	.button {
-          display: inline-block;
-          padding: 8px 16px;
-          font-size: 14px;
-          font-weight: bold;
-          text-decoration: none;
-          background-color: #4CAF50;
-          color: #fff;
-          border: none;
-          border-radius: 4px;
-          cursor: pointer;
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
         }
-        
+
+        .navbar {
+            background-color: #333;
+            overflow: hidden;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+        }
+
+        .search-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+        }
+
+        .search-container input[type=text] {
+            padding: 10px;
+            margin: 0;
+            width: 70%;
+            border: none;
+            border-radius: 5px 0 0 5px;
+        }
+
+        .search-container button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 0 5px 5px 0;
+            cursor: pointer;
+        }
+
+        .login-container {
+            display: flex;
+            align-items: center;
+        }
+
+        .login-button {
+            padding: 10px 20px;
+            background-color: #f44336;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            text-decoration: none;
+            background-color: #4CAF50;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
         .button:hover {
-          background-color: #45a049;
+            background-color: #45a049;
         }
-        
+
         .button:active {
-          background-color: #3e8e41;
+            background-color: #3e8e41;
+        }
+
+        /* Responsive styles */
+        @media screen and (max-width: 600px) {
+            .search-container input[type=text] {
+                width: 100%;
+            }
+        }
+
+        .search-results-dropdown {
+            display: none;
+            position: absolute;
+            background-color: #f9f9f9;
+            min-width: 50%;
+            box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
+            z-index: 1;
+            margin-top: 35px;
+            
+        }
+
+        .search-results-dropdown a {
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+            color: black;
+        }
+
+        .search-results-dropdown a:hover {
+            background-color: #f1f1f1;
         }
 
     </style>
 </head>
-    <body>
-        <h1>Welcome to Lmdx</h1>
-		{% block content %}
-		    {% if login == 1 %}
-		        <a>{{ name }}</a>
-		    {% else %}
-		        <button onClick="document.location.href='/login?from=/'" class="button">Log in</button>
-		    {% endif %}
-		{% endblock content %}
-        <input type="text" id="query" placeholder="Search manga">
-        <button onClick="searchManga()" class="button" type="submit">Search</button>
-		<button onClick="redirect_to_download_manager()" class="button">Download manager</button>
-		<button onClick="redirect_to_library()" class="button">Library</button>
-		<button onClick="redirect_to_updates()" class="button">Updates</button>
-		
-        <div id="searchResults">
-            <ul id="dropdownList"></ul>
-        </div>
 
-        <script>
+<body>
+<div class="navbar">
+    <button onClick="redirect_to_download_manager()" class="button">Download manager</button>
+    <button onClick="redirect_to_library()" class="button">Library</button>
+    <button onClick="redirect_to_updates()" class="button">Updates</button>
 
-            window.token = '{{ token }}';
-            // Perform background initialization
-            doAjax("/init", "POST");
-			function getCookie(cname) {
-			  let name = cname + "=";
-			  let decodedCookie = decodeURIComponent(document.cookie);
-			  let ca = decodedCookie.split(';');
-			  for(let i = 0; i <ca.length; i++) {
-			    let c = ca[i];
-			    while (c.charAt(0) == ' ') {
-			      c = c.substring(1);
-			    }
-			    if (c.indexOf(name) == 0) {
-			      return c.substring(name.length, c.length);
-			    }
-			  }
-			  return "";
-			}
+    <div class="search-container">
+        <input type="text" id="searchInput" placeholder="Search...">
+        <button type="submit" onclick="searchManga()">Search</button>
+        <div class="search-results-dropdown" id="searchResultsDropdown"></div>
+    </div>
+    {% block content %}
+    {% if login == 1 %}
+    <button class="login-button">{{ name }}</button>
+    {% else %}
+    <div class="login-container">
+        <button onClick="document.location.href='/login?from=/'" class="login-button">Login</button>
+    </div>
+    {% endif %}
+    {% endblock content %}
+</div>
 
-			function CheckSession(){
-				if(getCookie("session") == "" && localStorage.getItem("lmdx-session") !== null){
-					document.cookie = "session="+localStorage.getItem("lmdx-session")
-					document.location.href = "/";
-				}
-			}
-			CheckSession();
 
-            function getMethods(obj) {
-            	var result = [];
-            	for (var id in obj) {
-            		try {
-            			if (typeof(obj[id]) == "function") {
-            				result.push(id + ": " + obj[id].toString());
-            			}
-            		} catch (err) {
-            			result.push(id + ": inaccessible");
-            		}
-            	}
-            	return result;
+<script>
+
+    window.token = '{{ token }}';
+    // Perform background initialization
+    doAjax("/init", "POST");
+
+    function getCookie(cname) {
+        let name = cname + "=";
+        let decodedCookie = decodeURIComponent(document.cookie);
+        let ca = decodedCookie.split(';');
+        for (let i = 0; i < ca.length; i++) {
+            let c = ca[i];
+            while (c.charAt(0) == ' ') {
+                c = c.substring(1);
             }
-
-            function searchMangaHandler(response) {
-            	if (this.responseText) {
-            		var searchResults = JSON.parse(this.responseText).result;
-
-            		var results = [];
-
-            		for (var i = 0; i < searchResults.length; i++) {
-            			results.push([searchResults[i].title, searchResults[i].id]);
-            		}
-
-            		var dropdownList = document.getElementById("dropdownList");
-
-            		dropdownList.innerHTML = "";
-
-            		if (Object.keys(searchResults).length != 0) {
-            			document.getElementById("searchResults").style.display = "block";
-            			for (var i = 0; i < results.length; i++) {
-							var a = document.createElement("a");
-							var br = document.createElement("br");
-													
-							// Customize the text content and style of the link
-							a.textContent = results[i][0];
-							a.style.color = "blue"; // Example color
-							a.style.textDecoration = "underline"; // Example underline style
-							a.style.fontWeight = "bold"; // Example font weight
-							a.style.fontFamily = "Arial, sans-serif"; // Example font family
-							a.style.fontSize = "16px"; // Example font size
-													
-							// Set the link's href attribute
-							a.setAttribute('href', "/manga/" + results[i][1]);
-													
-							// Customize the line break style
-							br.style.marginTop = "5px"; // Example margin top
-													
-							// Append the link and line break to the dropdown list
-							dropdownList.appendChild(a);
-							dropdownList.appendChild(br);
-            			}
-            		} else {
-            			// Hide the dropdown menu if the query is empty
-            			document.getElementById("searchResults").style.display = "none";
-            		}
-            	}
+            if (c.indexOf(name) == 0) {
+                return c.substring(name.length, c.length);
             }
+        }
+        return "";
+    }
 
-            function searchManga() {
-            	var data = {};
+    function CheckSession() {
+        if (getCookie("session") == "" && localStorage.getItem("lmdx-session") !== null) {
+            document.cookie = "session=" + localStorage.getItem("lmdx-session")
+            document.location.href = "/";
+        }
+    }
 
-            	data["query"] = document.getElementById("query").value;
+    CheckSession();
 
-            	doAjax("/search/manga", "POST", searchMangaHandler, data);
+    function setResults(response) {
+        if (!this.responseText) {
+            return;
+        }
+
+        var searchResultsDropdown = document.getElementById("searchResultsDropdown");
+
+        var results = JSON.parse(this.responseText).result;
+
+        var searchResults = [];
+
+        for (var i = 0; i < results.length; i++) {
+            searchResults.push([results[i].title, results[i].id]);
+        }
+        // Clear previous search results
+        // TODO: clear childs of div maybe
+        while (searchResultsDropdown.firstChild) {
+            searchResultsDropdown.removeChild(searchResultsDropdown.firstChild);
+        }
+
+        // Display search results dropdown
+        searchResultsDropdown.style.display = "block";
+
+        // Populate search results dropdown
+        searchResults.forEach(function (result) {
+            var resultItem = document.createElement("a");
+            resultItem.href = "/manga/" + result[1]; // You can set the actual link here if needed
+            var image = document.createElement("img");
+            image.src = "/manga/cover/" + result[1] + "?small=1";
+            image.alt = "Result Image";
+            image.width = 51;
+            image.height = 80;
+
+            var text = document.createElement("span");
+            text.textContent = result[0];
+
+            resultItem.appendChild(image);
+            resultItem.appendChild(text);
+            searchResultsDropdown.appendChild(resultItem);
+        });
+    }
+
+
+    function searchManga() {
+        var data = {};
+
+        data["query"] = document.getElementById("searchInput").value;
+
+        doAjax("/search/manga", "POST", setResults, data);
+    }
+
+    // From https://gist.github.com/dharmavir/936328
+    function getHttpRequestObject() {
+        // Define and initialize as false
+        var xmlHttpRequst = false;
+
+        // Mozilla/Safari/Non-IE
+        if (window.XMLHttpRequest) {
+            xmlHttpRequst = new XMLHttpRequest();
+        }
+        // IE
+        else if (window.ActiveXObject) {
+            xmlHttpRequst = new ActiveXObject("Microsoft.XMLHTTP");
+        }
+        return xmlHttpRequst;
+    }
+
+    // Does the AJAX call to URL specific with rest of the parameters
+    function doAjax(url, method, responseHandler, data) {
+        // Set the variables
+        url = url || "";
+        method = method || "GET";
+        async = true;
+        data = data || {};
+        data.token = window.token;
+
+        if (url == "") {
+            alert("URL can not be null/blank");
+            return false;
+        }
+        var xmlHttpRequest = getHttpRequestObject();
+
+        // If AJAX supported
+        if (xmlHttpRequest != false) {
+            xmlHttpRequest.open(method, url, async);
+            // Set request header (optional if GET method is used)
+            if (method == "POST") {
+                xmlHttpRequest.setRequestHeader("Content-Type", "application/json");
             }
+            // Assign (or define) response-handler/callback when ReadyState is changed.
+            xmlHttpRequest.onreadystatechange = responseHandler;
+            // Send data
+            xmlHttpRequest.send(JSON.stringify(data));
+        } else {
+            alert("Please use browser with Ajax support.!");
+        }
+    }
 
-            // From https://gist.github.com/dharmavir/936328
-            function getHttpRequestObject() {
-            	// Define and initialize as false
-            	var xmlHttpRequst = false;
+    function redirect_to_download_manager() {
+        window.location.replace("/manga/download/manager");
+    }
 
-            	// Mozilla/Safari/Non-IE
-            	if (window.XMLHttpRequest) {
-            		xmlHttpRequst = new XMLHttpRequest();
-            	}
-            	// IE
-            	else if (window.ActiveXObject) {
-            		xmlHttpRequst = new ActiveXObject("Microsoft.XMLHTTP");
-            	}
-            	return xmlHttpRequst;
-            }
+    function redirect_to_library() {
+        window.location.replace("/manga/library");
+    }
 
-            // Does the AJAX call to URL specific with rest of the parameters
-            function doAjax(url, method, responseHandler, data) {
-            	// Set the variables
-            	url = url || "";
-            	method = method || "GET";
-            	async = true;
-            	data = data || {};
-            	data.token = window.token;
+    function redirect_to_updates() {
+        window.location.replace("/updates");
+    }
 
-            	if (url == "") {
-            		alert("URL can not be null/blank");
-            		return false;
-            	}
-            	var xmlHttpRequest = getHttpRequestObject();
+    document.getElementById('searchInput').onkeydown = function (event) {
 
-            	// If AJAX supported
-            	if (xmlHttpRequest != false) {
-            		xmlHttpRequest.open(method, url, async);
-            		// Set request header (optional if GET method is used)
-            		if (method == "POST") {
-            			xmlHttpRequest.setRequestHeader("Content-Type", "application/json");
-            		}
-            		// Assign (or define) response-handler/callback when ReadyState is changed.
-            		xmlHttpRequest.onreadystatechange = responseHandler;
-            		// Send data
-            		xmlHttpRequest.send(JSON.stringify(data));
-            	} else {
-            		alert("Please use browser with Ajax support.!");
-            	}
-            }
-			
-			function redirect_to_download_manager(){
-				window.location.replace("/manga/download/manager");
-			}
-
-			function redirect_to_library(){
-				window.location.replace("/manga/library");
-			}
-
-			function redirect_to_updates(){
-				window.location.replace("/updates");
-			}
-
-            document.getElementById('query').onkeydown = function(event) {
-                if (event.keyCode == 13) {
-                    searchManga();
+        if (event.keyCode === 13) {
+            searchManga();
+        } else if (event.keyCode === 8) {
+            if (document.getElementById("searchInput").value.length === 0) {
+                let searchResultsDropdown = document.getElementById("searchResultsDropdown");
+                while (searchResultsDropdown.firstChild) {
+                    searchResultsDropdown.removeChild(searchResultsDropdown.firstChild);
                 }
+                searchResultsDropdown.style.display = "none";
             }
+        }
+    }
 
-        </script>
-    </body>
+</script>
+</body>
+
 </html>

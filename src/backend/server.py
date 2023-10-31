@@ -105,9 +105,12 @@ def search():
 @server.route("/manga/<mangauuid>/info", methods=["GET"])
 def get_manga_info(mangauuid):
     app.initialize()
+    # this is taking a bit of time because its calling mdx api, and it takes about 2000ms,
+    # but it being cached
     chapters_ids = app.connection.get_chapter_list(mangauuid)
     rowid = app.database.get_rowid(mangauuid)
     chapters, warnings = app.database.get_chapters(chapters_ids, rowid)
+    # minifying the json (I thought it was bottleneck)
     for key in chapters.keys():
         del chapters[key]["pages"]
         try:
@@ -148,6 +151,9 @@ def get_chapter_image(identifier, page):
 def get_cover_art(identifier):
     app.initialize()
     image_binary = app.database.get_cover(identifier, small=bool(request.args.get('small')))
+    if image_binary is None:
+        app.connection.set_manga_info(identifier)
+        image_binary = app.database.get_cover(identifier, small=bool(request.args.get('small')))
     if image_binary is not None:
         response = make_response(compress(image_binary))
         response.headers.set('Content-Type', 'image/jpeg')
@@ -246,7 +252,9 @@ def download_status():
                 "in_progress": app.DlProcessor.is_running(),
                 "speed_mode": app.DlProcessor.mode}
 
-    return {"status": {cwo["id"]: {"name": cwo["name"], "page_status": cwo["page_status"], "chapter_status": cwo["chapter_status"]}}, "in_progress": app.DlProcessor.is_running(),
+    return {"status": {
+        cwo["id"]: {"name": cwo["name"], "page_status": cwo["page_status"], "chapter_status": cwo["chapter_status"]}},
+            "in_progress": app.DlProcessor.is_running(),
             "speed_mode": app.DlProcessor.mode}
 
 
@@ -260,6 +268,18 @@ def push_job():
         return {"status": "error"}
     app.DlProcessor.queue.add_job(app.MangaDownloadJob(_id=data.get("id")))
     return {"status": "success"}
+
+
+@server.route("/manga/remove", methods=["POST"])
+def manga_remove():
+    app.initialize()
+    data = request.json
+    if "muuid" not in data:
+        return {"error": "muuid not provided"}
+    if not is_valid_uuid(data.get("muuid")):
+        return {"error": "muuid is not valid uuid"}
+    app.database.remove_manga(data.get("muuid"))
+    return {"success": "successfully removed manga from database"}
 
 
 @server.route("/manga/download/pop-job", methods=["POST"])

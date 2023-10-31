@@ -68,16 +68,17 @@
     }
 
 	.button {
-      display: inline-block;
-      padding: 8px 16px;
-      font-size: 14px;
-      font-weight: bold;
-      text-decoration: none;
-      background-color: #4CAF50;
-      color: #fff;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
+        display: inline-block;
+        padding: 8px 16px;
+		margin-top: 4px;
+        font-size: 14px;
+        font-weight: bold;
+        text-decoration: none;
+        background-color: #4CAF50;
+        color: #fff;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
     }
 
     .button:hover {
@@ -86,6 +87,28 @@
 
     .button:active {
       background-color: #3e8e41;
+    }
+
+	.red-button {
+        display: inline-block;
+        padding: 8px 16px;
+		margin-top: 4px;
+        font-size: 14px;
+        font-weight: bold;
+        text-decoration: none;
+        background-color: #af4c4c;
+        color: #fff;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .red-button:hover {
+      background-color: #a04545;
+    }
+
+    .red-button:active {
+      background-color: #8e3e3e;
     }
 
 	.image-container {
@@ -197,6 +220,7 @@
 		  	<div class="manga-name">{{ name }}</div>
 		  	<div class="manga-description">{{ description }}</div>
 		  	<button type="button" onclick="push_job()" class="button">Push manga to download as job</button>
+			<button type="button" onclick="confirm()" class="red-button">Delete manga from database</button>
 		</div>
 	</div>
 	<br>
@@ -441,6 +465,26 @@
 				}
 				get_manga_data();
 			}
+		}
+
+		function confirm() {
+			let button = document.getElementsByClassName("red-button")[0];
+			button.innerText = "Are you sure?"
+			button.onclick = function() {
+    		    remove_manga()
+    		};
+		}
+
+		function remove_manga(){
+			console.log("call remove");
+			let button = document.getElementsByClassName("red-button")[0];
+			button.innerText = "Delete manga from database";
+			button.onclick = function() {
+    		    confirm()
+    		};
+			doAjax("/manga/remove", "POST", (response) => {
+				document.location.href="/library";
+			}, {"muuid": "{{ muuid }}"});
 		}
 
 		doAjax("/user/data", "GET", get_user_data);

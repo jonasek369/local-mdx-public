@@ -449,6 +449,24 @@ class Database:
         fetch = cursor.fetchall()
         return [] if not fetch else [i[0] for i in fetch]
 
+    # removes manga from a database, takes some time
+    # TODO: Add frontend button for removing the manga
+    def remove_manga(self, muuid):
+        chapter_list = connection.get_chapter_list(muuid)
+        cursor = self.conn.cursor()
+        for chapter in chapter_list:
+            cuuid = chapter["id"]
+            pages_in_db = database.get_chapter_pages(cuuid)
+
+            if not pages_in_db:
+                continue
+
+            cursor.execute("DELETE FROM mangas WHERE identifier=:cuid", {"cuid": cuuid})
+            cursor.execute("DELETE FROM records WHERE identifier=:cuid", {"cuid": cuuid})
+            cursor.execute("DELETE FROM chapter_info WHERE identifier=:cuid", {"cuid": cuuid})
+        cursor.execute("DELETE FROM info WHERE identifier=:muid", {"muid": muuid})
+        self.conn.commit()
+
 
 class MangadexConnection:
     def __init__(self):
