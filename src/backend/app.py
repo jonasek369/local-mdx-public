@@ -18,6 +18,7 @@ import discord
 from discord import File
 from discord import Webhook, Member
 from discord.abc import MISSING
+from pypresence import Presence
 
 from custom_logger import Logger, info, warn, erro
 from hashlib import sha256
@@ -89,6 +90,10 @@ class Settings:
     @property
     def AlertSystem(self):
         return self.__data["AlertSystem"]
+
+    @property
+    def DiscordIntegration(self):
+        return self.__data["DiscordIntegration"]
 
     @property
     def Global(self):
@@ -665,7 +670,7 @@ class MangadexConnection:
 
     def get_chapter_pages(self, identifier: str, db_pages: Sequence, silent=False, generate: Callable = None,
                           page_download_cb: Callable = None, muuid: str = None, rate_limit_callback: Callable = None) -> \
-    Sequence[Tuple[int, bytes]]:
+            Sequence[Tuple[int, bytes]]:
         metadata = requests.get(f"https://api.mangadex.org/at-home/server/{identifier}")
         remaining = metadata.headers.get("X-RateLimit-Remaining")
         retry_after = metadata.headers.get("X-RateLimit-Retry-After")
@@ -1184,11 +1189,53 @@ class SessionManager:
         return None
 
 
+class DiscordIntegration:
+    def __init__(self):
+        self.RPC: Presence
+        if settings.DiscordIntegration.get("showPresence"):
+            self.RPC = Presence("1169363237725286540")
+            self.RPC.connect()
+            self.update("Browsing", "https://github.com/jonasek369/local-mdx-public")
+        else:
+            self.RPC = None
+
+        self.filter = settings.DiscordIntegration.get("filter")
+
+    def stop(self):
+        if self.RPC:
+            self.RPC.close()
+
+    def update(self, state, details, muuid=None):
+        if not self.RPC:
+            return
+        if muuid:
+            is_allowed = True
+            for InOrEx, operation, uuids in self.filter:
+                if len(operation) > 2:
+                    raise Exception("Operation is bigger than 2 characters")
+                for uuid in uuids:
+                    try:
+                        passed = eval(f"'{muuid}'{operation}'{uuid}'")
+                        if passed and InOrEx == "exclude":
+                            is_allowed = False
+                        if not passed and InOrEx == "include":
+                            is_allowed = False
+                    except Exception as e:
+                        is_allowed = False
+                        Plogger.log(warn, f"raised exception while filtering: {e}")
+            if not is_allowed:
+                Plogger.log(info, "Change of reading want allowed by filter")
+                return
+
+        self.RPC.update(state=state, details=details, large_image="chair")
+
+
 database: Database = None
 connection: MangadexConnection = None
 DlProcessor: MangaDownloader = None
 alert_sys: AlertSystem = None
 session_manager: SessionManager = None
+discord_integration: DiscordIntegration = None
 cache: dict = {"search": {}, "chapter_to_manga": {}, "get_chapter_list": {}}
 
 
@@ -1214,13 +1261,14 @@ async def send_webhook(webhook, identifier, title, cover, old_chapter, new_chapt
 
 
 def initialize():
-    global database, connection, DlProcessor, alert_sys, session_manager
-    if database is None or connection is None or DlProcessor is None or alert_sys is None or session_manager is None:
+    global database, connection, DlProcessor, alert_sys, session_manager, discord_integration
+    if database is None or connection is None or DlProcessor is None or alert_sys is None or session_manager is None or discord_integration is None:
         database = Database()
         connection = MangadexConnection()
         DlProcessor = MangaDownloader()
         alert_sys = AlertSystem()
         session_manager = SessionManager()
+        discord_integration = DiscordIntegration()
         create_chapter_to_manga_cache()
         if settings.OnStart.get("cacheMangas"):
             # start on diffrent thread so it dose not block it takes quite a lot of time

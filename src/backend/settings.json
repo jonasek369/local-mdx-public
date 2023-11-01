@@ -27,5 +27,12 @@
 
         ],
         "cooldown": 600
+    },
+    "DiscordIntegration": {
+        "showPresence": true,
+        "filter": [
+            ["include", "!=", ["uuid-to-compare"]],
+            ["exclude", "==", ["some-other-uuid", "another-uuid-yes"]]
+        ]
     }
 }

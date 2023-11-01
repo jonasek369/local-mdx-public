@@ -174,6 +174,30 @@ def chapter_next_previous(chapteruuid):
     return next_prev
 
 
+@server.route("/presence/", methods=["POST"])
+def change_presence():
+    app.initialize()
+    if not app.discord_integration.RPC:
+        return {"error": "rpc turned off"}
+    data = request.json
+    if "cuuid" not in data or "muuid" not in data or "page" not in data:
+        return {"error": "One or more needed parameters not supplied"}
+    _, name, _, _, _ = app.database.get_info(data.get("muuid"))
+
+    chapter_info = app.database.get_chapter_info(data.get("muuid"))[1]
+    if chapter_info is None:
+        chapter_info = app.connection.get_chapter_list(data.get("muuid"))
+    chapter_object: dict = None
+    for chapter in json.loads(decompress(chapter_info)):
+        if chapter["id"] == data.get("cuuid"):
+            chapter_object = chapter
+            break
+    dets = f"Reading {name} (V. {chapter_object['attributes']['volume']} C. {chapter_object['attributes']['chapter']})"
+    state = f"page {data.get('page')}/{chapter_object['attributes']['pages']}"
+
+    app.discord_integration.update(state=state, details=dets, muuid=data.get("muuid"))
+    return {"success": "ok"}
+
 @server.route("/read/<chapteruuid>", methods=["GET"], defaults={"page": 1})
 @server.route("/read/<chapteruuid>/<page>", methods=["GET"])
 def read_manga(chapteruuid, page):
@@ -254,8 +278,8 @@ def download_status():
 
     return {"status": {
         cwo["id"]: {"name": cwo["name"], "page_status": cwo["page_status"], "chapter_status": cwo["chapter_status"]}},
-            "in_progress": app.DlProcessor.is_running(),
-            "speed_mode": app.DlProcessor.mode}
+        "in_progress": app.DlProcessor.is_running(),
+        "speed_mode": app.DlProcessor.mode}
 
 
 @server.route("/manga/download/push-job", methods=["POST"])
@@ -457,7 +481,7 @@ def read_status(muuid, cuuid):
 
 
 if __name__ == "__main__":
-    USE_SERVER = 1
+    USE_SERVER = 0
     if not USE_SERVER:
         server.run(host="127.0.0.1", port=5000)
     else:

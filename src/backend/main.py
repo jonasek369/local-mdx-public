@@ -7,6 +7,7 @@ import webview
 
 def close_threads():
     app.Plogger.log(app.info, "Closing threads")
+    app.discord_integration.stop()
     app.DlProcessor.stop()
     app.alert_sys.stop()
 
