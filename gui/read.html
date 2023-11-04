@@ -182,16 +182,17 @@
             }
             page_header.innerHTML = page + "/"+ pageCount + " pages"
             set_page(page);
+            doAjax("/presence", "POST", null, {"muuid": "{{muuid}}", "cuuid": "{{cuuid}}", "page": page});
 		}
 
         function set_page(to_page){
             let current_page = content.children.item(page-1);
-            let set_page = content.children.item(to_page-1);
+            let _set_page = content.children.item(to_page-1);
 
             current_page.classList.add("hidden");
             current_page.removeEventListener("mousedown", handle_click);
-            set_page.classList.remove("hidden")
-            set_page.addEventListener("mousedown", handle_click);
+            _set_page.classList.remove("hidden")
+            _set_page.addEventListener("mousedown", handle_click);
             page_header.innerHTML = to_page + "/"+ pageCount + " pages"
         }
 
@@ -211,12 +212,17 @@
 			}
         });
 
+        let relocated = false;
 
 		function page_add(){
+            if(relocated){
+                return;
+            }
 			var pageCopy = page;
 			if(page+1 > pageCount && nextChapter !== null)
 			{
 				window.location.href = "/read/"+nextChapter+"/1";
+                relocated = true;
 			}
 			var new_page = Math.max(1, Math.min(page+1, pageCount));
 			if(new_page === pageCopy){
@@ -224,13 +230,18 @@
 			}
 			set_page(new_page);
             page = new_page;
+            doAjax("/presence", "POST", null, {"muuid": "{{muuid}}", "cuuid": "{{cuuid}}", "page": page});
     	}
 
 		function page_sub(){
+            if(relocated){
+                return;
+            }
 			var pageCopy = page;
 			if(page-1 < 1 && prevChapter !== null)
 			{
 				window.location.href = "/read/"+prevChapter+"/"+prevPages;
+                relocated = true;
 			}
 			var new_page = Math.max(1, Math.min(page-1, pageCount));
 			if(new_page === pageCopy){
@@ -238,6 +249,7 @@
 			}
 			set_page(new_page);
             page = new_page;
+            doAjax("/presence", "POST", null, {"muuid": "{{muuid}}", "cuuid": "{{cuuid}}", "page": page});
 		}
 
 		function parse_next_prev(response){

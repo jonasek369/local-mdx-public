@@ -28,6 +28,8 @@ import concurrent.futures
 
 # for testing the offline mode
 DISABLE_INTERNET_CONNECTION = 0
+REDIS_CACHING = 1
+
 if DISABLE_INTERNET_CONNECTION:
     class empty_requests:
         def get(self, *args, **kwargs):
@@ -107,8 +109,64 @@ if settings.Global.get("LogLeveL"):
 else:
     Plogger = Logger(1)
 
-COMPILED = False
-LOGGING = False
+using_redis = False
+
+if settings.Global.get("redisCaching"):
+    import redis
+
+    try:
+        import redis
+
+        cache: redis.Redis = redis.Redis()
+        cache.setex("testvalue", 10, 1)
+        assert int(cache.get("testvalue")) == 1
+        using_redis = True
+        Plogger.log(info, "Using redis for caching")
+    except Exception as e:
+        Plogger.log(erro, f"Unable to initialize redis {e}")
+if not using_redis:
+    Plogger.log(warn, "Using self implemented caching instead of redis")
+
+
+    class Cache:
+        def __init__(self):
+            self.cache: dict = {}
+            self.__stop_event = threading.Event()
+            t = threading.Thread(target=self.__check_expiration)
+            t.start()
+            self.__thread_finished = False
+
+        def __check_expiration(self):
+            while not self.__stop_event.is_set():
+                for key, value in self.cache.items():
+                    if time.time() >= value["expiration"]:
+                        del self.cache[key]
+                time.sleep(0.1)
+            self.__thread_finished = True
+
+        def close(self):
+            self.__stop_event.set()
+            while not self.__thread_finished:
+                pass
+            del self.cache
+
+        def set(self, key, value):
+            self.cache[key] = {"value": value, "expiration": None}
+
+        def setex(self, key, _time, value):
+            self.cache[key] = {"value": value, "expiration": time.time() + _time}
+
+        def get(self, key):
+            try:
+                return self.cache[key]["value"]
+            except KeyError:
+                return None
+
+        def exists(self, key):
+            return key in self.cache
+
+
+    cache = Cache()
 
 
 def try_to_get(_json, path):
@@ -483,8 +541,8 @@ class MangadexConnection:
         self.cached_chapter_info = settings.MangadexConnection.get("cacheChapterInfoToDatabase")
 
     def search_manga(self, name: str, limit: int = 1) -> Optional[MutableSequence[dict]]:
-        if name in cache["search"]:
-            return cache["search"][name]["result"]
+        if cache.exists(f"search:{name}"):
+            return json.loads(cache.get(f"search:{name}"))
         try:
             req = self.session.get(url=f"{self.API}/manga", params={"title": name, "limit": limit})
         except requests.exceptions.ConnectionError:
@@ -500,9 +558,8 @@ class MangadexConnection:
             return_array.append(
                 {"id": i["id"], "title": try_to_get(i, ["attributes", "title", "en"]),
                  "description": try_to_get(i, ["attributes", "description", "en"])})
-        if name not in cache:
-            cache["search"][name] = {}
-            cache["search"][name]["result"] = return_array
+        if not cache.exists(f"search:{name}"):
+            cache.setex(f"redis:{name}", 3600, json.dumps(return_array))
         return return_array
 
     def coverart_update(self, identifier):
@@ -510,16 +567,17 @@ class MangadexConnection:
 
         manga_info_nonagr = self.session.get(
             f"{self.API}/manga/{identifier}?includes%5B%5D=cover_art").json()
-        if identifier not in cache:
-            cache[identifier] = {}
-        if cache[identifier].get("coverurl"):
+        if cache.exists(f"{identifier}:coverurl"):
             pass
         else:
             for index, relationship in enumerate(manga_info_nonagr["data"]["relationships"]):
                 if relationship["type"] == "cover_art":
-                    cache[identifier]["coverurl"] = f"https://mangadex.org/covers/{identifier}/" + try_to_get(
-                        manga_info_nonagr, ["data", "relationships", index, "attributes", "fileName"])
-        cover_url = cache[identifier].get("coverurl")
+                    coverurl = f"https://mangadex.org/covers/{identifier}/" + try_to_get(manga_info_nonagr,
+                                                                                         ["data", "relationships",
+                                                                                          index, "attributes",
+                                                                                          "fileName"])
+                    cache.setex(f"{identifier}:coverurl", 3600, coverurl)
+        cover_url = str(cache.get(f"{identifier}:coverurl"))
 
         if cover_url is None:
             Plogger.log(warn, "coverurl is none. Parsing failed or manga dose not have any cover")
@@ -544,16 +602,17 @@ class MangadexConnection:
                     f"{self.API}/manga/{identifier}?includes%5B%5D=cover_art").json()
             except AttributeError:
                 return None
-            if identifier not in cache:
-                cache[identifier] = {}
             for index, relationship in enumerate(manga_info_nonagr["data"]["relationships"]):
                 if relationship["type"] == "cover_art":
-                    cache[identifier]["coverurl"] = f"https://mangadex.org/covers/{identifier}/" + try_to_get(
-                        manga_info_nonagr, ["data", "relationships", index, "attributes", "fileName"])
+                    coverurl = f"https://mangadex.org/covers/{identifier}/" + try_to_get(manga_info_nonagr,
+                                                                                         ["data", "relationships",
+                                                                                          index, "attributes",
+                                                                                          "fileName"])
+                    cache.setex(f"{identifier}:coverurl", 3600, coverurl)
 
-            if cache[identifier]["coverurl"] is None:
+            if cache.get(f"{identifier}:coverurl") is None:
                 Plogger.log(warn, "coverurl is none. Parsing failed or manga dose not have any cover")
-            image_data = requests.get(cache[identifier]["coverurl"]).content
+            image_data = requests.get(str(cache.get(f"{identifier}:coverurl"))).content
             image = Image.open(io.BytesIO(image_data))
             width = 51
             height = 80
@@ -581,20 +640,23 @@ class MangadexConnection:
         if identifier is None:
             return {}
         try:
-            if identifier not in cache:
+            if cache.exists(f"{identifier}:current_chapter"):
                 manga_info_nonagr = self.session.get(
                     f"{self.API}/manga/{identifier}?includes%5B%5D=cover_art").json()
-                cache[identifier] = {}
-                cache[identifier]["titles"] = try_to_get(manga_info_nonagr, ["data", "attributes", "title"])
+                cache.setex(f"{identifier}:title", 3600,
+                            str(try_to_get(manga_info_nonagr, ["data", "attributes", "title"])))
                 for index, relationship in enumerate(manga_info_nonagr["data"]["relationships"]):
                     if relationship["type"] == "cover_art":
-                        cache[identifier]["coverurl"] = f"https://mangadex.org/covers/{identifier}/" + try_to_get(
-                            manga_info_nonagr, ["data", "relationships", index, "attributes", "fileName"])
+                        coverurl = f"https://mangadex.org/covers/{identifier}/" + try_to_get(manga_info_nonagr,
+                                                                                             ["data", "relationships",
+                                                                                              index, "attributes",
+                                                                                              "fileName"])
+                        cache.setex(f"{identifier}:coverurl", 3600, str(coverurl))
                 if not database.get_info(identifier):
                     # download cover and put into db cover url in cache
-                    if cache[identifier]["coverurl"] is None:
+                    if cache.get(f"{identifier}:coverurl") is None:
                         Plogger.log(warn, "coverurl is none. Parsing failed or manga dose not have any cover")
-                    image_data = requests.get(cache[identifier]["coverurl"]).content
+                    image_data = requests.get(str(cache.get(f"{identifier}:coverurl"))).content
                     image = Image.open(io.BytesIO(image_data))
                     width = 51
                     height = 80
@@ -613,11 +675,9 @@ class MangadexConnection:
                                       small_cover=small_cover_webp_bytes
                                       )
         except Exception as e:
-
-            Plogger.log(warn, str(e))
-        if identifier in cache and "chapter_expire" in cache[identifier].keys() and cache[identifier][
-            "chapter_expire"] >= time.time():
-            chapters_dict[identifier] = cache[identifier]["current_chapter"]
+            Plogger.log(warn, "ERR ?" + str(e))
+        if cache.exists(f"{identifier}:current_chapter"):
+            chapters_dict[identifier] = float(cache.get(f"{identifier}:current_chapter"))
         else:
             try:
                 manga_info = self.session.get(f"{self.API}/manga/{identifier}/aggregate").json()
@@ -630,19 +690,15 @@ class MangadexConnection:
                         except ValueError:
                             pass
                 chapters_dict[identifier] = highest_chapter
-                cache[identifier]["current_chapter"] = highest_chapter
-                cache[identifier]["chapter_expire"] = time.time() + 600
+                cache.setex(f"{identifier}:current_chapter", 600, highest_chapter)
             except Exception as e:
                 Plogger.log(warn, str(e))
         return chapters_dict
 
     def get_chapter_list(self, identifier: str, lang: str = "en", cache_only: bool = False, remove_duplicates=True) -> \
             Optional[List[dict]]:
-        if identifier in cache["get_chapter_list"]:
-            if time.time() >= cache["get_chapter_list"][identifier]["expire"]:
-                del cache[identifier]
-            else:
-                return cache["get_chapter_list"][identifier]["list"]
+        if cache.exists(f"{identifier}:chapter_list"):
+            return json.loads(cache.get(f"{identifier}:chapter_list"))
         if cache_only:
             return None
         chapters = self.get_last_chapter_num(identifier)
@@ -659,9 +715,8 @@ class MangadexConnection:
             chapters.extend(chapter["data"])
             offset += 100
         sorted_chapters = sorted(chapters, key=lambda x: float(x["attributes"]["chapter"]))
-        cache["get_chapter_list"][identifier] = {}
-        cache["get_chapter_list"][identifier]["expire"] = time.time() + 3600
-        cache["get_chapter_list"][identifier]["list"] = sorted_chapters
+        cache.setex(f"{identifier}:chapter_list", 600, json.dumps(sorted_chapters))
+
         if self.cached_chapter_info:
             data = compress(json.dumps(sorted_chapters).encode())
             database.add_chapter_info(identifier, data)
@@ -716,7 +771,6 @@ class MangadexConnection:
             else:
                 metadata = requests.get(f"https://api.mangadex.org/at-home/server/{identifier}")
         metadata = metadata.json()
-        print(metadata)
         _hash = metadata["chapter"]["hash"]
         baseUrl = metadata['baseUrl']
         pages = len(metadata["chapter"]["data"])
@@ -1236,7 +1290,6 @@ DlProcessor: MangaDownloader = None
 alert_sys: AlertSystem = None
 session_manager: SessionManager = None
 discord_integration: DiscordIntegration = None
-cache: dict = {"search": {}, "chapter_to_manga": {}, "get_chapter_list": {}}
 
 
 async def send_webhook(webhook, identifier, title, cover, old_chapter, new_chapter, desc, mention: Member = None):
@@ -1315,12 +1368,16 @@ def create_chapter_to_manga_cache():
     cursor.execute("SELECT * FROM chapter_info")
     fetch = cursor.fetchall()
     for muuid, chapter_info_str in fetch:
-        cache["chapter_to_manga"][muuid] = [i["id"] for i in json.loads(decompress(chapter_info_str).decode())]
+        cache.setex(f"{muuid}:chapter_to_manga", 3600,
+                    json.dumps([i["id"] for i in json.loads(decompress(chapter_info_str).decode())]))
 
 
 def chapter_to_manga_from_cache(cuuid):
-    for muuid in cache["chapter_to_manga"]:
-        for db_cuuid in cache["chapter_to_manga"][muuid]:
+    if not cache.exists(f"{cuuid}:chapter_to_manga"):
+        return None
+    uuids = json.loads(cache.get(f"{cuuid}:chapter_to_manga"))
+    for muuid in uuids:
+        for db_cuuid in uuids[muuid]:
             if db_cuuid == cuuid:
                 return muuid
 

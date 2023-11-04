@@ -198,6 +198,7 @@ def change_presence():
     app.discord_integration.update(state=state, details=dets, muuid=data.get("muuid"))
     return {"success": "ok"}
 
+
 @server.route("/read/<chapteruuid>", methods=["GET"], defaults={"page": 1})
 @server.route("/read/<chapteruuid>/<page>", methods=["GET"])
 def read_manga(chapteruuid, page):

@@ -36,6 +36,7 @@ class Logger:
             if not os.path.isdir("logs"):
                 os.mkdir("logs")
             self.file = open(f"logs\\{self.file_start}.log", "w")
+        os.system("cls")
 
     def log(self, ll: LogType, text):
         if ll.value >= self.log_level:

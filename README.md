@@ -11,11 +11,12 @@ settings.json
 ```json
 {
     "LogLevel": 1,
+    "redisCaching": false,
     "OnStart": {
         "cacheMangas": false
     },
     "DownloadProcessor": {
-        "defaultSpeedMode": "NORMAL",
+        "defaultSpeedMode": "NO_LIMIT",
         "useThreading": true,
         "silentDownload": true,
         "saveQueueOnExit": true,
@@ -38,6 +39,15 @@ settings.json
 
         ],
         "cooldown": 600
+    },
+    "DiscordIntegration": {
+        "showPresence": true,
+        "filter": [
+            [
+                "include", "!=", ["uuid-here"],
+                "exclude", "==", ["some-uuid"]
+            ]
+        ]
     }
 }
 ```

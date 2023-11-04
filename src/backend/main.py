@@ -10,6 +10,7 @@ def close_threads():
     app.discord_integration.stop()
     app.DlProcessor.stop()
     app.alert_sys.stop()
+    app.cache.close()
 
 
 if __name__ == '__main__':

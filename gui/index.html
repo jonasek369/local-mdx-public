@@ -43,6 +43,14 @@
             cursor: pointer;
         }
 
+        .search-container button:hover {
+            background-color: #45a049;
+        }
+
+        .search-container button:active {
+            background-color: #3e8e41;
+        }
+
         .login-container {
             display: flex;
             align-items: center;
@@ -123,7 +131,7 @@
     </div>
     {% block content %}
     {% if login == 1 %}
-    <button class="login-button">{{ name }}</button>
+        <button class="login-button">{{ name }}</button>
     {% else %}
     <div class="login-container">
         <button onClick="document.location.href='/login?from=/'" class="login-button">Login</button>

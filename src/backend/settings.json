@@ -1,5 +1,6 @@
 {
     "LogLevel": 1,
+    "redisCaching": false,
     "OnStart": {
         "cacheMangas": false
     },
@@ -31,8 +32,7 @@
     "DiscordIntegration": {
         "showPresence": true,
         "filter": [
-            ["include", "!=", ["uuid-to-compare"]],
-            ["exclude", "==", ["some-other-uuid", "another-uuid-yes"]]
+            ["include", "!=", ["e97fdc93-21ec-47e0-b676-e45d67068932"]]
         ]
     }
 }
