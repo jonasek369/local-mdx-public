@@ -5,329 +5,321 @@
     <title>Download Manager</title>
     <style>
         .table {
-          display: table;
-          width: 100%;
-          border-collapse: collapse;
-          background-color: #f2f2f2;
+            display: table;
+            width: 100%;
+            border-collapse: collapse;
+            background-color: #f2f2f2;
         }
 
         .row {
-          display: table-row;
+            display: table-row;
         }
 
         .cell {
-          display: table-cell;
-          border: 1px solid #ccc;
-          padding: 10px;
-          text-align: center;
+            display: table-cell;
+            border: 1px solid #ccc;
+            padding: 10px;
+            text-align: center;
         }
 
         .row:nth-child(odd) {
-          background-color: #e6e6e6;
+            background-color: #e6e6e6;
         }
 
         .cell:first-child {
-          border-left: none;
+            border-left: none;
         }
 
         .cell:last-child {
-          border-right: none;
+            border-right: none;
         }
 
         .row:last-child .cell {
-          border-bottom: none;
+            border-bottom: none;
         }
 
         .button {
-          display: inline-block;
-          padding: 8px 16px;
-          font-size: 14px;
-          font-weight: bold;
-          text-decoration: none;
-          background-color: #4CAF50;
-          color: #fff;
-          border: none;
-          border-radius: 4px;
-          cursor: pointer;
+            display: inline-block;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            text-decoration: none;
+            background-color: #4CAF50;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
         }
-        
+
         .button:hover {
-          background-color: #45a049;
+            background-color: #45a049;
         }
-        
+
         .button:active {
-          background-color: #3e8e41;
+            background-color: #3e8e41;
         }
     </style>
 </head>
 <body>
-    <button class="button" onClick="window.location.href='/';">Back</button>
-    <h1 id="downloader-state"></h1>
+<button class="button" onClick="window.location.href='/';">Back</button>
+<h1 id="downloader-state"></h1>
 
-    <h1>Queue</h1>
-    <div id="queue" class="table">
-    </div>
-    <button onclick="start_download()" class="button">Start download</button>
-    <button onclick="stop_download()" class="button">Stop download</button>
-    <fieldset>
-        <legend>Select speed</legend>
-        <input type="radio" name="speed-change" onchange="change_speed()" id="speed-no-limit"/><a>No limit</a>
-        <input type="radio" name="speed-change" onchange="change_speed()" id="speed-fast"/><a>Fast</a>
-        <input type="radio" name="speed-change" onchange="change_speed()" id="speed-normal"/><a>Normal</a>
-        <input type="radio" name="speed-change" onchange="change_speed()" id="speed-slow"/><a>Slow</a>
-    </fieldset>
+<h1>Queue</h1>
+<div id="queue" class="table">
+</div>
+<button onclick="start_download()" class="button">Start download</button>
+<button onclick="stop_download()" class="button">Stop download</button>
+<fieldset>
+    <legend>Select speed</legend>
+    <input type="radio" name="speed-change" onchange="change_speed()" id="speed-no-limit"/><a>No limit</a>
+    <input type="radio" name="speed-change" onchange="change_speed()" id="speed-fast"/><a>Fast</a>
+    <input type="radio" name="speed-change" onchange="change_speed()" id="speed-normal"/><a>Normal</a>
+    <input type="radio" name="speed-change" onchange="change_speed()" id="speed-slow"/><a>Slow</a>
+</fieldset>
 
-    <h1>Currently downloading</h1>
-    <div id="currently-working-on" class="table">
-    </div>
+<h1>Currently downloading</h1>
+<div id="currently-working-on" class="table">
+</div>
 
-    <script>
-        window.token = '{{ token }}';
+<script>
+    window.token = '{{ token }}';
 
-        var queue_updater = null;
-        var currently_working_updater = null;
+    var queue_updater = null;
+    var currently_working_updater = null;
 
-        function change_speed()
-        {
-            const no_limit = document.getElementById("speed-no-limit");
+    function change_speed() {
+        const no_limit = document.getElementById("speed-no-limit");
+        const fast = document.getElementById("speed-fast");
+        const normal = document.getElementById("speed-normal");
+        const slow = document.getElementById("speed-slow");
+        var reply = "NORMAL"; // default
+        if (no_limit.checked) {
+            reply = "NO_LIMIT";
+        } else if (fast.checked) {
+            reply = "FAST";
+        } else if (normal.checked) {
+            reply = "NORMAL";
+        } else if (slow.checked) {
+            reply = "SLOW"
+        }
+        doAjax("/manga/download/speed", "POST", null, {"speed": reply});
+    }
+
+    function getMethods(obj) {
+        var result = [];
+        for (var id in obj) {
+            try {
+                if (typeof (obj[id]) == "function") {
+                    result.push(id + ": " + obj[id].toString());
+                }
+            } catch (err) {
+                result.push(id + ": inaccessible");
+            }
+        }
+        return result;
+    }
+
+    // From https://gist.github.com/dharmavir/936328
+    function getHttpRequestObject() {
+        // Define and initialize as false
+        var xmlHttpRequst = false;
+
+        // Mozilla/Safari/Non-IE
+        if (window.XMLHttpRequest) {
+            xmlHttpRequst = new XMLHttpRequest();
+        }
+        // IE
+        else if (window.ActiveXObject) {
+            xmlHttpRequst = new ActiveXObject("Microsoft.XMLHTTP");
+        }
+        return xmlHttpRequst;
+    }
+
+    // Does the AJAX call to URL specific with rest of the parameters
+    function doAjax(url, method, responseHandler, data) {
+        // Set the variables
+        url = url || "";
+        method = method || "GET";
+        async = true;
+        data = data || {};
+        data.token = window.token;
+
+        if (url == "") {
+            alert("URL can not be null/blank");
+            return false;
+        }
+        var xmlHttpRequest = getHttpRequestObject();
+
+        // If AJAX supported
+        if (xmlHttpRequest != false) {
+            xmlHttpRequest.open(method, url, async);
+            // Set request header (optional if GET method is used)
+            if (method == "POST") {
+                xmlHttpRequest.setRequestHeader("Content-Type", "application/json");
+            }
+            // Assign (or define) response-handler/callback when ReadyState is changed.
+            xmlHttpRequest.onreadystatechange = responseHandler;
+            // Send data
+            xmlHttpRequest.send(JSON.stringify(data));
+        } else {
+            alert("Please use browser with Ajax support.!");
+        }
+    }
+
+    function start_download() {
+        doAjax("/manga/download/start", "GET", null);
+        refresh_queue();
+        refresh_status();
+    }
+
+    function stop_download() {
+        doAjax("/manga/download/stop", "GET", null);
+
+        /*if(currently_working_updater != null){
+            window.clearInterval(currently_working_updater);
+        }else{
+
+        }*/
+    }
+
+    function status_handler(response) {
+        if (this.responseText) {
+            const resp = JSON.parse(this.responseText);
+
+            console.log(resp);
+
+            const divUpdates = document.getElementById("currently-working-on");
+
+            if (!resp.in_progress) {
+                while (divUpdates.firstChild) {
+                    divUpdates.removeChild(divUpdates.firstChild);
+                }
+                return;
+            }
+
+            const divRow = document.createElement("div");
+            divRow.className = "row";
+
+            const stateText = document.getElementById("downloader-state");
+
             const fast = document.getElementById("speed-fast");
             const normal = document.getElementById("speed-normal");
             const slow = document.getElementById("speed-slow");
-            var reply = "NORMAL"; // default
-            if(no_limit.checked){
-                reply = "NO_LIMIT";
-            } else if(fast.checked){
-                reply = "FAST";
-            }else if(normal.checked){
-                reply = "NORMAL";
-            }else if(slow.checked){
-                reply = "SLOW"
+
+            switch (resp.speed_mode) {
+                case "FAST":
+                    fast.checked = true;
+                    normal.checked = false;
+                    slow.checked = false;
+                    break;
+                case "NORMAL":
+                    fast.checked = false;
+                    normal.checked = true;
+                    slow.checked = false;
+                    break;
+                case "SLOW":
+                    fast.checked = false;
+                    normal.checked = false;
+                    slow.checked = true;
+                    break;
+                default:
+                    console.log("Unexpected data from server: " + resp.speed_mode)
+                    break;
             }
-            doAjax("/manga/download/speed", "POST", null, {"speed": reply});
-        }
 
-        function getMethods(obj) {
-        	var result = [];
-        	for (var id in obj) {
-        		try {
-        			if (typeof(obj[id]) == "function") {
-        				result.push(id + ": " + obj[id].toString());
-        			}
-        		} catch (err) {
-        			result.push(id + ": inaccessible");
-        		}
-        	}
-        	return result;
-        }
+            if (resp.in_progress) {
+                stateText.innerHTML = "Downloading. Speed set to: " + resp.speed_mode;
+            } else {
+                stateText.innerHTML = "Paused";
+            }
 
-        // From https://gist.github.com/dharmavir/936328
-        function getHttpRequestObject() {
-        	// Define and initialize as false
-        	var xmlHttpRequst = false;
+            while (divUpdates.firstChild) {
+                divUpdates.removeChild(divUpdates.firstChild);
+            }
 
-        	// Mozilla/Safari/Non-IE
-        	if (window.XMLHttpRequest) {
-        		xmlHttpRequst = new XMLHttpRequest();
-        	}
-        	// IE
-        	else if (window.ActiveXObject) {
-        		xmlHttpRequst = new ActiveXObject("Microsoft.XMLHTTP");
-        	}
-        	return xmlHttpRequst;
-        }
-
-            // Does the AJAX call to URL specific with rest of the parameters
-        function doAjax(url, method, responseHandler, data) {
-        	// Set the variables
-        	url = url || "";
-        	method = method || "GET";
-        	async = true;
-        	data = data || {};
-        	data.token = window.token;
-
-        	if (url == "") {
-        		alert("URL can not be null/blank");
-        		return false;
-        	}
-        	var xmlHttpRequest = getHttpRequestObject();
-
-        	// If AJAX supported
-        	if (xmlHttpRequest != false) {
-        		xmlHttpRequest.open(method, url, async);
-        		// Set request header (optional if GET method is used)
-        		if (method == "POST") {
-        			xmlHttpRequest.setRequestHeader("Content-Type", "application/json");
-        		}
-        		// Assign (or define) response-handler/callback when ReadyState is changed.
-        		xmlHttpRequest.onreadystatechange = responseHandler;
-        		// Send data
-        		xmlHttpRequest.send(JSON.stringify(data));
-        	} else {
-        		alert("Please use browser with Ajax support.!");
-        	}
-        }
-
-        function start_download()
-		{
-			doAjax("/manga/download/start", "GET", null);
-            refresh_queue();
-            refresh_status();
-		}
-
-		function stop_download()
-		{
-			doAjax("/manga/download/stop", "GET", null);
-
-			/*if(currently_working_updater != null){
-				window.clearInterval(currently_working_updater);
-			}else{
-
-			}*/
-		}
-
-		function status_handler(response) {
-			if(this.responseText){
-				const resp = JSON.parse(this.responseText);
-
-                console.log(resp);
-
-				const divUpdates = document.getElementById("currently-working-on");
-
-                if(!resp.in_progress){
-                    while(divUpdates.firstChild){
-                    	divUpdates.removeChild(divUpdates.firstChild);
-            	    }
-                    return;
-                }
-
-                const divRow = document.createElement("div");
-                divRow.className = "row";
-
-                const stateText = document.getElementById("downloader-state");
-                
-                const fast = document.getElementById("speed-fast");
-                const normal = document.getElementById("speed-normal");
-                const slow = document.getElementById("speed-slow");
-        
-                switch(resp.speed_mode)
-                {
-                    case "FAST":
-                        fast.checked = true;
-                        normal.checked = false;
-                        slow.checked = false;
-                        break;
-                    case "NORMAL":
-                        fast.checked = false;
-                        normal.checked = true;
-                        slow.checked = false;
-                        break;
-                    case "SLOW":
-                        fast.checked = false;
-                        normal.checked = false;
-                        slow.checked = true;
-                        break;
-                    default:
-                        console.log("Unexpected data from server: " + resp.speed_mode)
-                        break;
-                }
-                
-                if (resp.in_progress){
-                    stateText.innerHTML = "Downloading. Speed set to: " + resp.speed_mode;
-                }else{
-                    stateText.innerHTML = "Paused";
-                }
-
-				while(divUpdates.firstChild){
-                	divUpdates.removeChild(divUpdates.firstChild);
-            	}
-
-                if(!resp.in_progress){
-                    return;
-                }
-
-                if(resp.status.length !== 0)
-                {
-                    const a = document.createElement("a");
-                    a.className = "cell"
-                    for (let status in resp.status) {
-					    const value = resp.status[status];
-                        // Old way of showing the progress keeping it here if i change my mind but i think percentages
-                        // are better for now
-					    // a.innerHTML = `downloading ${value.name} currently at chapter (${value.chapter_status[0]}/${value.chapter_status[1]}) page (${value.page_status[0]}/${value.page_status[1]})`;
-				    	let chapter_perc = Math.round((100 * value.chapter_status[0]) / value.chapter_status[1]);
-                        let page_perc = 0;
-                        if(value.page_status[0] === "?" || value.page_status[1] === "?"){
-                            page_perc = NaN;
-                        }else{
-                            page_perc = Math.round((100 * value.page_status[0]) / value.page_status[1]);
-                        }
-                        a.innerHTML = `downloading ${value.name} chapter progress ${chapter_perc}% page progress ${page_perc}%`;
-                    }
-                    divRow.appendChild(a);
-                    divUpdates.append(divRow);
-                }
-			}
-		}
-
-		function refresh_status(){
-			doAjax("/manga/download/status", "GET", status_handler);
-		}
-
-        function queue_handler(resp)
-        {
-            if(!this.responseText){
+            if (!resp.in_progress) {
                 return;
             }
-            const queue_json = JSON.parse(this.responseText);
-            const queue = document.getElementById("queue");
 
-            while(queue.firstChild){
-                queue.removeChild(queue.firstChild);
-            }
-
-            for(let index in queue_json.queue)
-            {
-                const value = queue_json.queue[index]
-
-                const EntryDiv = document.createElement("div");
-                EntryDiv.className = "row";
-
-                const EntryText = document.createElement("a");
-                EntryText.className = "cell";
-                EntryText.innerHTML = value.name
-
-                const RemoveButton = document.createElement("button");
-                RemoveButton.className = "cell button";
-                RemoveButton.innerHTML = "Remove entry";
-                RemoveButton.addEventListener("click", function() {
-                    doAjax("/manga/download/pop-job", "POST", null, {"index": index});
-                    refresh_queue();
-                });
-
-                const PushToTopButton = document.createElement("button");
-                PushToTopButton.className = "cell button";
-                PushToTopButton.innerHTML = "Push to top";
-                PushToTopButton.addEventListener("click", function() {
-                    doAjax("/manga/download/push-to-top", "POST", null, {"index": index});
-                    refresh_queue();
-                });
-
-                EntryDiv.appendChild(EntryText);
-                EntryDiv.appendChild(RemoveButton);
-                EntryDiv.appendChild(PushToTopButton);
-                queue.append(EntryDiv);
+            if (resp.status.length !== 0) {
+                const a = document.createElement("a");
+                a.className = "cell"
+                for (let status in resp.status) {
+                    const value = resp.status[status];
+                    // Old way of showing the progress keeping it here if i change my mind but i think percentages
+                    // are better for now
+                    // a.innerHTML = `downloading ${value.name} currently at chapter (${value.chapter_status[0]}/${value.chapter_status[1]}) page (${value.page_status[0]}/${value.page_status[1]})`;
+                    let chapter_perc = Math.round((100 * value.chapter_status[0]) / value.chapter_status[1]);
+                    let page_perc = 0;
+                    if (value.page_status[0] === "?" || value.page_status[1] === "?") {
+                        page_perc = NaN;
+                    } else {
+                        page_perc = Math.round((100 * value.page_status[0]) / value.page_status[1]);
+                    }
+                    a.innerHTML = `downloading ${value.name} chapter progress ${chapter_perc}% page progress ${page_perc}%`;
+                }
+                divRow.appendChild(a);
+                divUpdates.append(divRow);
             }
         }
+    }
 
-        function refresh_queue()
-        {
-            doAjax("/manga/download/queue", "GET", queue_handler)
+    function refresh_status() {
+        doAjax("/manga/download/status", "GET", status_handler);
+    }
+
+    function queue_handler(resp) {
+        if (!this.responseText) {
+            return;
+        }
+        const queue_json = JSON.parse(this.responseText);
+        const queue = document.getElementById("queue");
+
+        while (queue.firstChild) {
+            queue.removeChild(queue.firstChild);
         }
 
-		refresh_status()
-        refresh_queue()
-        queue_updater = setInterval(refresh_queue, 1000);
-		currently_working_updater = setInterval(refresh_status, 1000);
-    </script>
+        for (let index in queue_json.queue) {
+            const value = queue_json.queue[index]
+
+            const EntryDiv = document.createElement("div");
+            EntryDiv.className = "row";
+
+            const EntryText = document.createElement("a");
+            EntryText.className = "cell";
+            EntryText.innerHTML = value.name
+
+            const RemoveButton = document.createElement("button");
+            RemoveButton.className = "cell button";
+            RemoveButton.innerHTML = "Remove entry";
+            RemoveButton.addEventListener("click", function () {
+                doAjax("/manga/download/pop-job", "POST", null, {"index": index});
+                refresh_queue();
+            });
+
+            const PushToTopButton = document.createElement("button");
+            PushToTopButton.className = "cell button";
+            PushToTopButton.innerHTML = "Push to top";
+            PushToTopButton.addEventListener("click", function () {
+                doAjax("/manga/download/push-to-top", "POST", null, {"index": index});
+                refresh_queue();
+            });
+
+            EntryDiv.appendChild(EntryText);
+            EntryDiv.appendChild(RemoveButton);
+            EntryDiv.appendChild(PushToTopButton);
+            queue.append(EntryDiv);
+        }
+    }
+
+    function refresh_queue() {
+        doAjax("/manga/download/queue", "GET", queue_handler)
+    }
+
+    refresh_status()
+    refresh_queue()
+    queue_updater = setInterval(refresh_queue, 1000);
+    currently_working_updater = setInterval(refresh_status, 1000);
+</script>
 </body>
 </html>

@@ -5,213 +5,210 @@
     <title>Library</title>
     <style>
         #content {
-              display: flex;
-			  flex-direction: column; /* Stack items vertically */
-              justify-content: center;
-              align-items: center;
+            display: flex;
+            flex-direction: column; /* Stack items vertically */
+            justify-content: center;
+            align-items: center;
         }
 
         #content .manga {
-            width: 500px; 
+            width: 500px;
             height: 100px;
             display: flex;
             align-items: center;
-	        margin-top: 10px;
-	        color: #333333;
-	        text-decoration: none;
-	        background-color: #f2f2f2;
-	        border: 2px solid #999999;
-			overflow: hidden;
-  	    }
-        
-  	    #content .manga img {
+            margin-top: 10px;
+            color: #333333;
+            text-decoration: none;
+            background-color: #f2f2f2;
+            border: 2px solid #999999;
+            overflow: hidden;
+        }
+
+        #content .manga img {
             width: 51px;
             height: 80px;
             margin-left: 10px;
             object-fit: cover;
             background-size: contain;
             background-repeat: no-repeat;
-	        background-position: center;
-	        filter: drop-shadow(0px 0px 5px black);
-  	    }
+            background-position: center;
+            filter: drop-shadow(0px 0px 5px black);
+        }
 
-		#content .manga .name {
-  			align-self: flex-start;
-			margin-top: 10px;
-			margin-left: 5px;
+        #content .manga .name {
+            align-self: flex-start;
+            margin-top: 10px;
+            margin-left: 5px;
 
-			font-size: 28px;
-	        font-weight: bold;
-	        font-family: sans-serif;
+            font-size: 28px;
+            font-weight: bold;
+            font-family: sans-serif;
 
-			white-space: nowrap;
-		}
+            white-space: nowrap;
+        }
 
-		#content .manga .description {
-  			align-self: flex-start;
-			margin-top: 50px;
-			margin-left: 10px;
+        #content .manga .description {
+            align-self: flex-start;
+            margin-top: 50px;
+            margin-left: 10px;
 
-			font-size: 16px;
-	        font-weight: bold;
-	        font-family: sans-serif;
+            font-size: 16px;
+            font-weight: bold;
+            font-family: sans-serif;
 
 
-  			overflow: hidden;
-  			text-overflow:clip;
-		}
+            overflow: hidden;
+            text-overflow: clip;
+        }
 
         .button {
-          display: inline-block;
-          padding: 8px 16px;
-          font-size: 14px;
-          font-weight: bold;
-          text-decoration: none;
-          background-color: #4CAF50;
-          color: #fff;
-          border: none;
-          border-radius: 4px;
-          cursor: pointer;
+            display: inline-block;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            text-decoration: none;
+            background-color: #4CAF50;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
         }
 
         .button:hover {
-          background-color: #45a049;
+            background-color: #45a049;
         }
 
         .button:active {
-          background-color: #3e8e41;
+            background-color: #3e8e41;
         }
 
     </style>
 </head>
-    <body>
-        <button class="button" onClick="window.location.href='/';">Back</button>
-        <div id="content">
-            
-        </div>
-        <script>
-        window.token = '{{ token }}';
-        var ran = false;
+<body>
+<button class="button" onClick="window.location.href='/';">Back</button>
+<div id="content">
 
-        function getMethods(obj) {
-        	var result = [];
-        	for (var id in obj) {
-        		try {
-        			if (typeof(obj[id]) == "function") {
-        				result.push(id + ": " + obj[id].toString());
-        			}
-        		} catch (err) {
-        			result.push(id + ": inaccessible");
-        		}
-        	}
-        	return result;
+</div>
+<script>
+    window.token = '{{ token }}';
+    var ran = false;
+
+    function getMethods(obj) {
+        var result = [];
+        for (var id in obj) {
+            try {
+                if (typeof (obj[id]) == "function") {
+                    result.push(id + ": " + obj[id].toString());
+                }
+            } catch (err) {
+                result.push(id + ": inaccessible");
+            }
+        }
+        return result;
+    }
+
+    // From https://gist.github.com/dharmavir/936328
+    function getHttpRequestObject() {
+        // Define and initialize as false
+        var xmlHttpRequst = false;
+
+        // Mozilla/Safari/Non-IE
+        if (window.XMLHttpRequest) {
+            xmlHttpRequst = new XMLHttpRequest();
+        }
+        // IE
+        else if (window.ActiveXObject) {
+            xmlHttpRequst = new ActiveXObject("Microsoft.XMLHTTP");
+        }
+        return xmlHttpRequst;
+    }
+
+    // Does the AJAX call to URL specific with rest of the parameters
+    function doAjax(url, method, responseHandler, data) {
+        // Set the variables
+        url = url || "";
+        method = method || "GET";
+        async = true;
+        data = data || {};
+        data.token = window.token;
+
+        if (url == "") {
+            alert("URL can not be null/blank");
+            return false;
+        }
+        var xmlHttpRequest = getHttpRequestObject();
+
+        // If AJAX supported
+        if (xmlHttpRequest != false) {
+            xmlHttpRequest.open(method, url, async);
+            // Set request header (optional if GET method is used)
+            if (method == "POST") {
+                xmlHttpRequest.setRequestHeader("Content-Type", "application/json");
+            }
+            // Assign (or define) response-handler/callback when ReadyState is changed.
+            xmlHttpRequest.onreadystatechange = responseHandler;
+            // Send data
+            xmlHttpRequest.send(JSON.stringify(data));
+        } else {
+            alert("Please use browser with Ajax support.!");
+        }
+    }
+
+    function set_library(response) {
+        console.log("setting library")
+        if (!this.responseText)
+            return;
+        const data = JSON.parse(this.responseText).response;
+
+        const elem = document.getElementById("content");
+        if (elem.children.length > 0) {
+            return;
         }
 
-        // From https://gist.github.com/dharmavir/936328
-        function getHttpRequestObject() {
-        	// Define and initialize as false
-        	var xmlHttpRequst = false;
+        for (const [key, value] of Object.entries(data)) {
+            const to_append = document.createElement("div");
+            to_append.className = "manga";
+            const info = document.createElement("div");
 
-        	// Mozilla/Safari/Non-IE
-        	if (window.XMLHttpRequest) {
-        		xmlHttpRequst = new XMLHttpRequest();
-        	}
-        	// IE
-        	else if (window.ActiveXObject) {
-        		xmlHttpRequst = new ActiveXObject("Microsoft.XMLHTTP");
-        	}
-        	return xmlHttpRequst;
-        }
-
-            // Does the AJAX call to URL specific with rest of the parameters
-        function doAjax(url, method, responseHandler, data) {
-        	// Set the variables
-        	url = url || "";
-        	method = method || "GET";
-        	async = true;
-        	data = data || {};
-        	data.token = window.token;
-
-        	if (url == "") {
-        		alert("URL can not be null/blank");
-        		return false;
-        	}
-        	var xmlHttpRequest = getHttpRequestObject();
-
-        	// If AJAX supported
-        	if (xmlHttpRequest != false) {
-        		xmlHttpRequest.open(method, url, async);
-        		// Set request header (optional if GET method is used)
-        		if (method == "POST") {
-        			xmlHttpRequest.setRequestHeader("Content-Type", "application/json");
-        		}
-        		// Assign (or define) response-handler/callback when ReadyState is changed.
-        		xmlHttpRequest.onreadystatechange = responseHandler;
-        		// Send data
-        		xmlHttpRequest.send(JSON.stringify(data));
-        	} else {
-        		alert("Please use browser with Ajax support.!");
-        	}
-        }
-
-        function set_library(response)
-        {	
-			console.log("setting library")
-            if(!this.responseText)
-                return; 
-            const data = JSON.parse(this.responseText).response;
-
-            const elem = document.getElementById("content");
-            if (elem.children.length > 0){
-                return;
+            const cover = document.createElement("img");
+            cover.setAttribute("alt", value[0] + " cover art");
+            cover.src = "/manga/cover/" + key + "?small=1";
+            const name = document.createElement("a");
+            name.innerText = value[0];
+            name.className = "name"
+            console.log(value);
+            const desc = document.createElement("a");
+            if (value[1] !== null && value[1].indexOf("\n") != -1) {
+                desc.innerText = value[1].substring(0, value[1].indexOf("\n"));
+            } else {
+                desc.innerText = value[1];
+            }
+            if (desc.innerText && desc.innerText.length > 64) {
+                desc.innerText = desc.innerText.substring(0, 64) + "...";
+            } else {
+                desc.innerText = desc.innerText;
             }
 
-            for (const [key, value] of Object.entries(data)) {
-                const to_append = document.createElement("div");
-				to_append.className = "manga";
-				const info = document.createElement("div");
+            desc.className = "description"
+            to_append.appendChild(cover);
 
-                const cover = document.createElement("img");
-				cover.setAttribute("alt", value[0]+" cover art");
-                cover.src = "/manga/cover/"+key+"?small=1";
-                const name = document.createElement("a");
-                name.innerText = value[0];
-				name.className = "name"
-				console.log(value);
-                const desc = document.createElement("a");
-				if (value[1] !== null && value[1].indexOf("\n") != -1 )
-				{
-					desc.innerText = value[1].substring(0, value[1].indexOf("\n"));
-				}else{
-					desc.innerText = value[1];
-				}
-				if(desc.innerText && desc.innerText.length > 64)
-				{
-					desc.innerText = desc.innerText.substring(0, 64)+"...";
-				}else{
-					desc.innerText = desc.innerText;
-				}
+            info.appendChild(name);
+            info.appendChild(document.createElement("br"));
+            info.appendChild(desc);
 
-				desc.className = "description"
-                to_append.appendChild(cover);
+            to_append.append(info);
 
-                info.appendChild(name);
-				info.appendChild(document.createElement("br"));
-                info.appendChild(desc);
-
-				to_append.append(info);
-
-				to_append.style.cursor = 'pointer';
-				to_append.onclick = function(){
-					window.location.href = "/manga/"+key+"?from=/manga/library";
-				}
-
-                elem.appendChild(to_append);
+            to_append.style.cursor = 'pointer';
+            to_append.onclick = function () {
+                window.location.href = "/manga/" + key + "?from=/manga/library";
             }
 
+            elem.appendChild(to_append);
         }
-		
-		doAjax("/manga/library/data", "GET", set_library, null);
-        </script>
-    </body>
+
+    }
+
+    doAjax("/manga/library/data", "GET", set_library, null);
+</script>
+</body>
 </html>

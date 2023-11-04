@@ -1265,9 +1265,11 @@ class DiscordIntegration:
         if muuid:
             is_allowed = True
             for InOrEx, operation, uuids in self.filter:
-                if len(operation) > 2:
+                if len(operation) > 2 or operation not in ["==", "!="]:
                     raise Exception("Operation is bigger than 2 characters")
                 for uuid in uuids:
+                    if not is_uuid(uuid):
+                        raise Exception("provided uuid is not valid uuid")
                     try:
                         passed = eval(f"'{muuid}'{operation}'{uuid}'")
                         if passed and InOrEx == "exclude":
