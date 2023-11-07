@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import pprint
 import random
 import sqlite3
 import string
@@ -15,6 +16,7 @@ from uuid import UUID
 
 import aiohttp
 import discord
+import pypresence.exceptions
 from discord import File
 from discord import Webhook, Member
 from discord.abc import MISSING
@@ -46,20 +48,57 @@ if DISABLE_INTERNET_CONNECTION:
 else:
     import requests
 
+Plogger = Logger(1)
+
 
 class Settings:
     def __init__(self):
-        default: dict = {"LogLevel": 1, "OnStart": {"cacheMangas": True},
-                         "DownloadProcessor": {"defaultSpeedMode": "FAST", "settings": {"silent_download": False}},
-                         "MangadexConnection": {
-                             "excludedGroups": ["4f1de6a2-f0c5-4ac5-bce5-02c7dbb67deb"],
-                             "cacheChapterInfoToDatabase": True},
-                         "AlertSystem": {"discordWebhook": "", "discordRecipient": -1, "soundAlertOnRelease": False,
-                                         "downloadStartOnRelease": True, "watchedMangas": [], "cooldown": 600}}
+        default: dict = {
+            "LogLevel": 1,
+            "redisCaching": False,
+            "OnStart": {
+                "cacheMangas": False
+            },
+            "DownloadProcessor": {
+                "defaultSpeedMode": "NO_LIMIT",
+                "useThreading": True,
+                "silentDownload": True,
+                "saveQueueOnExit": True,
+                "runOnStart": True,
+                "haltOnRateLimitReach": True
+            },
+            "MangadexConnection": {
+                "excludedGroups": [
+                    "4f1de6a2-f0c5-4ac5-bce5-02c7dbb67deb"
+                ],
+                "cacheChapterInfoToDatabase": True
+            },
+            "AlertSystem": {
+                "discordWebhook": "",
+                "discordRecipient": -1,
+                "soundAlertOnRelease": False,
+                "downloadStartOnRelease": True,
+                "watchedMangas": [
+
+                ],
+                "cooldown": 300
+            },
+            "DiscordIntegration": {
+                "showPresence": True,
+                "filter": [
+
+                ]
+            }
+        }
         try:
             with open("settings.json") as file:
                 self.__data: dict = json.load(file)
         except Exception as e:
+            Plogger.log(erro, f"Could not load settings because of '{e}' using defaults")
+            if isinstance(e, FileNotFoundError):
+                with open("settings.json", "w") as file:
+                    file.write(json.dumps(default))
+                Plogger.log(info, "File dose not exist creating settings.json with default settings")
             self.__data: dict = {}
 
         self.__data = self.fill_default_settings(self.__data, default)
@@ -105,9 +144,7 @@ class Settings:
 settings = Settings()
 
 if settings.Global.get("LogLeveL"):
-    Plogger = Logger(int(settings.Global.get("LogLeveL")))
-else:
-    Plogger = Logger(1)
+    Plogger.log_level = int(settings.Global.get("LogLeveL"))
 
 using_redis = False
 
@@ -1246,11 +1283,14 @@ class SessionManager:
 class DiscordIntegration:
     def __init__(self):
         self.RPC: Presence
-        if settings.DiscordIntegration.get("showPresence"):
-            self.RPC = Presence("1169363237725286540")
-            self.RPC.connect()
-            self.update("Browsing", "https://github.com/jonasek369/local-mdx-public")
-        else:
+        try:
+            if settings.DiscordIntegration.get("showPresence"):
+                self.RPC = Presence("1169363237725286540")
+                self.RPC.connect()
+                self.update("Browsing", "https://github.com/jonasek369/local-mdx-public")
+            else:
+                self.RPC = None
+        except pypresence.exceptions.DiscordNotFound:
             self.RPC = None
 
         self.filter = settings.DiscordIntegration.get("filter")

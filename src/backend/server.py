@@ -107,6 +107,8 @@ def get_manga_info(mangauuid):
     app.initialize()
     # this is taking a bit of time because its calling mdx api, and it takes about 2000ms,
     # but it being cached
+    if not is_valid_uuid(mangauuid):
+        return {"error": "Invalid uuid"}
     chapters_ids = app.connection.get_chapter_list(mangauuid)
     rowid = app.database.get_rowid(mangauuid)
     chapters, warnings = app.database.get_chapters(chapters_ids, rowid)
@@ -150,10 +152,13 @@ def get_chapter_image(identifier, page):
 @server.route("/manga/cover/<identifier>")
 def get_cover_art(identifier):
     app.initialize()
-    image_binary = app.database.get_cover(identifier, small=bool(request.args.get('small')))
+    small = request.args.get('small')
+    if small.isdigit():
+        small = int(small)
+    image_binary = app.database.get_cover(identifier, small=bool(small))
     if image_binary is None:
         app.connection.set_manga_info(identifier)
-        image_binary = app.database.get_cover(identifier, small=bool(request.args.get('small')))
+        image_binary = app.database.get_cover(identifier, small=bool(small))
     if image_binary is not None:
         response = make_response(compress(image_binary))
         response.headers.set('Content-Type', 'image/jpeg')

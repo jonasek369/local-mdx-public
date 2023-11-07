@@ -347,8 +347,8 @@
 
                 if(jsonData.warning !== null){
                 	var message = "";
-					if(jsonData.warning == "NO_CONNECTION"){
-						message = "Connection could not be established. It was either refused or your internet connection is down. Could not load chapter and volume numbers (using cahce as fallback)";
+					if(jsonData.warning === "NO_CONNECTION"){
+						message = "Connection could not be established. It was either refused or your internet connection is down. Could not load chapter and volume numbers (using cache as fallback)";
 					}
 
 					var wb = document.getElementById("warningBox");
