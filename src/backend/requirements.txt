@@ -1,0 +1,8 @@
+aiohttp==3.8.4
+discord.py==2.3.2
+Flask==2.3.2
+Pillow==10.1.0
+pypresence==4.3.0
+redis==4.6.0
+requests==2.31.0
+waitress==2.1.2

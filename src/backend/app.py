@@ -1,7 +1,6 @@
 import asyncio
 import json
 import os
-import pprint
 import random
 import sqlite3
 import string
@@ -53,7 +52,7 @@ Plogger = Logger(1)
 
 class Settings:
     def __init__(self):
-        default: dict = {
+        self.default: dict = {
             "LogLevel": 1,
             "redisCaching": False,
             "OnStart": {
@@ -71,7 +70,8 @@ class Settings:
                 "excludedGroups": [
                     "4f1de6a2-f0c5-4ac5-bce5-02c7dbb67deb"
                 ],
-                "cacheChapterInfoToDatabase": True
+                "cacheChapterInfoToDatabase": True,
+                "contentRating": []
             },
             "AlertSystem": {
                 "discordWebhook": "",
@@ -91,17 +91,24 @@ class Settings:
             }
         }
         try:
-            with open("settings.json") as file:
+            with open("settings.json", "r") as file:
                 self.__data: dict = json.load(file)
         except Exception as e:
             Plogger.log(erro, f"Could not load settings because of '{e}' using defaults")
             if isinstance(e, FileNotFoundError):
                 with open("settings.json", "w") as file:
-                    file.write(json.dumps(default))
+                    json.dump(self.default, file)
                 Plogger.log(info, "File dose not exist creating settings.json with default settings")
             self.__data: dict = {}
 
-        self.__data = self.fill_default_settings(self.__data, default)
+        self.__data = self.fill_default_settings(self.__data, self.default)
+
+    def set_settings(self, _dict):
+        self.__data = self.fill_default_settings(_dict, self.default)
+        with open("settings.json", "w") as file:
+            json.dump(self.__data, file)
+        Plogger.log(info, f"Forcing restart on all modules wait please")
+        initialize(True)
 
     def fill_missing_info(self, input_dict, default_dict):
         for key, value in default_dict.items():
@@ -162,7 +169,7 @@ if settings.Global.get("redisCaching"):
     except Exception as e:
         Plogger.log(erro, f"Unable to initialize redis {e}")
 if not using_redis:
-    Plogger.log(warn, "Using self implemented caching instead of redis")
+    Plogger.log(info, "Using self implemented caching instead of redis (might use more ram)")
 
 
     class Cache:
@@ -240,8 +247,8 @@ class Database:
         cursor.execute(
             """CREATE TABLE IF NOT EXISTS "records" ("identifier" TEXT NOT NULL UNIQUE, "pages" INTEGER NOT NULL)""")
         cursor.execute(
-            """CREATE TABLE IF NOT EXISTS "info" ("identifier" TEXT NOT NULL, "name" TEXT NOT NULL, "description" 
-            TEXT, cover BLOB, small_cover BLOB)""")
+            """CREATE TABLE IF NOT EXISTS"info" ("identifier"	TEXT NOT NULL,"name"	TEXT NOT NULL,"description"	TEXT,"cover" 
+            BLOB,"small_cover"	BLOB,"manga_format"	TEXT,"manga_genre"	TEXT,"content_rating"	TEXT);""")
         cursor.execute(
             """CREATE TABLE IF NOT EXISTS "updates" ("identifier"	TEXT NOT NULL,"old_chapter"	REAL NOT NULL,
             "new_chapter"	REAL NOT NULL,"timestamp"	REAL NOT NULL);""")
@@ -379,14 +386,21 @@ class Database:
         fetch = cursor.fetchall()
         return fetch
 
-    def set_info(self, identifier: str, name: str, description: str, cover: bytes, small_cover: bytes) -> None:
+    def all_manga(self):
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM info")
+        return cursor.fetchall()
+
+    def set_info(self, identifier: str, name: str, description: str, cover: bytes, small_cover: bytes,
+                 manga_format: str, manga_genre: str, content_rating: str) -> None:
         cursor = self.conn.cursor()
         cursor.execute("SELECT identifier FROM info WHERE identifier=:ide", {"ide": identifier})
         fetch = cursor.fetchone()
         if fetch:
             return
-        cursor.execute("INSERT INTO info VALUES (:ide, :name, :desc, :cover, :sc)",
-                       {"ide": identifier, "name": name, "desc": description, "cover": cover, "sc": small_cover})
+        cursor.execute("INSERT INTO info VALUES (:ide, :name, :desc, :cover, :sc, :mf, :mg, :cr)",
+                       {"ide": identifier, "name": name, "desc": description, "cover": cover, "sc": small_cover,
+                        "mf": manga_format, "mg": manga_genre, "cr": content_rating})
         self.conn.commit()
 
     def get_info(self, identifier: str):
@@ -581,7 +595,11 @@ class MangadexConnection:
         if cache.exists(f"search:{name}"):
             return json.loads(cache.get(f"search:{name}"))
         try:
-            req = self.session.get(url=f"{self.API}/manga", params={"title": name, "limit": limit})
+            params = {"title": name, "limit": limit}
+            if settings.MangadexConnection.get("contentRating"):
+                params["contentRating[]"] = settings.MangadexConnection.get("contentRating")
+
+            req = self.session.get(url=f"{self.API}/manga", params=params)
         except requests.exceptions.ConnectionError:
             return None
         if req.status_code != 200:
@@ -635,10 +653,17 @@ class MangadexConnection:
     def set_manga_info(self, identifier: str) -> None:
         if not database.get_info(identifier):
             try:
+                params = {}
+                if settings.MangadexConnection.get("contentRating"):
+                    params["contentRating[]"] = settings.MangadexConnection.get("contentRating")
+
                 manga_info_nonagr = self.session.get(
-                    f"{self.API}/manga/{identifier}?includes%5B%5D=cover_art").json()
+                    f"{self.API}/manga/{identifier}?includes%5B%5D=cover_art", params=params).json()
             except AttributeError:
                 return None
+            manga_format = ""
+            manga_genre = ""
+            content_rating = try_to_get(manga_info_nonagr, ["data", "attributes", "contentRating"])
             for index, relationship in enumerate(manga_info_nonagr["data"]["relationships"]):
                 if relationship["type"] == "cover_art":
                     coverurl = f"https://mangadex.org/covers/{identifier}/" + try_to_get(manga_info_nonagr,
@@ -646,6 +671,17 @@ class MangadexConnection:
                                                                                           index, "attributes",
                                                                                           "fileName"])
                     cache.setex(f"{identifier}:coverurl", 3600, coverurl)
+
+            for tag in manga_info_nonagr["data"]["attributes"]["tags"]:
+                if tag["attributes"]["group"] == "format":
+                    manga_format = try_to_get(tag, ["attributes", "name", "en"]) + "|"
+                if tag["attributes"]["group"] == "genre":
+                    manga_genre += try_to_get(tag, ["attributes", "name", "en"]) + "|"
+
+            if manga_format.endswith("|"):
+                manga_format = manga_format[:-1]
+            if manga_genre.endswith("|"):
+                manga_genre = manga_genre[:-1]
 
             if cache.get(f"{identifier}:coverurl") is None:
                 Plogger.log(warn, "coverurl is none. Parsing failed or manga dose not have any cover")
@@ -669,7 +705,10 @@ class MangadexConnection:
                               name=title,
                               description=try_to_get(manga_info_nonagr, ["data", "attributes", "description", "en"]),
                               cover=image_webp_bytes,
-                              small_cover=small_cover_webp_bytes
+                              small_cover=small_cover_webp_bytes,
+                              manga_format=manga_format,
+                              manga_genre=manga_genre,
+                              content_rating=content_rating
                               )
 
     def get_last_chapter_num(self, identifier: str) -> dict:
@@ -678,10 +717,15 @@ class MangadexConnection:
             return {}
         try:
             if cache.exists(f"{identifier}:current_chapter"):
+                params = {}
+                if settings.MangadexConnection.get("contentRating"):
+                    params["contentRating[]"] = settings.MangadexConnection.get("contentRating")
+
                 manga_info_nonagr = self.session.get(
-                    f"{self.API}/manga/{identifier}?includes%5B%5D=cover_art").json()
+                    f"{self.API}/manga/{identifier}?includes%5B%5D=cover_art", params=params).json()
                 cache.setex(f"{identifier}:title", 3600,
                             str(try_to_get(manga_info_nonagr, ["data", "attributes", "title"])))
+                manga_format = None
                 for index, relationship in enumerate(manga_info_nonagr["data"]["relationships"]):
                     if relationship["type"] == "cover_art":
                         coverurl = f"https://mangadex.org/covers/{identifier}/" + try_to_get(manga_info_nonagr,
@@ -689,6 +733,29 @@ class MangadexConnection:
                                                                                               index, "attributes",
                                                                                               "fileName"])
                         cache.setex(f"{identifier}:coverurl", 3600, str(coverurl))
+
+                manga_format = ""
+                manga_genre = ""
+                content_rating = try_to_get(manga_info_nonagr, ["data", "attributes", "contentRating"])
+                for index, relationship in enumerate(manga_info_nonagr["data"]["relationships"]):
+                    if relationship["type"] == "cover_art":
+                        coverurl = f"https://mangadex.org/covers/{identifier}/" + try_to_get(manga_info_nonagr,
+                                                                                             ["data", "relationships",
+                                                                                              index, "attributes",
+                                                                                              "fileName"])
+                        cache.setex(f"{identifier}:coverurl", 3600, coverurl)
+
+                for tag in manga_info_nonagr["data"]["attributes"]["tags"]:
+                    if tag["attributes"]["group"] == "format":
+                        manga_format = try_to_get(tag, ["attributes", "name", "en"]) + "|"
+                    if tag["attributes"]["group"] == "genre":
+                        manga_genre += try_to_get(tag, ["attributes", "name", "en"]) + "|"
+
+                if manga_format.endswith("|"):
+                    manga_format = manga_format[:-1]
+                if manga_genre.endswith("|"):
+                    manga_genre = manga_genre[:-1]
+
                 if not database.get_info(identifier):
                     # download cover and put into db cover url in cache
                     if cache.get(f"{identifier}:coverurl") is None:
@@ -709,7 +776,10 @@ class MangadexConnection:
                                       description=try_to_get(manga_info_nonagr,
                                                              ["data", "attributes", "description", "en"]),
                                       cover=image_webp_bytes,
-                                      small_cover=small_cover_webp_bytes
+                                      small_cover=small_cover_webp_bytes,
+                                      manga_format=manga_format,
+                                      manga_genre=manga_genre,
+                                      content_rating=content_rating
                                       )
         except Exception as e:
             Plogger.log(warn, "ERR ?" + str(e))
@@ -738,17 +808,23 @@ class MangadexConnection:
             return json.loads(cache.get(f"{identifier}:chapter_list"))
         if cache_only:
             return None
-        chapters = self.get_last_chapter_num(identifier)
-        if not chapters.get(identifier):
-            return None
-        chapter_value = chapters.get(identifier)
         chapters = []
         offset = 0
-        while offset <= chapter_value:
+        total_chapters = None
+
+        while True:
+            if total_chapters and total_chapters <= offset:
+                break
+            params = {"manga": identifier, "limit": 100, "offset": offset,
+                      "translatedLanguage[]": lang,
+                      "excludedGroups[]": self.exclude_groups}
+            if settings.MangadexConnection.get("contentRating"):
+                params["contentRating[]"] = settings.MangadexConnection.get("contentRating")
+
             chapter = self.session.get(f"{self.API}/chapter",
-                                       params={"manga": identifier, "limit": 100, "offset": offset,
-                                               "translatedLanguage[]": lang,
-                                               "excludedGroups[]": self.exclude_groups}).json()
+                                       params=params).json()
+            if not total_chapters:
+                total_chapters = float(chapter.get("total"))
             chapters.extend(chapter["data"])
             offset += 100
         sorted_chapters = sorted(chapters, key=lambda x: float(x["attributes"]["chapter"]))
@@ -1299,28 +1375,50 @@ class DiscordIntegration:
         if self.RPC:
             self.RPC.close()
 
+    def allowed_by_filtering(self, InOrEx, value, operation, data) -> bool:
+        if isinstance(value, str):
+            filter = eval(f"'{value}'{operation}{data}")
+            if filter and InOrEx == "exclude":
+                return False
+            if filter and InOrEx == "include":
+                return True
+        if isinstance(value, list):
+            for element in value:
+                filter = eval(f"'{element}'.lower() {operation} '{data}'.lower()")
+                if filter and InOrEx == "exclude":
+                    return False
+                if filter and InOrEx == "include":
+                    return True
+
     def update(self, state, details, muuid=None):
         if not self.RPC:
             return
         if muuid:
             is_allowed = True
             for InOrEx, operation, uuids in self.filter:
-                if len(operation) > 2 or operation not in ["==", "!="]:
+                if len(operation) > 2 or operation not in ["==", "!=", "in"]:
                     raise Exception("Operation is bigger than 2 characters")
-                for uuid in uuids:
-                    if not is_uuid(uuid):
-                        raise Exception("provided uuid is not valid uuid")
-                    try:
-                        passed = eval(f"'{muuid}'{operation}'{uuid}'")
-                        if passed and InOrEx == "exclude":
-                            is_allowed = False
-                        if not passed and InOrEx == "include":
-                            is_allowed = False
-                    except Exception as e:
-                        is_allowed = False
-                        Plogger.log(warn, f"raised exception while filtering: {e}")
+                if operation == "in" and uuids[0] in ["content_rating", "genres"]:
+                    manga_info = database.get_info(muuid)
+                    match uuids[0]:
+                        case "genres":
+                            content_rating = manga_info[-2]
+                            is_allowed = self.allowed_by_filtering(InOrEx, uuids[1], operation, content_rating)
+                            if not is_allowed:
+                                break
+                        case "content_rating":
+                            genres = manga_info[-1]
+                            is_allowed = self.allowed_by_filtering(InOrEx, uuids[1], operation, genres)
+                            if not is_allowed:
+                                break
+                        case _:
+                            raise Exception(f"Unsupported value '{uuids[0]}'")
+                elif operation in ["==", "!="]:
+                    is_allowed = self.allowed_by_filtering(InOrEx, muuid, operation, uuids)
+                else:
+                    raise Exception("invalid filtering")
             if not is_allowed:
-                Plogger.log(info, "Change of reading want allowed by filter")
+                Plogger.log(info, "Change of reading was not allowed by filter")
                 return
 
         self.RPC.update(state=state, details=details, large_image="chair")
@@ -1355,9 +1453,11 @@ async def send_webhook(webhook, identifier, title, cover, old_chapter, new_chapt
         await webhook.send(content=message, embed=embed, file=File(io.BytesIO(cover), filename="image.jpg"))
 
 
-def initialize():
+def initialize(force=False):
     global database, connection, DlProcessor, alert_sys, session_manager, discord_integration
-    if database is None or connection is None or DlProcessor is None or alert_sys is None or session_manager is None or discord_integration is None:
+    if database is None or connection is None or DlProcessor is None or alert_sys is None or session_manager is None or discord_integration is None or force:
+        if force and discord_integration:
+            discord_integration.stop()
         database = Database()
         connection = MangadexConnection()
         DlProcessor = MangaDownloader()
@@ -1372,10 +1472,10 @@ def initialize():
     return True
 
 
-def search_manga(name):
+def search_manga(name, limit=5):
     if database is None or connection is None or DlProcessor is None:
         initialize()
-    return connection.search_manga(name, limit=5)
+    return connection.search_manga(name, limit=limit)
 
 
 def download_manga(manga):
@@ -1455,3 +1555,37 @@ if __name__ == "__main__":
     database = Database()
     connection = MangadexConnection()
     DlProcessor = MangaDownloader()
+
+    discord_integration = DiscordIntegration()
+
+    print(connection.get_chapter_list("17a56d33-9443-433a-9e0d-70459893ed8f"))
+
+    # for manga in database.all_manga():
+    #    info = database.get_info(manga[0])
+    #    params = {}
+    #    if settings.MangadexConnection.get("contentRating"):
+    #        params["contentRating[]"] = settings.MangadexConnection.get("contentRating")
+#
+#    manga_info_nonagr = connection.session.get(f"{connection.API}/manga/{info[0]}?includes%5B%5D=cover_art",
+#                                               params=params).json()
+#    manga_format = ""
+#    manga_genre = ""
+#    content_rating = try_to_get(manga_info_nonagr, ["data", "attributes", "contentRating"])
+#
+#    for tag in manga_info_nonagr["data"]["attributes"]["tags"]:
+#        if tag["attributes"]["group"] == "format":
+#            manga_format = try_to_get(tag, ["attributes", "name", "en"]) + "|"
+#        if tag["attributes"]["group"] == "genre":
+#            manga_genre += try_to_get(tag, ["attributes", "name", "en"]) + "|"
+#
+#    if manga_format.endswith("|"):
+#        manga_format = manga_format[:-1]
+#    if manga_genre.endswith("|"):
+#        manga_genre = manga_genre[:-1]
+#
+#    cursor = database.conn.cursor()
+#    cursor.execute("UPDATE info SET manga_format=:mf , manga_genre=:mg, content_rating=:cr WHERE identifier=:ide",
+#                   {"ide": info[0], "mf": manga_format, "mg": manga_genre, "cr": content_rating})
+#    database.conn.commit()
+#    print(info[0])
+# print("end")

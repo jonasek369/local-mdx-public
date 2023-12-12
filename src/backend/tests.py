@@ -40,5 +40,3 @@ class DatabaseTests:
         no_error_run("create user", self.database.add_user, name=name, pwd_hash=pwd)
         no_error_run("login user", self.database.login_user, output_check=lambda x: x is True, name=name, pwd_hash=pwd)
 
-
-DatabaseTests().run()

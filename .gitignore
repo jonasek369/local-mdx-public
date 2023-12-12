@@ -11,3 +11,4 @@ src/backend/logs
 src/backend/data
 src/backend/tests.py
 src/backend/settings.json
+Dockerfile

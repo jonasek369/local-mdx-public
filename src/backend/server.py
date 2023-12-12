@@ -91,8 +91,13 @@ def initialize():
 def search():
     app.initialize()
     data = request.json
-
-    result = app.search_manga(data["query"])
+    try:
+        limit = int(request.args.get("limit"))
+    except TypeError:
+        limit = 5
+    if limit > 50:
+        return "cannot search that much"
+    result = app.search_manga(data["query"], limit=limit)
 
     if result:
         response = {'status': 'ok', 'result': result}
@@ -153,7 +158,7 @@ def get_chapter_image(identifier, page):
 def get_cover_art(identifier):
     app.initialize()
     small = request.args.get('small')
-    if small.isdigit():
+    if small and small.isdigit():
         small = int(small)
     image_binary = app.database.get_cover(identifier, small=bool(small))
     if image_binary is None:
@@ -187,7 +192,7 @@ def change_presence():
     data = request.json
     if "cuuid" not in data or "muuid" not in data or "page" not in data:
         return {"error": "One or more needed parameters not supplied"}
-    _, name, _, _, _ = app.database.get_info(data.get("muuid"))
+    _, name, _, _, _, _, _, _ = app.database.get_info(data.get("muuid"))
 
     chapter_info = app.database.get_chapter_info(data.get("muuid"))[1]
     if chapter_info is None:
@@ -234,10 +239,15 @@ def read_manga(chapteruuid, page):
         if chapteruuid not in data["read_manga"][muuid]:
             data["read_manga"][muuid].append(chapteruuid)
             app.database.set_user_data(name, data)
+    render_type = "NORMAL"
+    info = app.database.get_info(muuid)
+    if "Long Strip" in info[5]:
+        render_type = "LONG_STRIP"
     return render_template("read.html", cuuid=chapteruuid,
                            pages=app.database.get_chapters([{"id": chapteruuid}], rowid)[0][chapteruuid]["pages"],
                            muuid=muuid,
-                           page=page
+                           page=page,
+                           page_render=render_type
                            )
 
 
@@ -259,7 +269,7 @@ def server_manga(mangauuid):
         back = "/"
 
     app.connection.set_manga_info(mangauuid)
-    _, name, description, _, _ = app.database.get_info(mangauuid)
+    _, name, description, _, _, _, _, _ = app.database.get_info(mangauuid)
     if name is None:
         name = "Could not find name"
     if description is None:
@@ -414,9 +424,26 @@ def update():
     return render_template("updates.html")
 
 
-@server.route("/updates/settings")
-def updates_settings():
-    return render_template("updates-settings.html")
+@server.route("/config/data", methods=["POST", "GET"])
+def config_data():
+    app.initialize()
+    match request.method:
+        case "GET":
+            return jsonify(app.settings.Global)
+        case "POST":
+            new_settings = request.json
+            print(new_settings)
+            app.settings.set_settings(new_settings)
+            print(app.settings.Global)
+            return {"status": "ok", "response": None}
+        case _:
+            return {"status": "error", "response": "Method not allowed"}, 405
+
+
+@server.route("/config")
+def config():
+    app.initialize()
+    return render_template("config.html")
 
 
 @server.route("/login")
@@ -486,11 +513,17 @@ def read_status(muuid, cuuid):
     return {"error": "invalid session"}
 
 
+@server.route("/cache")
+def cache():
+    return {"size": sys.getsizeof(app.cache.cache), "cache": app.cache.cache}
+
+
 if __name__ == "__main__":
-    USE_SERVER = 0
+    USE_SERVER = 1
     if not USE_SERVER:
         server.run(host="127.0.0.1", port=5000)
     else:
+        print("starting server")
         # testing performance on other devices
         from waitress import serve
 

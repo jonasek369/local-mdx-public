@@ -34,11 +34,11 @@
           border-radius: 4px;
           cursor: pointer;
         }
-        
+
         .button:hover {
           background-color: #45a049;
         }
-        
+
         .button:active {
           background-color: #3e8e41;
         }
@@ -62,10 +62,11 @@
 		}
 
         .hidden {
-            visibility: hidden;
-            display: none;
-            pointer-events: none;
-        }
+                visibility: hidden;
+                display: none;
+                pointer-events: none;
+            }
+
 	</style>
 </head>
 <body>
@@ -137,7 +138,7 @@
         		alert("Please use browser with Ajax support.!");
         	}
         }
-		
+
 		const content = document.getElementById('content');
 		const page_header = document.getElementById("page-header");
 
@@ -256,12 +257,12 @@
 			if(!this.responseText)
                 return;
 			const data = JSON.parse(this.responseText);
-			
+
 			if(data.next !== null){
 				nextChapter = data.next.id;
 				nextPages = data.next.attributes.pages;
 			}
-			
+
 			if(data.prev !== null){
 				prevChapter = data.prev.id;
 				prevPages = data.prev.attributes.pages;
