@@ -55,3 +55,6 @@ settings.json
 ## How to start
 
 make sure you have all dependencies installed  go to src/backend/main.py and start
+
+## Termidex
+Terminal based version of lmdx
