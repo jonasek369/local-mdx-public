@@ -1,8 +1,14 @@
 aiohttp==3.8.4
 discord.py==2.3.2
-Flask==2.3.2
-Pillow==10.1.0
+Flask>=2.3.3
+Pillow>=9.5.0
 pypresence==4.3.0
 redis==4.6.0
 requests==2.31.0
 waitress==2.1.2
+
+
+discord>=2.1.0
+python-dotenv>=1.0.0
+pywebview>=4.2.2
+matplotlib>=3.7.1

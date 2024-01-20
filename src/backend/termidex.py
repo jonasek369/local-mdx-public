@@ -6,15 +6,18 @@ import sys
 import threading
 import time
 from dataclasses import dataclass
-from typing import List, Callable, Optional
+from typing import List, Callable, Optional, Union
 import os
 from gzip import decompress
 from uuid import UUID
 
-import matplotlib.pyplot as plt
 from io import BytesIO
+import pygame
 
-from matplotlib import image as mpimg
+pygame.init()
+pygame.font.init()
+
+warining_font = pygame.sysfont.SysFont("Consolas", 32)
 
 os.environ["stop_cache_start"] = "0"
 
@@ -48,17 +51,21 @@ class vec2:
         return self.x <= other.x and self.y <= other.y
 
     def __repr__(self):
-        return f"{self.x}x {self.y}y"
+        return f"[{self.x}, {self.y}]"
+
+    def copy(self):
+        return vec2(self.x, self.y)
 
 
 class ChoiceCursor:
-    def __init__(self, max_x: vec2, max_y: vec2, on_choice: Callable = None):
+    def __init__(self, max_x: vec2, max_y: vec2, on_choice: Callable = None, on_change: Callable = None):
         # ranges
         self.xmax: vec2 = max_x
         self.ymax: vec2 = max_y
 
         self.current = vec2(self.xmax.x, self.ymax.x)
         self.on_choice = on_choice
+        self.on_change = on_change
 
     def set_callback(self, cb: Callable):
         self.on_choice = cb
@@ -66,11 +73,13 @@ class ChoiceCursor:
     def reset(self):
         self.current = vec2(self.xmax.x, self.ymax.x)
 
-    def handle_key(self, key, termidex_instance):
+    def handle_key(self, key: int, termidex_instance):
         termidex_instance.stdscr.clear()
 
         if (key == ord("\n")) and self.on_choice:
             self.on_choice(self.current, termidex_instance)
+
+        before = self.current.copy()
 
         if (key == ord("s") or key == curses.KEY_DOWN) and self.current.y + 1 <= self.ymax.y:
             self.current.y += 1
@@ -83,6 +92,13 @@ class ChoiceCursor:
 
         if (key == ord("a") or key == curses.KEY_LEFT) and self.current.x - 1 >= self.xmax.x:
             self.current.x -= 1
+
+        if self.on_change is not None and before != self.current:
+            self.on_change(before, self.current)
+
+
+manga_viewer_window = pygame.display.set_mode((1280, 720), flags=pygame.HIDDEN)
+manga_viewer_window_hidden = True
 
 
 @dataclass
@@ -212,6 +228,16 @@ def get_param_by_name(command_name, param_name):
             return param
 
 
+def resize_surface(surface, target_size):
+    current_size = surface.get_size()
+    width_scale = target_size[0] / current_size[0]
+    height_scale = target_size[1] / current_size[1]
+    min_scale = min(width_scale, height_scale)
+    new_width = int(current_size[0] * min_scale)
+    new_height = int(current_size[1] * min_scale)
+    return pygame.transform.scale(surface, (new_width, new_height))
+
+
 class Termidex:
     def __init__(self):
         self.stdscr = None
@@ -229,6 +255,16 @@ class Termidex:
             command_in_use = None
             param_in_use = None
             parsed_params = {}
+
+            if self.page.name == "MangaReader" and not manga_viewer_window_hidden:
+                self.handle_pygame_events()
+                message = warining_font.render("Close cmd overlay in terminal to continue!", True, (255, 0, 0))
+                w, h = manga_viewer_window.get_size()
+                manga_viewer_window.blit(message,
+                                         ((w / 2) - message.get_width() / 2, (h / 2) - message.get_height() / 2))
+                pygame.display.update()
+                # to redraw panel so the message is removed
+                self.page.data.update({"is_displayed": False})
 
             # handle key event
             key = self.stdscr.getch()
@@ -313,7 +349,32 @@ class Termidex:
             # Set cursor to where the user is typing
             self.stdscr.addstr(rows - 1, len(buffer), "")
 
+    def handle_pygame_events(self):
+        global manga_viewer_window, manga_viewer_window_hidden
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.set_page(self.last_page)
+                self.last_page = LIBRARY_PAGE
+
+                manga_viewer_window = pygame.display.set_mode((1280, 720), flags=pygame.HIDDEN)
+                manga_viewer_window_hidden = True
+            if event.type == pygame.KEYDOWN:
+                self.page.data["choice_cursor"].handle_key(event.key, self)
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                x, y = event.pos
+                if event.button != pygame.BUTTON_LEFT or not pygame.Rect(self.page.data["page_rectangle"]).collidepoint(
+                        x, y):
+                    continue
+                position, size = self.page.data["page_rectangle"]
+                x_perc = (x - position[0]) / size[0]
+
+                if x_perc <= 0.5:
+                    self.page.data["choice_cursor"].handle_key(ord("a"), self)
+                else:
+                    self.page.data["choice_cursor"].handle_key(ord("d"), self)
+
     def main(self, stdscr):
+        global manga_viewer_window, manga_viewer_window_hidden
         if not self.stdscr and stdscr:
             self.stdscr = stdscr
         self.stdscr.nodelay(True)
@@ -340,6 +401,10 @@ class Termidex:
                     self.stdscr.clear()
                     last_page = self.page
                 cmd_buffer = None
+
+                if self.page.name != "MangaReader" and not manga_viewer_window_hidden:
+                    manga_viewer_window = pygame.display.set_mode((1280, 720), flags=pygame.HIDDEN)
+                    manga_viewer_window_hidden = True
 
                 if key == KEY_ESC:
                     cmd_buffer = self.open_cmd_overlay()
@@ -480,29 +545,34 @@ class Termidex:
                         self.stdscr.addstr(index + 2, 0, tag, attr)
 
                 if self.page.name == "MangaReader":
-                    #TODO: Make the image viewer decent
+                    # TODO: Make the image viewer decent
                     self.stdscr.clear()
+
+                    if manga_viewer_window_hidden:
+                        manga_viewer_window = pygame.display.set_mode((1280, 720), flags=pygame.SHOWN)
+                        manga_viewer_window_hidden = False
+
+                    self.handle_pygame_events()
+
+                    if self.page.name != "MangaReader":
+                        continue
+
                     if not self.page.data["is_displayed"]:
                         page_img = None
                         for page, image in self.page.data["chapter_pages"]:
-                            if page == self.page.data["at_page"]:
+                            if page == self.page.data["choice_cursor"].current.x:
                                 page_img = image
-                        assert page_img is not None, f"Could not find image with page {self.page.data['at_page']}"
-                        fig, ax = plt.subplots()
-                        ax.axis('off')  # Turn off the axes
-
-                        # Prototype of showing the image maybe experiment with different libraries
-                        image = mpimg.imread(BytesIO(page_img), format="jpeg")
-
-                        # Display the image
-                        plt.imshow(image)
-                        plt.get_current_fig_manager().toolbar_visible = False
-
-
-                        plt.show()
-
+                        assert page_img is not None, f"Could not find image with page {self.page.data['choice_cursor'].current.x}"
+                        manga_viewer_window.fill(0)
+                        image = pygame.image.load(BytesIO(page_img))
+                        resized_img = resize_surface(image, manga_viewer_window.get_size())
+                        side_avaible = (manga_viewer_window.get_width() - resized_img.get_width()) / 2
+                        top_avaible = (manga_viewer_window.get_height() - resized_img.get_height()) / 2
+                        manga_viewer_window.blit(resized_img, (side_avaible, top_avaible))
+                        self.page.data["page_rectangle"] = [[side_avaible, top_avaible], resized_img.get_size()]
                         self.page.data["is_displayed"] = True
 
+                    pygame.display.flip()
             except KeyboardInterrupt:
                 break
 
@@ -514,13 +584,28 @@ def callback_read_manga(position: vec2, termidex_instance: Termidex):
         cuid, chapter_data = chapter
         muid = termidex_instance.page.id
         termidex_instance.set_page(Page(cuid, "MangaReader", {
+            "choice_cursor": ChoiceCursor(vec2(1, chapter_data["pages"]), vec2(0, 0)),
             "manga_uuid": muid,
             "chapter_uuid": cuid,
             "chapter_data": chapter_data,
-            "at_page": 1,
             "is_displayed": False,
-            "chapter_pages": database.get_chapter_images(cuid)
+            "chapter_pages": database.get_chapter_images(cuid),
+            "page_rectangle": [[-1, -1], [0, 0]],
+            "next_prev": connection.get_next_and_prev(cuid)
         }))
+        # if the page is changed make sure we rerender it and change caption of window
+        pygame.display.set_caption(
+            f"{termidex_instance.page.data['choice_cursor'].current.x}/{termidex_instance.page.data['choice_cursor'].xmax.y}")
+        termidex_instance.page.data["choice_cursor"].on_change = lambda before, current: (
+            termidex_instance.page.data.update({"is_displayed": False}),
+            pygame.display.set_caption(
+                f"{termidex_instance.page.data['choice_cursor'].current.x}/{termidex_instance.page.data['choice_cursor'].xmax.y}")
+        )
+
+
+def set_new_chapter(muid, cuid):
+    chapters = database.get_chapters(json.loads(decompress(database.get_chapter_info(muid)[1])))[0]
+    #TODO: finish switching chapters
 
 
 def callback_open_manga(position: vec2, termidex_instance: Termidex):

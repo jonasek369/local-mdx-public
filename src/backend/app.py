@@ -26,6 +26,9 @@ from hashlib import sha256
 from PIL import Image
 import io
 import concurrent.futures
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # for testing the offline mode
 DISABLE_INTERNET_CONNECTION = 0
@@ -155,62 +158,63 @@ if settings.Global.get("LogLeveL"):
 
 using_redis = False
 
-if settings.Global.get("redisCaching"):
-    import redis
-
-    try:
+if os.getenv("stop_cache_start") != "1":
+    if settings.Global.get("redisCaching"):
         import redis
 
-        cache: redis.Redis = redis.Redis()
-        cache.setex("testvalue", 10, 1)
-        assert int(cache.get("testvalue")) == 1
-        using_redis = True
-        Plogger.log(info, "Using redis for caching")
-    except Exception as e:
-        Plogger.log(erro, f"Unable to initialize redis {e}")
-if not using_redis:
-    Plogger.log(info, "Using self implemented caching instead of redis (might use more ram)")
+        try:
+            import redis
+
+            cache: redis.Redis = redis.Redis()
+            cache.setex("testvalue", 10, 1)
+            assert int(cache.get("testvalue")) == 1
+            using_redis = True
+            Plogger.log(info, "Using redis for caching")
+        except Exception as e:
+            Plogger.log(erro, f"Unable to initialize redis {e}")
+    if not using_redis:
+        Plogger.log(info, "Using self implemented caching instead of redis (might use more ram)")
 
 
-    class Cache:
-        def __init__(self):
-            self.cache: dict = {}
-            self.__stop_event = threading.Event()
-            t = threading.Thread(target=self.__check_expiration)
-            t.start()
-            self.__thread_finished = False
+        class Cache:
+            def __init__(self):
+                self.cache: dict = {}
+                self.__stop_event = threading.Event()
+                t = threading.Thread(target=self.__check_expiration)
+                t.start()
+                self.__thread_finished = False
 
-        def __check_expiration(self):
-            while not self.__stop_event.is_set():
-                for key, value in self.cache.items():
-                    if time.time() >= value["expiration"]:
-                        del self.cache[key]
-                time.sleep(0.1)
-            self.__thread_finished = True
+            def __check_expiration(self):
+                while not self.__stop_event.is_set():
+                    for key, value in self.cache.copy().items():
+                        if time.time() >= value["expiration"]:
+                            del self.cache[key]
+                    time.sleep(0.1)
+                self.__thread_finished = True
 
-        def close(self):
-            self.__stop_event.set()
-            while not self.__thread_finished:
-                pass
-            del self.cache
+            def close(self):
+                self.__stop_event.set()
+                while not self.__thread_finished:
+                    pass
+                del self.cache
 
-        def set(self, key, value):
-            self.cache[key] = {"value": value, "expiration": None}
+            def set(self, key, value):
+                self.cache[key] = {"value": value, "expiration": None}
 
-        def setex(self, key, _time, value):
-            self.cache[key] = {"value": value, "expiration": time.time() + _time}
+            def setex(self, key, _time, value):
+                self.cache[key] = {"value": value, "expiration": time.time() + _time}
 
-        def get(self, key):
-            try:
-                return self.cache[key]["value"]
-            except KeyError:
-                return None
+            def get(self, key):
+                try:
+                    return self.cache[key]["value"]
+                except KeyError:
+                    return None
 
-        def exists(self, key):
-            return key in self.cache
+            def exists(self, key):
+                return key in self.cache
 
 
-    cache = Cache()
+        cache = Cache()
 
 
 def try_to_get(_json, path):
@@ -387,6 +391,10 @@ class Database:
         return fetch
 
     def all_manga(self):
+        """
+        for manga in database.all_manga():
+            identifier, name, description, cover, small_cover, manga_format, manga_genre, content_rating = manga
+        """
         cursor = self.conn.cursor()
         cursor.execute("SELECT * FROM info")
         return cursor.fetchall()
@@ -404,6 +412,10 @@ class Database:
         self.conn.commit()
 
     def get_info(self, identifier: str):
+        """
+        returns
+        identifier, name, description, cover, small_cover, manga_format, manga_genre, content_rating
+        """
         cursor = self.conn.cursor()
         cursor.execute("SELECT * FROM info WHERE identifier=:ide", {"ide": identifier})
         fetch = cursor.fetchone()
@@ -583,13 +595,18 @@ class Database:
 
 
 class MangadexConnection:
-    def __init__(self):
+    def __init__(self, _database=None):
         self.session = requests.Session()
         self.API = "https://api.mangadex.org"
         self.ROUTE = "https://mangadex.org"
 
         self.exclude_groups = settings.MangadexConnection.get("excludedGroups")
         self.cached_chapter_info = settings.MangadexConnection.get("cacheChapterInfoToDatabase")
+
+        if _database is not None:
+            self.database = _database
+        else:
+            self.database = database
 
     def search_manga(self, name: str, limit: int = 1) -> Optional[MutableSequence[dict]]:
         if cache.exists(f"search:{name}"):
@@ -618,7 +635,7 @@ class MangadexConnection:
         return return_array
 
     def coverart_update(self, identifier):
-        _, _, _, old_image, _ = database.get_info(identifier)
+        _, _, _, old_image, _ = self.database.get_info(identifier)
 
         manga_info_nonagr = self.session.get(
             f"{self.API}/manga/{identifier}?includes%5B%5D=cover_art").json()
@@ -647,11 +664,11 @@ class MangadexConnection:
         with io.BytesIO() as small_cover_webp:
             small_cover.save(small_cover_webp, 'WEBP')
             small_cover_webp_bytes = small_cover_webp.getvalue()
-        database.change_cover(identifier, image_webp_bytes)
-        database.change_small_cover(identifier, small_cover_webp_bytes)
+        self.database.change_cover(identifier, image_webp_bytes)
+        self.database.change_small_cover(identifier, small_cover_webp_bytes)
 
     def set_manga_info(self, identifier: str) -> None:
-        if not database.get_info(identifier):
+        if not self.database.get_info(identifier):
             try:
                 params = {}
                 if settings.MangadexConnection.get("contentRating"):
@@ -701,15 +718,16 @@ class MangadexConnection:
                 title = list(try_to_get(manga_info_nonagr, ["data", "attributes", "title"]).values())[0]
             else:
                 title = try_to_get(manga_info_nonagr, ["data", "attributes", "title", "en"])
-            database.set_info(identifier=identifier,
-                              name=title,
-                              description=try_to_get(manga_info_nonagr, ["data", "attributes", "description", "en"]),
-                              cover=image_webp_bytes,
-                              small_cover=small_cover_webp_bytes,
-                              manga_format=manga_format,
-                              manga_genre=manga_genre,
-                              content_rating=content_rating
-                              )
+            self.database.set_info(identifier=identifier,
+                                   name=title,
+                                   description=try_to_get(manga_info_nonagr,
+                                                          ["data", "attributes", "description", "en"]),
+                                   cover=image_webp_bytes,
+                                   small_cover=small_cover_webp_bytes,
+                                   manga_format=manga_format,
+                                   manga_genre=manga_genre,
+                                   content_rating=content_rating
+                                   )
 
     def get_last_chapter_num(self, identifier: str) -> dict:
         chapters_dict = {}
@@ -756,7 +774,7 @@ class MangadexConnection:
                 if manga_genre.endswith("|"):
                     manga_genre = manga_genre[:-1]
 
-                if not database.get_info(identifier):
+                if not self.database.get_info(identifier):
                     # download cover and put into db cover url in cache
                     if cache.get(f"{identifier}:coverurl") is None:
                         Plogger.log(warn, "coverurl is none. Parsing failed or manga dose not have any cover")
@@ -771,16 +789,16 @@ class MangadexConnection:
                     with io.BytesIO() as small_cover_webp:
                         small_cover.save(small_cover_webp, 'WEBP')
                         small_cover_webp_bytes = small_cover_webp.getvalue()
-                    database.set_info(identifier=identifier,
-                                      name=try_to_get(manga_info_nonagr, ["data", "attributes", "title", "en"]),
-                                      description=try_to_get(manga_info_nonagr,
-                                                             ["data", "attributes", "description", "en"]),
-                                      cover=image_webp_bytes,
-                                      small_cover=small_cover_webp_bytes,
-                                      manga_format=manga_format,
-                                      manga_genre=manga_genre,
-                                      content_rating=content_rating
-                                      )
+                    self.database.set_info(identifier=identifier,
+                                           name=try_to_get(manga_info_nonagr, ["data", "attributes", "title", "en"]),
+                                           description=try_to_get(manga_info_nonagr,
+                                                                  ["data", "attributes", "description", "en"]),
+                                           cover=image_webp_bytes,
+                                           small_cover=small_cover_webp_bytes,
+                                           manga_format=manga_format,
+                                           manga_genre=manga_genre,
+                                           content_rating=content_rating
+                                           )
         except Exception as e:
             Plogger.log(warn, "ERR ?" + str(e))
         if cache.exists(f"{identifier}:current_chapter"):
@@ -823,16 +841,18 @@ class MangadexConnection:
 
             chapter = self.session.get(f"{self.API}/chapter",
                                        params=params).json()
+            if not chapter["data"]:
+                break
             if not total_chapters:
                 total_chapters = float(chapter.get("total"))
             chapters.extend(chapter["data"])
             offset += 100
-        sorted_chapters = sorted(chapters, key=lambda x: float(x["attributes"]["chapter"]))
+        sorted_chapters = sorted(chapters, key=lambda x: try_and_conv(x["attributes"]["chapter"]))
         cache.setex(f"{identifier}:chapter_list", 600, json.dumps(sorted_chapters))
 
-        if self.cached_chapter_info:
+        if self.cached_chapter_info and self.database:
             data = compress(json.dumps(sorted_chapters).encode())
-            database.add_chapter_info(identifier, data)
+            self.database.add_chapter_info(identifier, data)
 
         return remove_duplicate_chapters(sorted_chapters)
 
@@ -850,7 +870,7 @@ class MangadexConnection:
         _hash = metadata["chapter"]["hash"]
         baseUrl = metadata['baseUrl']
         pages = len(metadata["chapter"]["data"])
-        database.set_record(identifier, pages)
+        self.database.set_record(identifier, pages)
         if not silent:
             start = time.perf_counter()
         downloaded_pages = []
@@ -887,7 +907,7 @@ class MangadexConnection:
         _hash = metadata["chapter"]["hash"]
         baseUrl = metadata['baseUrl']
         pages = len(metadata["chapter"]["data"])
-        database.set_record(identifier, pages)
+        self.database.set_record(identifier, pages)
 
         def download_page(page_count, page_digest):
             page = requests.get(f"{baseUrl}/data/{_hash}/{page_digest}")
@@ -949,9 +969,9 @@ class MangadexConnection:
                 if chapter_list_index >= 1 and chapter_list_index + 1 <= len(chapter_list) - 1:
                     next_prev["prev"] = chapter_list[chapter_list_index - 1]
                     next_prev["next"] = chapter_list[chapter_list_index + 1]
-        if not database.contains_chapter(try_to_get(next_prev, ["next", "id"])):
+        if not self.database.contains_chapter(try_to_get(next_prev, ["next", "id"])):
             next_prev["next"] = None
-        if not database.contains_chapter(try_to_get(next_prev, ["prev", "id"])):
+        if not self.database.contains_chapter(try_to_get(next_prev, ["prev", "id"])):
             next_prev["prev"] = None
         return next_prev
 
@@ -978,7 +998,8 @@ timeouts = {
 
 
 class MangaDownloadJob:
-    def __init__(self, _id: str, chapter_start: Optional[float] = None, chapter_end: Optional[float] = None):
+    def __init__(self, _id: str, connection: MangadexConnection, database: Database,
+                 chapter_start: Optional[float] = None, chapter_end: Optional[float] = None):
         self.id = _id
         self.chapter_start = chapter_start
         self.chapter_end = chapter_end
@@ -986,6 +1007,9 @@ class MangaDownloadJob:
 
         self.__chapter_info = connection.get_chapter_list(self.id)
         # not a mdx api call so it should not fail
+        info = database.get_info(self.id)
+        if not info:
+            connection.set_manga_info(self.id)
         self.name = database.get_info(self.id)[1]
 
     @property
@@ -1044,7 +1068,7 @@ class MangaQueue:
 
 
 class MangaDownloader:
-    def __init__(self):
+    def __init__(self, manga_connection=None, _database=None):
         self.mode = settings.DownloadProcessor.get("defaultSpeedMode")
         self.silent_download = settings.DownloadProcessor.get("silentDownload")
         self.save_queue = settings.DownloadProcessor.get("saveQueueOnExit")
@@ -1054,6 +1078,16 @@ class MangaDownloader:
         self.queue = MangaQueue()
         self.currently_working_on = None
         self.stop_event = threading.Event()
+
+        if manga_connection is not None:
+            self.connection = manga_connection
+        else:
+            self.connection = connection
+
+        if _database is not None:
+            self.database = _database
+        else:
+            self.database = database
 
         if settings.DownloadProcessor.get("runOnStart"):
             self.start()
@@ -1066,7 +1100,7 @@ class MangaDownloader:
     def stop(self):
         if self.save_queue:
             if self.currently_working_on:
-                self.queue.add_job(MangaDownloadJob(_id=self.currently_working_on["id"]))
+                self.queue.add_job(MangaDownloadJob(_id=self.currently_working_on["id"], connection=self.connection, database=self.database))
             with open(f"{os.getcwd()}\data\queue.json", "w") as file:
                 json.dump([i.to_cwo() for i in self.queue], file)
         self.stop_event.set()
@@ -1111,9 +1145,9 @@ class MangaDownloader:
             self.currently_working_on = job.to_cwo()
 
             if self.use_threading:
-                download_func = connection.threaded_get_chapter_page
+                download_func = self.connection.threaded_get_chapter_page
             else:
-                download_func = connection.get_chapter_pages
+                download_func = self.connection.get_chapter_pages
 
             for chapter in job.chapter_list:
                 if self.stop_event.is_set():
@@ -1135,9 +1169,9 @@ class MangaDownloader:
                 if reached_end:
                     break
                 cuuid = chapter["id"]
-                pages_in_db = database.get_chapter_pages(cuuid)
+                pages_in_db = self.database.get_chapter_pages(cuuid)
 
-                if len(pages_in_db) == database.get_record(cuuid):
+                if len(pages_in_db) == self.database.get_record(cuuid):
                     self.add_chapter()
                     Plogger.log(info,
                                 f"already in database {chapter['attributes']['volume']} Volume {chapter['attributes']['chapter']} Chapter")
@@ -1151,7 +1185,7 @@ class MangaDownloader:
                                                       rate_limit_callback=self.rate_limit_callback):
                     if page_value is None or page is None:
                         continue
-                    database.save_page(cuuid, page_value, job.id, page)
+                    self.database.save_page(cuuid, page_value, job.id, page)
                 self.add_chapter()
                 Plogger.log(info,
                             f"saved to database {chapter['attributes']['volume']} Volume {chapter['attributes']['chapter']} Chapter")
@@ -1551,41 +1585,16 @@ def remove_duplicate_chapters(chapters):
                   key=lambda x: (try_and_conv(x['attributes']['volume']), try_and_conv(x['attributes']['chapter'])))
 
 
+# initializes only critical parts
+def critical_init():
+    global database, connection, DlProcessor
+    database = Database()
+    connection = MangadexConnection()
+    DlProcessor = MangaDownloader()
+    print("cinit")
+
+
 if __name__ == "__main__":
     database = Database()
     connection = MangadexConnection()
     DlProcessor = MangaDownloader()
-
-    discord_integration = DiscordIntegration()
-
-    print(connection.get_chapter_list("17a56d33-9443-433a-9e0d-70459893ed8f"))
-
-    # for manga in database.all_manga():
-    #    info = database.get_info(manga[0])
-    #    params = {}
-    #    if settings.MangadexConnection.get("contentRating"):
-    #        params["contentRating[]"] = settings.MangadexConnection.get("contentRating")
-#
-#    manga_info_nonagr = connection.session.get(f"{connection.API}/manga/{info[0]}?includes%5B%5D=cover_art",
-#                                               params=params).json()
-#    manga_format = ""
-#    manga_genre = ""
-#    content_rating = try_to_get(manga_info_nonagr, ["data", "attributes", "contentRating"])
-#
-#    for tag in manga_info_nonagr["data"]["attributes"]["tags"]:
-#        if tag["attributes"]["group"] == "format":
-#            manga_format = try_to_get(tag, ["attributes", "name", "en"]) + "|"
-#        if tag["attributes"]["group"] == "genre":
-#            manga_genre += try_to_get(tag, ["attributes", "name", "en"]) + "|"
-#
-#    if manga_format.endswith("|"):
-#        manga_format = manga_format[:-1]
-#    if manga_genre.endswith("|"):
-#        manga_genre = manga_genre[:-1]
-#
-#    cursor = database.conn.cursor()
-#    cursor.execute("UPDATE info SET manga_format=:mf , manga_genre=:mg, content_rating=:cr WHERE identifier=:ide",
-#                   {"ide": info[0], "mf": manga_format, "mg": manga_genre, "cr": content_rating})
-#    database.conn.commit()
-#    print(info[0])
-# print("end")

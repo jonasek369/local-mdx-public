@@ -154,6 +154,23 @@ def get_chapter_image(identifier, page):
     return "Error: no image found"
 
 
+@server.route("/manga/get-all-downloaded-manga")
+def has_full_manga():
+    app.initialize()
+
+    cursor = app.database.conn.cursor()
+    cursor.execute("SELECT identifier, pages FROM records")
+    all_mangas = cursor.fetchall()
+
+    downloaded = []
+
+    for uuid, pages in all_mangas:
+        db_pages = app.database.get_chapter_pages(uuid)
+        if pages == len(db_pages):
+            downloaded.append(uuid)
+    return downloaded
+
+
 @server.route("/manga/cover/<identifier>")
 def get_cover_art(identifier):
     app.initialize()
@@ -306,7 +323,7 @@ def push_job():
         return {"status": "error"}
     if not is_valid_uuid(data.get("id")):
         return {"status": "error"}
-    app.DlProcessor.queue.add_job(app.MangaDownloadJob(_id=data.get("id")))
+    app.DlProcessor.queue.add_job(app.MangaDownloadJob(_id=data.get("id"), connection=app.connection, database=app.database))
     return {"status": "success"}
 
 
@@ -519,7 +536,7 @@ def cache():
 
 
 if __name__ == "__main__":
-    USE_SERVER = 1
+    USE_SERVER = 0
     if not USE_SERVER:
         server.run(host="127.0.0.1", port=5000)
     else:
