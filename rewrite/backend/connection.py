@@ -1,0 +1,379 @@
+import os
+import sys
+import threading
+import time
+from dataclasses import dataclass, asdict
+from typing import Optional, Sequence, Tuple, Callable, Dict
+
+import requests
+from rewrite.backend.schemas import MangaList, from_json, Manga, MangaIdentifier, ChapterIdentifier, ChapterList, \
+    Chapter, \
+    DirectSearchManga, MangaAttributes
+from enum import Enum, auto
+from rewrite.backend.settings import Settings
+import concurrent.futures
+
+
+class DownloaderState(Enum):
+    Off = auto()
+    Starting = auto()
+    Awaiting = auto()
+    Downloading = auto()
+    Cancelling = auto()
+
+
+@dataclass
+class MangaDownloadJobInDatabase:
+    # Stores the pages in database and record (how many pages does the chapter have)
+    pages_in_db: Dict  # {"cuuid": [1,2, 3, 4, 5], ...}
+    records: Dict  # {"cuuid": 12, ...}
+
+
+class MangaDownloadJob:
+    # pages_in_db = {"cuuid": [1,2, 3, 4, 5]}
+    def __init__(self, identifier: MangaIdentifier, manga_attribute: MangaAttributes, chapter_list: ChapterList,
+                 database_info: MangaDownloadJobInDatabase):
+        self.identifier = identifier
+        self.downloaded = False
+        self.chapter_info = chapter_list
+        self.database_info = database_info
+        if self.chapter_info.data is not None:
+            self.title = manga_attribute.title["en"]
+
+    def __eq__(self, other):
+        if isinstance(other, MangaDownloadJob):
+            return self.identifier == other.identifier
+        return False
+
+    # to currently working on (json struct with info about state of download)
+    def to_cwo(self):
+        return {
+            "id": self.identifier,
+            "title": self.title,
+            "chapter_status": [0, int(len(self.chapter_info.data))],
+            "page_status": ["?", "?"]
+        }
+
+
+class MangaQueue:
+    def __init__(self):
+        self.__queue: [MangaDownloadJob] = []
+
+    @property
+    def first(self) -> Optional[MangaDownloadJob]:
+        if len(self.__queue) == 0:
+            return None
+        return self.__queue[0]
+
+    def next(self) -> Optional[MangaDownloadJob]:
+        if self.__queue:
+            return self.__queue.pop(0)
+        else:
+            return None
+
+    def add_job(self, job: MangaDownloadJob) -> bool:
+        if job not in self.__queue:
+            self.__queue.append(job)
+            return True
+        return False
+
+    def remove_job(self, _id: str):
+        for index, job in enumerate(self.__queue):
+            if job.downloaded or job.id == _id:
+                self.__queue.pop(index)
+
+    def in_queue(self, _id: str):
+        return _id in self.__queue
+
+    def push_to_top(self, index):
+        self.__queue.insert(0, self.__queue.pop(index))
+
+    def __iter__(self):
+        return self.__queue.__iter__()
+
+    def __len__(self):
+        return self.__queue.__len__()
+
+    def add_to_top(self, job: MangaDownloadJob):
+        self.__queue.insert(0, job)
+
+
+@dataclass
+class MangaDownload:
+    pages: int
+    data: [bytes]
+
+
+def threaded_get_chapter_page(
+        identifier: MangaIdentifier,
+        db_pages: Sequence,
+        rate_limit_callback: Optional[Callable] = None,
+        can_continue_download: Optional[Callable] = None,
+        page_download_cb: Optional[Callable] = None) -> Optional[MangaDownload]:
+    """
+    if rate_limit_callback returns False it will retry
+    """
+    metadata = requests.get(f"https://api.mangadex.org/at-home/server/{identifier}")
+    remaining = metadata.headers.get("X-RateLimit-Remaining")
+    retry_after = metadata.headers.get("X-RateLimit-Retry-After")
+    if int(remaining) <= 0:
+        if rate_limit_callback(float(retry_after)):
+            return None
+        else:
+            return threaded_get_chapter_page(identifier, db_pages, rate_limit_callback, can_continue_download,
+                                             page_download_cb)
+    metadata = metadata.json()
+    _hash = metadata["chapter"]["hash"]
+    baseUrl = metadata['baseUrl']
+    pages = len(metadata["chapter"]["data"])
+    manga_download = MangaDownload(int(pages), [])
+    session = requests.Session()
+
+    def download_page(page_count, page_digest):
+        page = session.get(f"{baseUrl}/data/{_hash}/{page_digest}")
+        print(f"Getting {page_digest}")
+        return page_count + 1, page.content
+
+    downloaded_pages = []
+    # this is for mangas that have 1-4 pages per chapter because im not sure if ThreadPoolExecutor handles that
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(max(pages, 4), os.cpu_count())) as executor:
+        futures = [executor.submit(download_page, page_count, page_digest)
+                   for page_count, page_digest in enumerate(metadata["chapter"]["data"])
+                   if page_count + 1 not in db_pages and (can_continue_download() if can_continue_download else True)]
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                downloaded_pages.append(future.result())
+                if page_download_cb:
+                    page_download_cb(identifier, downloaded_pages[-1][0], pages)
+            except Exception as e:
+                print(f"An error occurred: {e}")
+
+    for i in sorted(downloaded_pages, key=lambda x: x[0]):
+        manga_download.data.append(i[1])
+
+    return manga_download
+
+
+class MangaDownloader:
+    def __init__(self, settings: Settings):
+        self.state: DownloaderState = DownloaderState.Off
+
+        self.stop_event = threading.Event()
+        # Should be only called on the end
+        self.exit_event = threading.Event()
+        self.queue = MangaQueue()
+        self.finished = {}
+        self.currently_working_on: Optional[dict] = None
+
+        assert settings.onMangaDownloadFinishHandler is not None, "onMangaDownloadFinishHandler cannot be None"
+
+        self.on_finish_callback = settings.onMangaDownloadFinishHandler
+        threading.Thread(target=self.__loop).start()
+
+    def start(self):
+        if self.state == DownloaderState.Off:
+            self.state = DownloaderState.Starting
+
+    def stop(self):
+        self.stop_event.set()
+
+    def exit(self):
+        self.exit_event.set()
+
+    def add_chapter(self):
+        self.currently_working_on["chapter_status"][0] += 1
+        self.currently_working_on["page_status"] = ["?", "?"]
+
+    def rate_limit_callback(self, retry_after) -> bool:
+        print("Halting execution of downloader")
+        # pause execution until we can try again
+        time.sleep((retry_after + 30) - time.time())
+        return False
+
+    def can_continue_downloading(self):
+        return self.state != DownloaderState.Off
+
+    def page_download_callback(self, identifier, at_page, page_total):
+        if self.currently_working_on["page_status"] == ["?", "?"]:
+            self.currently_working_on["page_status"] = [0, page_total]
+        self.currently_working_on["page_status"][0] += 1
+
+    def __loop(self):
+        while not self.exit_event.is_set():  # Outer loop checks exit_event
+            if self.state == DownloaderState.Off:
+                time.sleep(0.1)
+                continue
+
+            if self.stop_event.is_set():
+                self.state = DownloaderState.Off
+                self.stop_event.clear()
+                continue
+
+            job = self.queue.next()
+
+            if not job:
+                time.sleep(0.01)
+                self.state = DownloaderState.Awaiting
+                continue
+
+            self.state = DownloaderState.Downloading
+            self.currently_working_on = job.to_cwo()
+
+            for chapter in job.chapter_info.data:
+                if self.stop_event.is_set() or self.exit_event.is_set():  # Check both events
+                    self.queue.add_to_top(job)
+                    self.currently_working_on = None
+                    break  # Break out of the chapter processing loop
+
+                try:
+                    if len(job.database_info.pages_in_db[chapter.id]) == job.database_info.records[chapter.id]:
+                        self.add_chapter()
+                        print(
+                            f"already in database {chapter.attributes.volume} Volume {chapter.attributes.chapter} Chapter")
+                        continue
+                except KeyError:
+                    pass
+
+                pages_in_db = job.database_info.pages_in_db.get(chapter.id, [])
+                downloaded_data = threaded_get_chapter_page(
+                    chapter.id,
+                    pages_in_db,
+                    self.rate_limit_callback,
+                    self.can_continue_downloading,
+                    self.page_download_callback
+                )
+
+                if job.identifier not in self.finished:
+                    self.finished[job.identifier] = {}
+
+                self.finished[job.identifier][chapter.id] = downloaded_data.data
+                self.on_finish_callback(job.identifier, chapter.id, self)
+                print(f"Downloaded {chapter.attributes.volume} Volume {chapter.attributes.chapter} Chapter")
+                self.add_chapter()
+                time.sleep(1)  # Simulate rate-limited download
+
+
+class MangadexConnection:
+    def __init__(self, settings):
+        self.session = requests.Session()
+        self.API = "https://api.mangadex.org"
+        self.ROUTE = "https://mangadex.org"
+
+        self.exclude_groups = []
+
+    def safe_get_request(self, url: str, params=None) -> Optional[requests.Response]:
+        if params is None:
+            params = {}
+        try:
+            return self.session.get(url=url, params=params, timeout=10)
+        except requests.exceptions.Timeout:
+            print(f"Request timed out when trying to reach {url}")
+            return None
+        except requests.exceptions.ConnectionError:
+            print(f"Connection error when trying to reach {url}")
+            return None
+        except requests.exceptions.RequestException as e:
+            print(f"An error occurred: {e}")
+            return None
+
+    def search_manga(self, name: str, limit: int) -> Optional[MangaList]:
+        params = {"title": name, "limit": limit}
+        req = self.safe_get_request(f"{self.API}/manga", params)
+
+        if req and req.status_code != 200:
+            return None
+
+        query = req.json()
+
+        if query["result"] != "ok":
+            return None
+
+        return from_json(MangaList, query)
+
+    def get_manga(self, identifier: MangaIdentifier) -> Optional[Manga]:
+
+        req = self.safe_get_request(f"{self.API}/manga/{identifier}?includes%5B%5D=cover_art")
+
+        if req and req.status_code != 200:
+            return None
+
+        query = req.json()
+
+        if query["result"] != "ok":
+            return None
+
+        return from_json(DirectSearchManga, query).data
+
+    def get_cover_art(self, identifier: MangaIdentifier) -> Optional[bytes]:
+
+        req = self.safe_get_request(f"{self.API}/manga/{identifier}?includes%5B%5D=cover_art")
+
+        if req and req.status_code != 200:
+            return None
+
+        query = req.json()
+
+        if query["result"] != "ok":
+            return None
+
+        for relationship in from_json(DirectSearchManga, query).data.relationships:
+            if relationship.type == "cover_art":
+                coverurl = f"https://mangadex.org/covers/{identifier}/" + relationship.attributes["fileName"]
+                return self.safe_get_request(coverurl).content
+
+    def get_chapter_list(self, identifier: ChapterIdentifier, lang: str = "en") -> Optional[ChapterList]:
+        params = {"manga": identifier, "limit": 100, "offset": 0,
+                  "translatedLanguage[]": lang,
+                  "excludedGroups[]": self.exclude_groups}
+        req = self.safe_get_request(url=f"{self.API}/chapter", params=params)
+
+        if req and req.status_code != 200:
+            return None
+
+        query = req.json()
+
+        if query["result"] != "ok":
+            return None
+
+        chapter_list: ChapterList = from_json(ChapterList, req.json())
+        while chapter_list.total > len(chapter_list.data):
+            params["offset"] += 100
+            req = self.safe_get_request(url=f"{self.API}/chapter", params=params)
+
+            if req.status_code != 200:
+                print(f"API returned {req.status_code} while getting rest of the chapters")
+                return chapter_list
+            query = req.json()
+            if query["result"] != "ok":
+                print(f"API returned result {query['result']} while getting rest of the chapters")
+                return None
+
+            new_chapter_list: ChapterList = from_json(ChapterList, query)
+            chapter_list.data.extend(new_chapter_list.data)
+
+        return chapter_list
+
+    def get_manga_uuid_from_chapter(self, identifier: ChapterIdentifier):
+        req = self.safe_get_request(url=f"{self.API}/chapter/{identifier}")
+        if req and req.status_code != 200:
+            return None
+        chapter_info = req.json()
+        if chapter_info["result"] != "ok":
+            return None
+        for relationship in chapter_info["data"]["relationships"]:
+            if relationship["type"] == "manga":
+                return relationship["id"]
+        return None
+
+
+# simple download to FS
+# TODO: Change to repository callback
+def on_download(muuid: MangaIdentifier, cuuid: ChapterIdentifier, downloader: MangaDownloader):
+    if not os.path.isdir(f"{os.getcwd()}/download/{muuid}"):
+        os.mkdir(f"{os.getcwd()}/download/{muuid}")
+    if not os.path.isdir(f"{os.getcwd()}/download/{muuid}/{cuuid}"):
+        os.mkdir(f"{os.getcwd()}/download/{muuid}/{cuuid}")
+    for index, page in enumerate(downloader.finished[muuid][cuuid]):
+        with open(f"{os.getcwd()}/download/{muuid}/{cuuid}/{index}.png", "wb") as file:
+            file.write(page)
+    del downloader.finished[muuid][cuuid]

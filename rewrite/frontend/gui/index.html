@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Navbar with Login Button and Search Bar</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+
+        .navbar {
+            background-color: #333;
+            overflow: hidden;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+        }
+
+        .search-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+        }
+
+        .search-container input[type=text] {
+            padding: 10px;
+            margin: 0;
+            width: 70%;
+            border: none;
+            border-radius: 5px 0 0 5px;
+        }
+
+        .search-container button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 0 5px 5px 0;
+            cursor: pointer;
+        }
+
+        .search-container button:hover {
+            background-color: #45a049;
+        }
+
+        .search-container button:active {
+            background-color: #3e8e41;
+        }
+
+        .login-container {
+            display: flex;
+            align-items: center;
+        }
+
+        .login-button {
+            padding: 10px 20px;
+            background-color: #f44336;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            text-decoration: none;
+            background-color: #4CAF50;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .button:hover {
+            background-color: #45a049;
+        }
+
+        .button:active {
+            background-color: #3e8e41;
+        }
+
+        /* Responsive styles */
+        @media screen and (max-width: 600px) {
+            .search-container input[type=text] {
+                width: 100%;
+            }
+        }
+
+        .search-results-dropdown {
+            display: none;
+            position: absolute;
+            background-color: #f9f9f9;
+            min-width: 50%;
+            box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
+            z-index: 1;
+            margin-top: 35px;
+
+        }
+
+        .search-results-dropdown a {
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+            color: black;
+        }
+
+        .search-results-dropdown a:hover {
+            background-color: #f1f1f1;
+        }
+
+    </style>
+</head>
+
+<body>
+<div class="navbar">
+    <button onClick="redirect_to_download_manager()" class="button">Download manager</button>
+    <button onClick="redirect_to_library()" class="button">Library</button>
+    <button onClick="redirect_to_updates()" class="button">Updates</button>
+
+    <div class="search-container">
+        <input type="text" id="searchInput" placeholder="Search...">
+        <button type="submit" onclick="searchManga()">Search</button>
+        <div class="search-results-dropdown" id="searchResultsDropdown"></div>
+    </div>
+    {% block content %}
+    {% if login == 1 %}
+    <button class="login-button">{{ name }}</button>
+    {% else %}
+    <div class="login-container">
+        <button onClick="document.location.href='/login?from=/'" class="login-button">Login</button>
+    </div>
+    {% endif %}
+    {% endblock content %}
+</div>
+
+<script>
+    function redirect_to_download_manager() {
+        window.location.replace("/manga/download/manager");
+    }
+
+    function redirect_to_library() {
+        window.location.replace("/manga/library");
+    }
+
+    function redirect_to_updates() {
+        window.location.replace("/updates");
+    }
+
+
+    function searchManga() {
+        var searchResultsDropdown = document.getElementById("searchResultsDropdown");
+
+        while (searchResultsDropdown.firstChild) {
+            searchResultsDropdown.removeChild(searchResultsDropdown.firstChild);
+        }
+
+        // Display search results dropdown
+        searchResultsDropdown.style.display = "block";
+        fetch("/search/manga", {
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/json' // Indicate you're sending JSON
+            },
+            body: JSON.stringify({searchTerm: document.getElementById('searchInput').value}) // Wrap the search term in an object
+        })
+            .then(response => response.json())  // Assuming the server returns JSON
+            .then(data => {
+                data.forEach(function (result) {
+                    console.log(result)
+                    var resultItem = document.createElement("a");
+                    resultItem.href = "/manga/" + result["id"]; // You can set the actual link here if needed
+                    var image = document.createElement("img");
+                    image.src = "/manga/cover/" + result["id"] + "?small=1";
+                    image.alt = "Result Image";
+                    image.width = 51;
+                    image.height = 80;
+
+                    var text = document.createElement("span");
+                    text.textContent = result["attributes"]["title"]["en"];
+
+                    resultItem.appendChild(image);
+                    resultItem.appendChild(text);
+                    searchResultsDropdown.appendChild(resultItem);
+                });
+            })
+            .catch(error => {
+                console.error('Error:', error); // Handle any errors here
+            });
+    }
+
+    document.getElementById('searchInput').onkeydown = function (event) {
+
+        if (event.keyCode === 13) {
+            searchManga()
+        } else if (event.keyCode === 8) {
+            if (document.getElementById("searchInput").value.length === 0) {
+                let searchResultsDropdown = document.getElementById("searchResultsDropdown");
+                while (searchResultsDropdown.firstChild) {
+                    searchResultsDropdown.removeChild(searchResultsDropdown.firstChild);
+                }
+                searchResultsDropdown.style.display = "none";
+            }
+        }
+    }
+
+</script>
+</body>
+
+</html>

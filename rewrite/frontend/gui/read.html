@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Title</title>
+	<style>
+        body {
+            background-color: #333333;
+        }
+
+        .page-content {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            height: 100vh; /* Adjust the height as needed */
+        }
+
+        .page-content img {
+            object-fit: cover;
+            max-width: 100%;
+            max-height: 100%;
+            width: 550px;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            text-decoration: none;
+            background-color: #4CAF50;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .button:hover {
+            background-color: #45a049;
+        }
+
+        .button:active {
+            background-color: #3e8e41;
+        }
+
+        #page-header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: calc(50% - 100px);
+            margin-bottom: 50px;
+            width: 200px;
+            height: 50px;
+            text-align: center;
+            color: #333333;
+            text-decoration: none;
+            background-color: #f2f2f2;
+            border: 2px solid #999999;
+            font-size: 30px;
+            font-weight: bold;
+            font-family: sans-serif;
+        }
+
+        .hidden {
+            visibility: hidden;
+            display: none;
+            pointer-events: none;
+        }
+
+	</style>
+</head>
+<body>
+<button class="button" onClick="window.location.href='/manga/{{muuid}}';">Back</button>
+
+<h1 id="page-header">1/{{ pages }} pages</h1>
+<div id="content" class="page-content"></div>
+
+<script>
+    window.token = '{{ token }}';
+
+    const content = document.getElementById('content');
+    const page_header = document.getElementById("page-header");
+
+    let nextChapter = null;
+    let prevChapter = null;
+
+    let relocated = false;
+
+    let pageCount = {{pages}};
+    let page = {{page}};
+
+
+    function full_load() {
+        for (let i = 1; i < pageCount + 1; i++) {
+            const img = document.createElement("img");
+
+            img.id = "page-panel";
+            img.src = `/page-image/{{cuuid}}/${i}`;
+            img.classList.add("hidden");
+            img.setAttribute("data-retry-count", "0");
+            img.onerror = function () {
+                const maxRetries = 5;
+                let retryCount = parseInt(img.getAttribute("data-retry-count"));
+
+                if (retryCount < maxRetries) {
+                    retryCount++;
+                    img.setAttribute("data-retry-count", retryCount);
+
+                    setTimeout(() => {
+                        console.log(`Retrying ${img.src}, attempt ${retryCount}`);
+                        img.src = `/page-image/{{cuuid}}/${i}?retry=${retryCount}`;
+                    }, 1000 * retryCount); // Exponential backoff
+                } else {
+                    console.error(`Failed to load ${img.src} after ${maxRetries} retries.`);
+                }
+            };
+
+            content.appendChild(img);
+        }
+
+        page_header.innerHTML = `${page}/${pageCount} pages`;
+        set_page(page);
+    }
+
+    function set_page(to_page) {
+        let current_page = content.children.item(page - 1);
+        let _set_page = content.children.item(to_page - 1);
+
+        current_page.classList.add("hidden");
+        current_page.removeEventListener("mousedown", handle_click);
+        _set_page.classList.remove("hidden")
+        _set_page.addEventListener("mousedown", handle_click);
+        page_header.innerHTML = to_page + "/" + pageCount + " pages"
+
+    }
+
+    function handle_click(event) {
+        const image = document.querySelector('#page-panel:not(.hidden)');
+        const boundingRect = image.getBoundingClientRect();
+        const clickX = event.clientX - boundingRect.left;
+        const imageWidth = boundingRect.width;
+
+        // Calculate the midpoint of the image
+        const midpoint = imageWidth / 2;
+
+        console.log(clickX, midpoint);
+
+        if (clickX < midpoint) {
+            page_sub();
+        } else {
+            page_add();
+        }
+    }
+
+    function page_add() {
+        if (relocated) {
+            return;
+        }
+        var pageCopy = page;
+        if (page + 1 > pageCount && nextChapter !== null) {
+            window.location.href = "/read/" + nextChapter + "/1";
+            relocated = true;
+        }
+        var new_page = Math.max(1, Math.min(page + 1, pageCount));
+        if (new_page === pageCopy) {
+            return;
+        }
+        set_page(new_page);
+        page = new_page;
+    }
+
+    function page_sub() {
+        if (relocated) {
+            return;
+        }
+        var pageCopy = page;
+        if (page - 1 < 1 && prevChapter !== null) {
+            window.location.href = "/read/" + prevChapter + "?end=true";
+            relocated = true;
+        }
+        var new_page = Math.max(1, Math.min(page - 1, pageCount));
+        if (new_page === pageCopy) {
+            return;
+        }
+        set_page(new_page);
+        page = new_page;
+    }
+
+    document.addEventListener('keydown', (event) => {
+        switch (event.key) {
+            case "ArrowRight":
+                page_add();
+                break;
+            case "ArrowLeft":
+                page_sub();
+                break;
+            default:
+                break;
+        }
+    });
+
+    full_load()
+    fetch("/read/next-prev/{{cuuid}}").then(response => response.json()).then(data => {
+            nextChapter = data["next"]
+            prevChapter = data["prev"]
+        }
+    )
+</script>
+</body>
+</html>

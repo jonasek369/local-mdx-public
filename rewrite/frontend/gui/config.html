@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Updates Settings</title>
+    <style>
+        .button {
+            display: inline-block;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            text-decoration: none;
+            background-color: #4CAF50;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .button:hover {
+            background-color: #45a049;
+        }
+
+        .button:active {
+            background-color: #3e8e41;
+        }
+
+        .config-field #data {
+            width: 700px;
+            height: 750px;
+            resize: none;
+        }
+
+    </style>
+</head>
+<body>
+<button class="button" onClick="window.location.href='/';">Back</button>
+<div class="config-field">
+    <label for="data">
+        Config
+    </label>
+    <br>
+    <textarea id="data">
+        Wait to load current settings!
+    </textarea>
+</div>
+<button class="button" onClick="send_config()">
+    update config
+</button>
+
+
+<script>
+    window.token = '{{ token }}';
+
+    function send_config() {
+        let data = JSON.parse(document.getElementById("data").value);
+        fetch("config/data", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            "body": JSON.stringify(data)
+        }).then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+        }).then(jsonData => {
+            location.reload();
+        })
+    }
+
+    fetch("/config/data").then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        return response.json();
+    }).then(jsonData => {
+        let element = document.getElementById("data");
+        element.innerHTML = JSON.stringify(jsonData, null, 4);
+    })
+
+</script>
+</body>
+</html>
