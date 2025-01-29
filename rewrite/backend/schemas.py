@@ -15,7 +15,7 @@ LocalizedString = dict
 # }
 Links = dict
 
-# This means literally the same but i want to be visible what the connection wants
+# This means literally the same, but I want to be visible what the connection wants
 ChapterIdentifier = str
 MangaIdentifier = str
 

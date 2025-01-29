@@ -4,7 +4,7 @@ from dataclasses import asdict
 
 from rewrite.backend.connection import MangaDownloadJob, DownloaderState
 from rewrite.backend.repository import MangaRepository
-from rewrite.backend.utils import is_valid_uuid
+from rewrite.backend.utils import is_valid_uuid, info
 
 try:
     import webview
@@ -13,6 +13,8 @@ except ImportError:
         def __init__(self):
             self.windows = []
             self.token = -1
+
+
     webview = wv()
 
 from flask import Flask, jsonify, render_template, request, make_response
@@ -21,11 +23,11 @@ from gzip import compress
 
 gui_dir = os.path.join(os.getcwd(), 'gui')
 
-print(gui_dir, "is static and template dir!")
+repository = MangaRepository()
+
+repository.settings.logger.log(info, gui_dir + " is static and template dir!")
 
 server = Flask(__name__, static_folder=gui_dir, template_folder=gui_dir)
-
-repository = MangaRepository()
 
 
 @server.route("/")
@@ -68,13 +70,15 @@ def server_manga(mangauuid):
     back = request.args.get('from', "/")
 
     manga = repository.get_manga_attributes(mangauuid)
-    return render_template("manga.html", muuid=mangauuid, name=manga.title["en"], description=manga.description["en"],
+    return render_template("manga.html",
+                           muuid=mangauuid, name=manga.title["en"],
+                           description=manga.description["en"],
                            back_redirect=back)
 
 
 @server.route("/manga/<mangauuid>/info", methods=["GET"])
 def get_manga_info(mangauuid):
-    downloaded_pages = repository.get_downloaded_chapters(mangauuid)
+    downloaded_pages = repository.get_downloaded_pages(mangauuid)
     chapters = {}
     for cuuid, title, volume, chapter in downloaded_pages:
         chapters[cuuid] = {"title": title, "volume": volume, "chapter": chapter}
@@ -83,7 +87,9 @@ def get_manga_info(mangauuid):
 
 @server.route("/page-image/<identifier>/<page>")
 def get_chapter_image(identifier, page):
-    image_binary = repository.database.get_page(identifier, page)
+    if not page.isdigit():
+        return "Error: page is not an number"
+    image_binary = repository.database.get_page(identifier, int(page))
     if image_binary is not None:
         response = make_response(image_binary)
         response.headers.set('Content-Type', 'image/jpeg')
@@ -126,6 +132,7 @@ def push_job():
 def read_manga(chapteruuid, page):
     from_end = request.args.get('end', None)
     ids = {}
+    # ids are passed and filled with data in the functions
     attributes = repository.get_chapter_attributes(chapteruuid, ids)
     if not attributes:
         return {"error": "Data not in database"}
@@ -138,7 +145,7 @@ def read_manga(chapteruuid, page):
                            pages=attributes.pages,
                            muuid=ids["muuid"],
                            page=page,
-                           page_render="NORMAL"
+                           page_render="NORMAL"  # TODO: Add logic for long strips when reader supports it
                            )
 
 
@@ -206,10 +213,15 @@ def library():
     return render_template("library.html")
 
 
+@server.route("/popular-new-titles", methods=["GET"])
+def popular_new_titles():
+    return repository.popular_new_titles()
+
+
 if __name__ == "__main__":
     USE_SERVER = 0
     if not USE_SERVER:
-        server.run(host="127.0.0.1", port=5000)
+        server.run(host="127.0.0.1", port=5000, threaded=False)
     else:
         print("starting server")
         # testing performance on other devices

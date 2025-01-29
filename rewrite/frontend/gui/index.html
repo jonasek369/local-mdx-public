@@ -2,10 +2,10 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Navbar with Login Button and Search Bar</title>
-    <style>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Navbar with Login Button and Search Bar</title>
+	<style>
         body {
             margin: 0;
             font-family: Arial, sans-serif;
@@ -115,29 +115,62 @@
             background-color: #f1f1f1;
         }
 
-    </style>
+	</style>
+	<script src="https://cdn.tailwindcss.com"></script>
 </head>
 
 <body>
 <div class="navbar">
-    <button onClick="redirect_to_download_manager()" class="button">Download manager</button>
-    <button onClick="redirect_to_library()" class="button">Library</button>
-    <button onClick="redirect_to_updates()" class="button">Updates</button>
+	<button onClick="redirect_to_download_manager()" class="button">Download manager</button>
+	<button onClick="redirect_to_library()" class="button">Library</button>
+	<button onClick="redirect_to_updates()" class="button">Updates</button>
 
-    <div class="search-container">
-        <input type="text" id="searchInput" placeholder="Search...">
-        <button type="submit" onclick="searchManga()">Search</button>
-        <div class="search-results-dropdown" id="searchResultsDropdown"></div>
-    </div>
-    {% block content %}
-    {% if login == 1 %}
-    <button class="login-button">{{ name }}</button>
-    {% else %}
-    <div class="login-container">
-        <button onClick="document.location.href='/login?from=/'" class="login-button">Login</button>
-    </div>
-    {% endif %}
-    {% endblock content %}
+	<div class="search-container">
+		<input type="text" id="searchInput" placeholder="Search...">
+		<button type="submit" onclick="searchManga()">Search</button>
+		<div class="search-results-dropdown" id="searchResultsDropdown"></div>
+	</div>
+	{% block content %}
+	{% if login == 1 %}
+	<button class="login-button">{{ name }}</button>
+	{% else %}
+	<div class="login-container">
+		<button onClick="document.location.href='/login?from=/'" class="login-button">Login</button>
+	</div>
+	{% endif %}
+	{% endblock content %}
+</div>
+
+<div class="max-w-4xl mx-auto bg-white shadow-lg rounded-lg p-6">
+	<h2 class="text-xl font-semibold text-gray-700">Popular New Titles</h2>
+
+	<div class="mt-4 flex items-center space-x-6 h-[400px]" onclick="to_manga()">
+		<!-- Book Cover -->
+		<img src="" alt="Book Cover" class="w-[193px] h-[276px] object-cover rounded-lg shadow-md" id="cover-art">
+
+		<!-- Book Details -->
+		<div>
+			<h3 class="text-2xl font-bold" id="manga-title">Umarekawatta Kensei, Kenshi ga Reiguu sareru...</h3>
+
+			<!-- Dynamic Genre Tags -->
+			<ul id="genre-tags" class="flex space-x-2 mt-2">
+				<!-- Tags will be added here dynamically -->
+			</ul>
+
+			<p class="mt-2 text-gray-700 text-sm h-[200px] overflow-hidden" id="description">
+				Lyus, once hailed as the Sword Saint, was reborn through some twist of fate with all his memories
+				intact...
+			</p>
+			<p class="mt-3 italic text-gray-500" id="authors">Kishimoto Kazuha, Kuwashima Rein, someno shizuya</p>
+		</div>
+	</div>
+
+	<!-- Navigation Controls -->
+	<div class="flex justify-between items-center mt-4">
+		<button class="bg-gray-200 px-3 py-1 rounded-lg text-gray-700" id="manga-sub">&larr;</button>
+		<span class="text-gray-600" id="number">NO. 7</span>
+		<button class="bg-gray-200 px-3 py-1 rounded-lg text-gray-700" id="manga-add">&rarr;</button>
+	</div>
 </div>
 
 <script>
@@ -154,6 +187,15 @@
     }
 
 
+    let currentIndex = 1;
+    const title = document.getElementById("manga-title");
+    const description = document.getElementById("description");
+    const authors = document.getElementById("authors");
+    const image = document.getElementById("cover-art");
+    const number = document.getElementById("number");
+    const genreTags = document.getElementById("genre-tags");
+    const cached_cover_arts = {}
+
     function searchManga() {
         var searchResultsDropdown = document.getElementById("searchResultsDropdown");
 
@@ -166,16 +208,15 @@
         fetch("/search/manga", {
             method: "POST",
             headers: {
-                'Content-Type': 'application/json' // Indicate you're sending JSON
+                'Content-Type': 'application/json'
             },
-            body: JSON.stringify({searchTerm: document.getElementById('searchInput').value}) // Wrap the search term in an object
-        })
-            .then(response => response.json())  // Assuming the server returns JSON
+            body: JSON.stringify({searchTerm: document.getElementById('searchInput').value})
+        }).then(response => response.json())  // Assuming the server returns JSON
             .then(data => {
                 data.forEach(function (result) {
                     console.log(result)
                     var resultItem = document.createElement("a");
-                    resultItem.href = "/manga/" + result["id"]; // You can set the actual link here if needed
+                    resultItem.href = "/manga/" + result["id"];
                     var image = document.createElement("img");
                     image.src = "/manga/cover/" + result["id"] + "?small=1";
                     image.alt = "Result Image";
@@ -210,6 +251,95 @@
         }
     }
 
+    let popular_manga = null;
+    fetch("popular-new-titles").then(response => response.json()).then(data => {
+        popular_manga = data
+        cache_cover_art()
+        updateManga()
+    })
+    document.getElementById('manga-sub').addEventListener('click', (event) => {
+        currentIndex = currentIndex - 1;
+        if (currentIndex <= 0) {
+            currentIndex = 10;
+        }
+        updateManga()
+    })
+    document.getElementById('manga-add').addEventListener('click', (event) => {
+        currentIndex = currentIndex + 1;
+        if (currentIndex >= 10) {
+            currentIndex = 1;
+        }
+        updateManga()
+    })
+
+    function to_manga() {
+        window.location.replace("/manga/" + popular_manga[currentIndex - 1]["id"]);
+    }
+
+    function cache_cover_art() {
+        popular_manga.forEach(manga => {
+            const img = new Image();
+            img.src = "/manga/cover/" + manga.id;
+            img.onerror = function () {
+                const maxRetries = 5;
+                let retryCount = parseInt(img.getAttribute("data-retry-count"));
+
+                if (retryCount < maxRetries) {
+                    retryCount++;
+                    img.setAttribute("data-retry-count", retryCount);
+
+                    setTimeout(() => {
+                        console.log(`Retrying ${img.src}, attempt ${retryCount}`);
+                        img.src = "/manga/cover/" + manga.id;
+                    }, 1000 * retryCount); // Exponential backoff
+                } else {
+                    console.error(`Failed to load ${img.src} after ${maxRetries} retries.`);
+                }
+            };
+            cached_cover_arts[manga.id] = img
+        })
+        console.log(cached_cover_arts)
+        updateManga()
+    }
+
+    function updateManga() {
+        if (popular_manga === null) {
+            return null
+        }
+        while (genreTags.firstChild) {
+            genreTags.removeChild(genreTags.firstChild);
+        }
+        image.src = cached_cover_arts[popular_manga[currentIndex - 1]["id"]].src
+        title.innerText = popular_manga[currentIndex - 1]["attributes"]["title"]["en"];
+        description.innerText = popular_manga[currentIndex - 1]["attributes"]["description"]["en"]
+        authors.innerText = title.innerText;
+        number.innerText = "NO. " + currentIndex.toString()
+
+        let rating = popular_manga[currentIndex - 1]["attributes"]["contentRating"];
+        if (rating !== "safe") {
+            let li = document.createElement("li");
+            li.textContent = popular_manga[currentIndex - 1]["attributes"]["contentRating"];
+            switch (rating) {
+                case "suggestive":
+                    li.classList.add("bg-orange-200", "px-2", "py-1", "rounded-lg", "text-xs", "font-medium");
+                    break
+                default:
+                    li.classList.add("bg-red-200", "px-2", "py-1", "rounded-lg", "text-xs", "font-medium");
+                    break
+            }
+            genreTags.appendChild(li);
+        }
+
+        popular_manga[currentIndex - 1]["attributes"]["tags"].forEach(tag => {
+            if (tag["attributes"]["group"] !== "genre" || genreTags.children.length === 4) {
+                return
+            }
+            let li = document.createElement("li");
+            li.textContent = tag["attributes"]["name"]["en"];
+            li.classList.add("bg-gray-200", "px-2", "py-1", "rounded-lg", "text-xs", "font-medium");
+            genreTags.appendChild(li);
+        })
+    }
 </script>
 </body>
 

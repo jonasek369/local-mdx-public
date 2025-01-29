@@ -1,7 +1,6 @@
 import json
 import sqlite3
 from dataclasses import asdict
-from pprint import pprint
 from typing import List, Optional
 
 from rewrite.backend.connection import MangaDownloadJobInDatabase
@@ -15,8 +14,8 @@ class Database:
         self.conn = sqlite3.connect("database.db", check_same_thread=False, timeout=10)
         cursor = self.conn.cursor()
         cursor.execute("""CREATE TABLE IF NOT EXISTS chapter_attributes (
-            cuuid CHAR(36) PRIMARY KEY,
-            muuid CHAR(36),
+            cuuid TEXT PRIMARY KEY,
+            muuid TEXT,
             title TEXT,
             volume TEXT,
             chapter TEXT,
@@ -31,7 +30,7 @@ class Database:
             readableAt TEXT NOT NULL
         );""")
         cursor.execute("""CREATE TABLE IF NOT EXISTS manga_attributes (
-            muuid CHAR(36) NOT NULL PRIMARY KEY,
+            muuid TEXT NOT NULL PRIMARY KEY,
             title TEXT NOT NULL,
             altTitles TEXT NOT NULL, -- List[LocalizedString] as JSON
             description TEXT NOT NULL,
@@ -56,25 +55,26 @@ class Database:
         cursor.execute("""CREATE TABLE IF NOT EXISTS chapter_page (
             page_number INT NOT NULL,
             page_content BLOB NOT NULL,
-            cuuid CHAR(36) NOT NULL,
+            cuuid TEXT NOT NULL,
             FOREIGN KEY (cuuid) REFERENCES chapter_attributes(cuuid) ON DELETE CASCADE
         );""")
         cursor.execute("""CREATE TABLE IF NOT EXISTS cover_art(
-            muuid CHAR(36) NOT NULL primary key,
+            muuid TEXT NOT NULL primary key,
             data BLOB NOT NULL
         )""")
         cursor.execute("""CREATE TABLE IF NOT EXISTS cover_art_small(
-            muuid CHAR(36) NOT NULL primary key,
+            muuid TEXT NOT NULL primary key,
             data BLOB NOT NULL
         )""")
 
         cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_chapter_attributes_cuuid ON chapter_attributes(cuuid);
         """)
-
-        # Create index for chapter_id in chapter_page
         cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_chapter_page_chapter_id ON chapter_page(cuuid);
+        """)
+        cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_muuid ON chapter_attributes (muuid);
         """)
 
         # TODO: Make index from chapter to chapter attributes if performance begins to be a problem
@@ -82,6 +82,7 @@ class Database:
         self.conn.commit()
         cursor.close()
 
+    @perf_test
     def get_chapter_attribute(self, identifier: ChapterIdentifier) -> Optional[ChapterAttributes]:
         cursor = self.conn.cursor()
         cursor.execute("SELECT * FROM chapter_attributes WHERE cuuid=:id", {"id": identifier})
@@ -91,6 +92,7 @@ class Database:
             return ChapterAttributes(*fetch[2:])
         return None
 
+    @perf_test
     def get_chapter_attribute_raw(self, identifier: ChapterIdentifier) -> Optional[ChapterAttributes]:
         # Returns the raw fetch. Because the raw fetch returns muuid and cuuid which can be usefull
         cursor = self.conn.cursor()
@@ -101,6 +103,7 @@ class Database:
             return fetch
         return None
 
+    @perf_test
     def set_chapter_attributes(self, identifier: MangaIdentifier, chapters: List[Chapter]) -> None:
         cursor = self.conn.cursor()
         cursor.executemany("REPLACE INTO chapter_attributes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -108,6 +111,7 @@ class Database:
         self.conn.commit()
         cursor.close()
 
+    @perf_test
     def set_manga_attributes(self, manga: Manga):
         cursor = self.conn.cursor()
         data = [manga.id]
@@ -121,6 +125,7 @@ class Database:
         self.conn.commit()
         cursor.close()
 
+    @perf_test
     def get_manga_attributes(self, identifier: MangaIdentifier) -> Optional[MangaAttributes]:
         cursor = self.conn.cursor()
         cursor.execute("SELECT * FROM manga_attributes WHERE muuid=:identifier", {"identifier": identifier})
@@ -130,6 +135,7 @@ class Database:
             return MangaAttributes(*fetch[1:])
         return None
 
+    @perf_test
     def get_chapter_list(self, identifier: MangaIdentifier) -> Optional[List[ChapterAttributes]]:
         cursor = self.conn.cursor()
         cursor.execute("SELECT * FROM chapter_attributes WHERE muuid=:identifier", {"identifier": identifier})
@@ -139,6 +145,7 @@ class Database:
             return chapters
         return None
 
+    @perf_test
     def set_chapter_page(self, page, content, cuuid) -> None:
         cursor = self.conn.cursor()
         cursor.execute("INSERT INTO chapter_page VALUES (:p_count, :p_content, :cuuid)",
@@ -179,6 +186,7 @@ class Database:
         cursor.close()
         return mdj
 
+    @perf_test
     def get_cover_art(self, identifier: MangaIdentifier) -> Optional[bytes]:
         cursor = self.conn.cursor()
         cursor.execute("SELECT data FROM cover_art WHERE muuid=:id", {"id": identifier})
@@ -188,6 +196,7 @@ class Database:
             return fetch[0]
         return fetch
 
+    @perf_test
     def get_small_cover_art(self, identifier: MangaIdentifier) -> Optional[bytes]:
         cursor = self.conn.cursor()
         cursor.execute("SELECT data FROM cover_art_small WHERE muuid=:id", {"id": identifier})
@@ -197,27 +206,30 @@ class Database:
             return fetch[0]
         return None
 
-    def set_cover_art(self, identifier: MangaIdentifier, content):
+    @perf_test
+    def set_cover_art(self, identifier: MangaIdentifier, content: bytes) -> None:
         cursor = self.conn.cursor()
         cursor.execute("REPLACE INTO cover_art (muuid, data) VALUES (?, ?)", (identifier, content))
         self.conn.commit()
         cursor.close()
 
+    @perf_test
     def set_small_cover_art(self, identifier: MangaIdentifier, content):
         cursor = self.conn.cursor()
         cursor.execute("REPLACE INTO cover_art_small (muuid, data) VALUES (?, ?)", (identifier, content))
         self.conn.commit()
         cursor.close()
 
-    def get_page(self, identifier: ChapterIdentifier, page: int) -> Optional[bytes]:
-        # Sometimes this fails under sqlite3.InterfaceError api misuse no idea why identifier and page is always valid
+    @perf_test
+    def get_page(self, identifier: str, page: int) -> Optional[bytes]:
         cursor = self.conn.cursor()
         cursor.execute("SELECT page_content FROM chapter_page WHERE cuuid=:identifier AND page_number=:page",
-                       {"identifier": str(identifier), "page": int(page)})
+                       {"identifier": identifier, "page": page})
         fetch = cursor.fetchone()
         cursor.close()
         return None if fetch is None else fetch[0]
 
+    @perf_test
     def get_pages(self, identifier: ChapterIdentifier):
         cursor = self.conn.cursor()
         cursor.execute("SELECT page_number, page_content FROM chapter_page WHERE cuuid=:identifier",
@@ -228,6 +240,7 @@ class Database:
             return fetch
         return None
 
+    @perf_test
     def all_manga_in_db(self) -> Optional[List[str]]:
         cursor = self.conn.cursor()
         cursor.execute("SELECT muuid, title, description FROM manga_attributes")
@@ -241,45 +254,24 @@ class Database:
     def get_downloaded_pages(self, identifier: MangaIdentifier):
         cursor = self.conn.cursor()
         try:
-            # Fetch chapter attributes
             cursor.execute(
-                """SELECT cuuid, title, volume, chapter, pages 
-                   FROM chapter_attributes 
-                   WHERE muuid = :identifier""",
-                {"identifier": identifier}
-            )
-            chapters = cursor.fetchall()
-
-            if not chapters:
-                return []
-
-            # Construct placeholders for the IN clause
-            chapter_ids = [chapter[0] for chapter in chapters]
-            placeholders = ', '.join(['?'] * len(chapter_ids))
-
-            # Fetch page counts grouped by chapter
-            cursor.execute(
-                f"""
-                SELECT cuuid, COUNT(page_number) as page_count
-                FROM chapter_page
-                WHERE cuuid IN ({placeholders})
-                GROUP BY cuuid
+                """
+                SELECT ca.cuuid, ca.title, ca.volume, ca.chapter
+                FROM chapter_attributes ca
+                WHERE ca.muuid = ?
+                AND ca.pages = (
+                    SELECT COUNT(*)
+                    FROM chapter_page cp
+                    WHERE cp.cuuid = ca.cuuid
+                )
                 """,
-                chapter_ids
+                (identifier,)
             )
-            page_counts = dict(cursor.fetchall())
-
-            # Determine fully downloaded chapters
-            downloaded = [
-                (cuuid, title, volume, chapter)
-                for cuuid, title, volume, chapter, total_pages in chapters
-                if page_counts.get(cuuid, 0) == total_pages
-            ]
-
-            return downloaded
+            return cursor.fetchall()
         finally:
             cursor.close()
 
+    @perf_test
     def get_next_prev(self, identifier: MangaIdentifier) -> Optional[tuple]:
         cursor = self.conn.cursor()
         cursor.execute("""

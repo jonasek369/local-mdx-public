@@ -1,3 +1,4 @@
+from dataclasses import asdict
 from typing import Optional
 
 import requests
@@ -6,8 +7,8 @@ from rewrite.backend.connection import MangadexConnection, MangaDownloader
 from rewrite.backend.database import Database
 from rewrite.backend.schemas import MangaIdentifier, ChapterIdentifier, ChapterList, Manga, MangaAttributes, \
     ChapterAttributes
-from rewrite.backend.settings import Settings
-from rewrite.backend.utils import resize_image
+from rewrite.backend.settings import load_settings
+from rewrite.backend.utils import resize_image, perf_test
 
 
 # Taking inspiration from how android works utilizing repositories which take connection nad database
@@ -16,7 +17,9 @@ from rewrite.backend.utils import resize_image
 
 class MangaRepository:
     def __init__(self):
-        self.settings = Settings(self.store_downloaded_pages)
+        self.settings = load_settings()
+        self.settings.onMangaDownloadFinishHandler = self.store_downloaded_pages
+
         self.database = Database()
         self.connection = MangadexConnection(self.settings)
         self.downloader = MangaDownloader(self.settings)
@@ -47,41 +50,23 @@ class MangaRepository:
             return chapter_list
         raise NotImplemented("Error")
 
-    # def get_cover_art(self, identifier: MangaIdentifier) -> Optional[bytes]:
-    #     cover_art = self.connection.get_cover_art(identifier)
-    #     if cover_art is not None:
-    #         self.database.set_cover_art(identifier, cover_art)
-    #         small = resize_image(cover_art)
-    #         if small:
-    #             self.database.set_small_cover_art(identifier, small)
-    #         return cover_art
-    #     fetch = self.database.get_cover_art(identifier)
-    #     if fetch:
-    #         return fetch
-    #     return None
-
     def get_cover_art(self, identifier: MangaIdentifier, small=False) -> Optional[bytes]:
         if small:
             small_cover_art = self.database.get_small_cover_art(identifier)
             if not small_cover_art:
-                self.connection.get_cover_art(identifier)
-                small_cover_art = self.database.get_small_cover_art(identifier)
+                fetch_small_cover_art = self.connection.get_cover_art(identifier)
+                if fetch_small_cover_art is not None:
+                    self.database.set_small_cover_art(identifier, fetch_small_cover_art)
+                return fetch_small_cover_art
             return small_cover_art
         else:
             cover_art = self.database.get_cover_art(identifier)
             if not cover_art:
-                self.connection.get_cover_art(identifier)
-                cover_art = self.database.get_cover_art(identifier)
+                fetch_cover_art = self.connection.get_cover_art(identifier)
+                if fetch_cover_art is not None:
+                    self.database.set_cover_art(identifier, fetch_cover_art)
+                return fetch_cover_art
             return cover_art
-
-    # def get_small_cover_art(self, identifier: MangaIdentifier) -> Optional[bytes]:
-    #     small = self.database.get_small_cover_art(identifier)
-    #     if not small:
-    #         self.get_cover_art(identifier)
-    #     else:
-    #         return small
-    #     small = self.database.get_small_cover_art(identifier)
-    #     return small
 
     def get_chapter_attributes(self, identifier: MangaIdentifier, ids: Optional[dict[str, str]] = None) -> Optional[
         ChapterAttributes]:
@@ -100,7 +85,7 @@ class MangaRepository:
             return attributes
         return None
 
-    def get_downloaded_chapters(self, identifier: MangaIdentifier):
+    def get_downloaded_pages(self, identifier: MangaIdentifier):
         pages = self.database.get_downloaded_pages(identifier)
         return pages
 
@@ -115,3 +100,16 @@ class MangaRepository:
     def get_next_prev(self, identifier: ChapterIdentifier):
         next_prev = self.database.get_next_prev(identifier)
         return next_prev
+
+    @perf_test
+    def popular_new_titles(self):
+        popular = self.connection.get_popular_new_titles()
+        for manga in popular.data:
+            for relationship in manga.relationships:
+                if relationship.type == "cover_art":
+                    coverurl = f"https://mangadex.org/covers/{manga.id}/" + relationship.attributes["fileName"]
+                    if not self.database.get_cover_art(manga.id):
+                        self.database.set_cover_art(manga.id, self.connection.safe_get_request(coverurl).content)
+        if popular is None:
+            return popular
+        return asdict(popular)["data"]
