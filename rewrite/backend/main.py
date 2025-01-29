@@ -5,4 +5,3 @@ from repository import MangaRepository
 from settings import Settings
 
 repository = MangaRepository()
-

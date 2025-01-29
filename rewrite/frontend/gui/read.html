@@ -89,7 +89,26 @@
     let pageCount = {{pages}};
     let page = {{page}};
 
+    // fetches all the pages at once
+    function full_load() {
+        fetch("/page-images/{{cuuid}}")
+            .then(response => response.json())
+            .then(data => {
+                for (const key in data) {
+                    const img = document.createElement("img");
+                    img.id = "page-panel";
+                    img.src = `data:image/png;base64,${data[key]}`;
+                    img.classList.add("hidden");
+                    content.appendChild(img);
+                }
+                page_header.innerHTML = `${page}/${pageCount} pages`;
+                set_page(page);
+            });
+    }
 
+    /*
+    // this function loads one by one image but because this is local service the overhead of creating multiple
+    // requests and getting one by one from database costs about 8000ms for 100 chapters (to fetch it at once its 500ms)
     function full_load() {
         for (let i = 1; i < pageCount + 1; i++) {
             const img = document.createElement("img");
@@ -97,34 +116,20 @@
             img.id = "page-panel";
             img.src = `/page-image/{{cuuid}}/${i}`;
             img.classList.add("hidden");
-            img.setAttribute("data-retry-count", "0");
-            img.onerror = function () {
-                const maxRetries = 5;
-                let retryCount = parseInt(img.getAttribute("data-retry-count"));
-
-                if (retryCount < maxRetries) {
-                    retryCount++;
-                    img.setAttribute("data-retry-count", retryCount);
-
-                    setTimeout(() => {
-                        console.log(`Retrying ${img.src}, attempt ${retryCount}`);
-                        img.src = `/page-image/{{cuuid}}/${i}?retry=${retryCount}`;
-                    }, 1000 * retryCount); // Exponential backoff
-                } else {
-                    console.error(`Failed to load ${img.src} after ${maxRetries} retries.`);
-                }
-            };
-
             content.appendChild(img);
         }
 
         page_header.innerHTML = `${page}/${pageCount} pages`;
         set_page(page);
-    }
+    }*/
 
     function set_page(to_page) {
+        if (content.children.length === 0) {
+            return
+        }
         let current_page = content.children.item(page - 1);
         let _set_page = content.children.item(to_page - 1);
+
 
         current_page.classList.add("hidden");
         current_page.removeEventListener("mousedown", handle_click);

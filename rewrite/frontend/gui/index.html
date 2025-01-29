@@ -150,18 +150,17 @@
 
 		<!-- Book Details -->
 		<div>
-			<h3 class="text-2xl font-bold" id="manga-title">Umarekawatta Kensei, Kenshi ga Reiguu sareru...</h3>
+			<h3 class="text-2xl font-bold" id="manga-title">Sample Title</h3>
 
 			<!-- Dynamic Genre Tags -->
 			<ul id="genre-tags" class="flex space-x-2 mt-2">
-				<!-- Tags will be added here dynamically -->
+
 			</ul>
 
 			<p class="mt-2 text-gray-700 text-sm h-[200px] overflow-hidden" id="description">
-				Lyus, once hailed as the Sword Saint, was reborn through some twist of fate with all his memories
-				intact...
+				Sample Description
 			</p>
-			<p class="mt-3 italic text-gray-500" id="authors">Kishimoto Kazuha, Kuwashima Rein, someno shizuya</p>
+			<p class="mt-3 italic text-gray-500" id="authors">Sample Author</p>
 		</div>
 	</div>
 
@@ -211,7 +210,7 @@
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({searchTerm: document.getElementById('searchInput').value})
-        }).then(response => response.json())  // Assuming the server returns JSON
+        }).then(response => response.json())
             .then(data => {
                 data.forEach(function (result) {
                     console.log(result)
@@ -266,7 +265,7 @@
     })
     document.getElementById('manga-add').addEventListener('click', (event) => {
         currentIndex = currentIndex + 1;
-        if (currentIndex >= 10) {
+        if (currentIndex > 10) {
             currentIndex = 1;
         }
         updateManga()
@@ -312,7 +311,9 @@
         image.src = cached_cover_arts[popular_manga[currentIndex - 1]["id"]].src
         title.innerText = popular_manga[currentIndex - 1]["attributes"]["title"]["en"];
         description.innerText = popular_manga[currentIndex - 1]["attributes"]["description"]["en"]
-        authors.innerText = title.innerText;
+
+        authors.innerText = ""; // TODO: add
+
         number.innerText = "NO. " + currentIndex.toString()
 
         let rating = popular_manga[currentIndex - 1]["attributes"]["contentRating"];
@@ -321,10 +322,14 @@
             li.textContent = popular_manga[currentIndex - 1]["attributes"]["contentRating"];
             switch (rating) {
                 case "suggestive":
-                    li.classList.add("bg-orange-200", "px-2", "py-1", "rounded-lg", "text-xs", "font-medium");
+                    li.classList.add("px-2", "py-1", "rounded-lg", "text-xs", "font-medium");
+                    li.style.backgroundColor = "rgb(218, 117, 0)";
+                    li.style.color = "rgb(255, 255, 255)";
                     break
                 default:
-                    li.classList.add("bg-red-200", "px-2", "py-1", "rounded-lg", "text-xs", "font-medium");
+                    li.classList.add("px-2", "py-1", "rounded-lg", "text-xs", "font-medium");
+                    li.style.backgroundColor = "rgb(255, 64, 64)";
+                    li.style.color = "rgb(255, 255, 255)";
                     break
             }
             genreTags.appendChild(li);

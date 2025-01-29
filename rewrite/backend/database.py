@@ -14,8 +14,8 @@ class Database:
         self.conn = sqlite3.connect("database.db", check_same_thread=False, timeout=10)
         cursor = self.conn.cursor()
         cursor.execute("""CREATE TABLE IF NOT EXISTS chapter_attributes (
-            cuuid TEXT PRIMARY KEY,
-            muuid TEXT,
+            cuuid CHAR(36) PRIMARY KEY,
+            muuid CHAR(36),
             title TEXT,
             volume TEXT,
             chapter TEXT,
@@ -30,7 +30,7 @@ class Database:
             readableAt TEXT NOT NULL
         );""")
         cursor.execute("""CREATE TABLE IF NOT EXISTS manga_attributes (
-            muuid TEXT NOT NULL PRIMARY KEY,
+            muuid CHAR(36) NOT NULL PRIMARY KEY,
             title TEXT NOT NULL,
             altTitles TEXT NOT NULL, -- List[LocalizedString] as JSON
             description TEXT NOT NULL,
@@ -55,15 +55,15 @@ class Database:
         cursor.execute("""CREATE TABLE IF NOT EXISTS chapter_page (
             page_number INT NOT NULL,
             page_content BLOB NOT NULL,
-            cuuid TEXT NOT NULL,
+            cuuid CHAR(36) NOT NULL,
             FOREIGN KEY (cuuid) REFERENCES chapter_attributes(cuuid) ON DELETE CASCADE
         );""")
         cursor.execute("""CREATE TABLE IF NOT EXISTS cover_art(
-            muuid TEXT NOT NULL primary key,
+            muuid CHAR(36) NOT NULL primary key,
             data BLOB NOT NULL
         )""")
         cursor.execute("""CREATE TABLE IF NOT EXISTS cover_art_small(
-            muuid TEXT NOT NULL primary key,
+            muuid CHAR(36) NOT NULL primary key,
             data BLOB NOT NULL
         )""")
 

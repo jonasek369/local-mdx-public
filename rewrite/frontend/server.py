@@ -1,5 +1,7 @@
+import base64
 import json
 import os
+import time
 from dataclasses import asdict
 
 from rewrite.backend.connection import MangaDownloadJob, DownloaderState
@@ -38,10 +40,13 @@ def landing():
 @server.route('/search/manga', methods=['POST'])
 def search():
     data = request.json
-    try:
-        limit = int(request.args.get("limit"))
-    except TypeError:
-        limit = 5
+    limit = 5
+    if request.args.get("limit").isdigit():
+        try:
+            limit = int(request.args.get("limit"))
+        except ValueError:
+            pass
+
     if limit > 50:
         return "cannot search that much"
 
@@ -91,11 +96,25 @@ def get_chapter_image(identifier, page):
         return "Error: page is not an number"
     image_binary = repository.database.get_page(identifier, int(page))
     if image_binary is not None:
-        response = make_response(image_binary)
+        response = make_response(compress(image_binary))
         response.headers.set('Content-Type', 'image/jpeg')
         response.headers.set('Content-Disposition', 'inline', filename=f'{identifier}-{page}.png')
+        response.headers.set("Content-Encoding", "gzip")
         return response
     return "Error: no image found"
+
+
+@server.route("/page-images/<identifier>/")
+def get_chapter_images(identifier):
+    image_binary = repository.database.get_pages(identifier)
+    if image_binary is not None:
+        data = {}
+        for page, image in image_binary:
+            # Ensure to decode the bytes to a UTF-8 string and remove the b' prefix
+            encoded_image = base64.b64encode(image).decode('utf-8')
+            data[page] = encoded_image
+        return jsonify(data)  # Return as a proper JSON response
+    return "Error: no image found", 404
 
 
 @server.route("/read/next-prev/<chapteruuid>")
@@ -221,7 +240,8 @@ def popular_new_titles():
 if __name__ == "__main__":
     USE_SERVER = 0
     if not USE_SERVER:
-        server.run(host="127.0.0.1", port=5000, threaded=False)
+        # TODO: Decide if using threaded is viable
+        server.run(host="127.0.0.1", port=5000, threaded=True)
     else:
         print("starting server")
         # testing performance on other devices
