@@ -4,7 +4,7 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Navbar with Login Button and Search Bar</title>
+	<title>Lmdx</title>
 	<style>
         body {
             margin: 0;
@@ -290,7 +290,7 @@
                     setTimeout(() => {
                         console.log(`Retrying ${img.src}, attempt ${retryCount}`);
                         img.src = "/manga/cover/" + manga.id;
-                    }, 1000 * retryCount); // Exponential backoff
+                    }, 1000 * retryCount);
                 } else {
                     console.error(`Failed to load ${img.src} after ${maxRetries} retries.`);
                 }
@@ -345,6 +345,15 @@
             genreTags.appendChild(li);
         })
     }
+
+    setInterval(function () {
+        currentIndex = currentIndex + 1;
+        if (currentIndex > 10) {
+            currentIndex = 1;
+        }
+        updateManga()
+    }, 10000)
+
 </script>
 </body>
 

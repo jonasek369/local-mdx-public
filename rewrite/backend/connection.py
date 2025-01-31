@@ -6,6 +6,7 @@ from dataclasses import dataclass, asdict
 from typing import Optional, Sequence, Tuple, Callable, Dict
 
 import requests
+from PIL.ImageTransform import AffineTransform
 from dateutil.relativedelta import relativedelta
 
 from rewrite.backend.schemas import MangaList, from_json, Manga, MangaIdentifier, ChapterIdentifier, ChapterList, \
@@ -84,8 +85,18 @@ class MangaQueue:
 
     def remove_job(self, _id: str):
         for index, job in enumerate(self.__queue):
-            if job.downloaded or job.id == _id:
+            if job.downloaded or job.identifier == _id:
                 self.__queue.pop(index)
+
+    def get_job_index(self, _id: str) -> Optional[int]:
+        for index, job in enumerate(self.__queue):
+            if job.identifier == _id:
+                return index
+
+    def pop_job_index(self, index: int) -> Optional[MangaDownloadJob]:
+        if self.__queue:
+            return self.__queue.pop(index)
+        return None
 
     def in_queue(self, _id: str):
         return _id in self.__queue
@@ -160,6 +171,14 @@ def threaded_get_chapter_page(
 
     return manga_download
 
+timeouts = {
+    "NO_LIMIT_CHAPTER_FINISH": 0,
+    "FAST_CHAPTER_FINISH": 1,
+    "NORMAL_CHAPTER_FINISH": 2.5,
+    "SLOW_CHAPTER_FINISH": 5,
+}
+
+
 
 class MangaDownloader:
     def __init__(self, settings: Settings):
@@ -171,6 +190,7 @@ class MangaDownloader:
         self.queue = MangaQueue()
         self.finished = {}
         self.currently_working_on: Optional[dict] = None
+        self.speed = "NORMAL"
 
         assert settings.onMangaDownloadFinishHandler is not None, "onMangaDownloadFinishHandler cannot be None"
 
@@ -258,8 +278,9 @@ class MangaDownloader:
                 self.on_finish_callback(job.identifier, chapter.id, self)
                 self.logger.log(info, f"Downloaded {chapter.attributes.volume} Volume {chapter.attributes.chapter} Chapter")
                 self.add_chapter()
-                time.sleep(1)  # Simulate rate-limited download
+                time.sleep(timeouts[self.speed + "_CHAPTER_FINISH"])
 
+            self.currently_working_on = None
 
 class MangadexConnection:
     def __init__(self, settings):
@@ -269,6 +290,7 @@ class MangadexConnection:
 
         self.exclude_groups = []
 
+        # default headers for every api call
         self.header_include = {"contentRating[]": settings.contentRating}
         self.logger = settings.logger
 
@@ -298,8 +320,10 @@ class MangadexConnection:
 
         if query["result"] != "ok":
             return None
-
-        return from_json(MangaList, query)
+        try:
+            return from_json(MangaList, query)
+        except AttributeError:
+            return None
 
     def get_manga(self, identifier: MangaIdentifier) -> Optional[Manga]:
 
@@ -312,8 +336,10 @@ class MangadexConnection:
 
         if query["result"] != "ok":
             return None
-
-        return from_json(DirectSearchManga, query).data
+        try:
+            return from_json(DirectSearchManga, query).data
+        except AttributeError:
+            return None
 
     def get_cover_art(self, identifier: MangaIdentifier) -> Optional[bytes]:
 
@@ -387,7 +413,11 @@ class MangadexConnection:
             "createdAtSince": set_time.isoformat()
         })
         # TODO: parse out data that is usefull like a cover art
-        manga_list: MangaList = from_json(MangaList, data.json())
+        try:
+            manga_list: MangaList = from_json(MangaList, data.json())
+        except AttributeError as e:
+            self.logger.log(error, str(e))
+            return None
         if not manga_list:
             return None
         return manga_list

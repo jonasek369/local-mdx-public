@@ -35,7 +35,7 @@ class MangaRepository:
 
     def get_manga_attributes(self, identifier: MangaIdentifier) -> Optional[MangaAttributes]:
         manga = self.connection.get_manga(identifier)
-        if manga:
+        if manga is not None:
             self.database.set_manga_attributes(manga)
             return manga.attributes
         db_manga = self.database.get_manga_attributes(identifier)

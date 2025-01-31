@@ -1,8 +1,9 @@
 import base64
 import json
 import os
-import time
 from dataclasses import asdict
+
+from transformers.commands.add_new_model_like import REPO_PATH
 
 from rewrite.backend.connection import MangaDownloadJob, DownloaderState
 from rewrite.backend.repository import MangaRepository
@@ -76,7 +77,8 @@ def server_manga(mangauuid):
 
     manga = repository.get_manga_attributes(mangauuid)
     return render_template("manga.html",
-                           muuid=mangauuid, name=manga.title["en"],
+                           muuid=mangauuid,
+                           name=manga.title["en"],
                            description=manga.description["en"],
                            back_redirect=back)
 
@@ -110,10 +112,9 @@ def get_chapter_images(identifier):
     if image_binary is not None:
         data = {}
         for page, image in image_binary:
-            # Ensure to decode the bytes to a UTF-8 string and remove the b' prefix
             encoded_image = base64.b64encode(image).decode('utf-8')
             data[page] = encoded_image
-        return jsonify(data)  # Return as a proper JSON response
+        return jsonify(data)
     return "Error: no image found", 404
 
 
@@ -124,7 +125,6 @@ def chapter_next_previous(chapteruuid):
         next_prev = {"next": next_prev_tuple[0], "prev": next_prev_tuple[1]}
     else:
         next_prev = {"next": None, "prev": None}
-
     return jsonify(next_prev)
 
 
@@ -207,13 +207,44 @@ def download_status():
     if cwo is None:
         return {"status": {},
                 "in_progress": repository.downloader.state != DownloaderState.Off,
-                "speed_mode": "NORMAL"}
+                "speed_mode": repository.downloader.speed}
 
     return {"status": {
         cwo["id"]: {"name": cwo["title"], "page_status": cwo["page_status"], "chapter_status": cwo["chapter_status"]}},
         "in_progress": repository.downloader.state != DownloaderState.Off,
-        "speed_mode": "NORMAL"}
+        "speed_mode": repository.downloader.speed}
 
+@server.route("/manga/download/push-to-top", methods=["POST"])
+def push_to_top():
+    data = request.json
+    if "index" not in data:
+        return "Error: no index in json"
+
+    repository.downloader.queue.push_to_top(int(data["index"]))
+
+    return {"status": "success"}
+
+
+@server.route("/manga/download/pop-job", methods=["POST"])
+def pop_job():
+    data = request.json
+    if "index" not in data:
+        return "Error: no index in json"
+
+    repository.downloader.queue.remove_job(
+        repository.downloader.queue.pop_job_index(int(data["index"])).identifier
+    )
+    return {"status": "success"}
+
+
+@server.route("/manga/download/speed", methods=["POST"])
+def set_speed():
+    data = request.json
+    if "speed" not in data or data["speed"] not in ["SLOW", "NORMAL", "FAST", "NO_LIMIT"]:
+        return {"status": "error"}
+    repository.downloader.speed = data["speed"]
+
+    return {"status": "success"}
 
 @server.route("/manga/library/data", methods=["GET"])
 def library_data():
@@ -241,7 +272,7 @@ if __name__ == "__main__":
     USE_SERVER = 0
     if not USE_SERVER:
         # TODO: Decide if using threaded is viable
-        server.run(host="127.0.0.1", port=5000, threaded=True)
+        server.run(host="127.0.0.1", port=5000, threaded=False)
     else:
         print("starting server")
         # testing performance on other devices
