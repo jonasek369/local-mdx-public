@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Login Page</title>
+	<style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        button {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: #fff;
+            font-size: 14px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .container {
+            width: 300px;
+            margin: 0 auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        input[type="text"], input[type="password"] {
+            width: 80%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            display: block;
+            margin: 0 auto;
+        }
+
+        input[type="submit"] {
+            background-color: #4CAF50;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            padding: 10px 20px;
+            cursor: pointer;
+        }
+
+        .button {
+            background-color: #4CAF50;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            padding: 10px 20px;
+            cursor: pointer;
+        }
+
+	</style>
+</head>
+<body>
+<button class="button" onclick="document.location.href='{{back_redirect}}'">Back</button>
+<div class="container">
+	<h2>Mangadex app credentials</h2>
+	<label for="username">Username</label>
+	<input type="text" id="username" name="username" required><br>
+
+	<label for="password">Password</label>
+	<input type="password" id="password" name="password" required><br>
+
+	<label for="client-id">Client id</label>
+	<input type="text" id="client-id" name="client-id" required><br>
+
+	<label for="client-secret">Client secret</label>
+	<input type="password" id="client-secret" name="client-secret" required><br>
+
+	<input type="submit" value="Save credentials" onclick="handle_login()">
+</div>
+</body>
+<script>
+    window.token = '{{ token }}';
+    var redirect = "{{ back_redirect }}";
+
+    function handle_login() {
+        var name = document.getElementById("username").value;
+        var password = document.getElementById("password").value;
+        var client_id = document.getElementById("client-id").value;
+        var client_secret = document.getElementById("client-secret").value;
+        var payload = {
+            "username": name,
+            "password": password,
+            "client_id": client_id,
+            "client_secret": client_secret
+        };
+
+        fetch('auth/set-credentials', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        }).then(response => response.json())
+            .then(data => {
+                if(data.status === 'ok'){
+                    window.location.href = '/';
+				}
+			})
+
+
+    }
+
+</script>
+</html>

@@ -119,6 +119,13 @@ class Chapter:
 
 
 @dataclass
+class DirectSearchChapter:
+    result: str
+    response: str
+    data: Chapter
+
+
+@dataclass
 class ChapterList:
     result: str
     response: str
@@ -175,3 +182,38 @@ class MangaList:
     limit: int
     offset: int
     total: int
+
+@dataclass
+class CustomListAttributes:
+    name: str
+    visibility: Union[str]
+    version: int
+
+
+@dataclass
+class CustomList:
+    id: str
+    type: str
+    attributes: CustomListAttributes
+    relationships: List[Relationship]
+
+@dataclass
+class CustomListResponse:
+    result: str
+    response: str
+    data: List[CustomList]
+
+# Custom schema
+
+
+# Latest chapter per downloaded manga
+# all mangas are checked against this to see if there was new release
+@dataclass
+class LatestChapter:
+    muuid: str
+    latestChapter: str
+    createdAt: str
+    updatedAt: str
+    # Maybe dont need this
+    volume: Optional[str]
+    chapter: Optional[str]

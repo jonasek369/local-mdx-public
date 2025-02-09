@@ -3,11 +3,12 @@ import json
 import os
 from dataclasses import asdict
 
-from transformers.commands.add_new_model_like import REPO_PATH
+from werkzeug.exceptions import UnsupportedMediaType
 
-from rewrite.backend.connection import MangaDownloadJob, DownloaderState
+from rewrite.backend.connection import MangaDownloadJob, DownloaderState, save_credentials
 from rewrite.backend.repository import MangaRepository
-from rewrite.backend.utils import is_valid_uuid, info
+from rewrite.backend.settings import credentials_from_json
+from rewrite.backend.utils import is_valid_uuid, info, error
 
 try:
     import webview
@@ -42,7 +43,7 @@ def landing():
 def search():
     data = request.json
     limit = 5
-    if request.args.get("limit").isdigit():
+    if request.args.get("limit") and request.args.get("limit").isdigit():
         try:
             limit = int(request.args.get("limit"))
         except ValueError:
@@ -214,6 +215,7 @@ def download_status():
         "in_progress": repository.downloader.state != DownloaderState.Off,
         "speed_mode": repository.downloader.speed}
 
+
 @server.route("/manga/download/push-to-top", methods=["POST"])
 def push_to_top():
     data = request.json
@@ -246,6 +248,7 @@ def set_speed():
 
     return {"status": "success"}
 
+
 @server.route("/manga/library/data", methods=["GET"])
 def library_data():
     to_send = {}
@@ -255,6 +258,7 @@ def library_data():
         if pages:
             to_send[manga[0]] = [json.loads(manga[1])["en"], json.loads(manga[2])["en"]]
 
+    repository.sync_libraries(list(to_send.keys()))
     return {"status": "ok", "response": to_send}
 
 
@@ -268,10 +272,56 @@ def popular_new_titles():
     return repository.popular_new_titles()
 
 
+@server.route("/auth/check")
+def check_auth():
+    token = repository.credential_manager.token
+    if repository.credential_manager.validate_token(token):
+        status = "ok"
+    else:
+        status = "error"
+    return {"auth_status": status}
+
+
+@server.route("/auth")
+def authorize():
+    return render_template("auth.html")
+
+
+@server.route("/auth/set-credentials", methods=["POST"])
+def set_credentials():
+    try:
+        data = request.json
+    except UnsupportedMediaType:
+        return {"status": "error", "response": "Endpoint requires json"}
+    credentials = credentials_from_json(data)
+    repository.credential_manager.set_credentials(credentials)
+    if credentials.is_valid():
+        save_credentials(credentials)
+        return {"status": "ok", "response": "credentials set"}
+    return {"status": "error", "response": "invalid credentials"}
+
+
+@server.route("/updates")
+def updates():
+    auth = check_auth()
+    if auth["auth_status"] != "ok":
+        return {"status": "error", "response": "Credentials are not set properly. Updates require them"}
+    return render_template("updates.html")
+
+
+@server.route("/updates/data")
+def updates_data():
+    limit = request.args.get('limit', 32)
+    offset = request.args.get('offset', 0)
+    _updates = repository.get_updates(limit, offset)
+    if not _updates:
+        repository.settings.logger.log(error, "coudnt get updates")
+        return {"status": "error"}
+    return asdict(_updates)
+
 if __name__ == "__main__":
     USE_SERVER = 0
     if not USE_SERVER:
-        # TODO: Decide if using threaded is viable
         server.run(host="127.0.0.1", port=5000, threaded=False)
     else:
         print("starting server")

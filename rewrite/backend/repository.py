@@ -1,14 +1,15 @@
 from dataclasses import asdict
-from typing import Optional
+from typing import Optional, List
 
 import requests
+from attr import attributes
 
-from rewrite.backend.connection import MangadexConnection, MangaDownloader
+from rewrite.backend.connection import MangadexConnection, MangaDownloader, CredentialManager
 from rewrite.backend.database import Database
 from rewrite.backend.schemas import MangaIdentifier, ChapterIdentifier, ChapterList, Manga, MangaAttributes, \
-    ChapterAttributes
-from rewrite.backend.settings import load_settings
-from rewrite.backend.utils import resize_image, perf_test
+    ChapterAttributes, LatestChapter
+from rewrite.backend.settings import load_settings, load_credentials
+from rewrite.backend.utils import resize_image, perf_test, info, warning, error
 
 
 # Taking inspiration from how android works utilizing repositories which take connection nad database
@@ -21,7 +22,8 @@ class MangaRepository:
         self.settings.onMangaDownloadFinishHandler = self.store_downloaded_pages
 
         self.database = Database()
-        self.connection = MangadexConnection(self.settings)
+        self.credential_manager = CredentialManager(self.settings, load_credentials())
+        self.connection = MangadexConnection(self.settings, self.credential_manager)
         self.downloader = MangaDownloader(self.settings)
 
     def store_downloaded_pages(self, muuid: MangaIdentifier, cuuid: ChapterIdentifier, downloader: MangaDownloader):
@@ -113,3 +115,65 @@ class MangaRepository:
         if popular is None:
             return popular
         return asdict(popular)["data"]
+
+    @perf_test
+    def __get_updates(self):
+        # TODO: attributes have any language not just our selected
+        # This is pretty intresting approach but its not complete
+        # And it would cost multiple api calls. Ive decided it will be better
+        # To use mangadexes feed which comes with cost of requiring users credentials
+        return None
+        downloaded_mangas = self.database.all_manga_in_db()
+        latest_chapters = self.database.get_latest_chapters()
+        latest_chapters_map = {}
+        if latest_chapters is not None:
+            for latest_chapter in latest_chapters:
+                latest_chapters_map[latest_chapter.muuid] = latest_chapters
+        else:
+            latest_chapters_map = {}
+        muuid_list = [manga[0] for manga in downloaded_mangas]
+        attribute_map = {}
+        for muuid in muuid_list:
+            manga = self.connection.get_manga(muuid)
+            if manga is not None:
+                attribute_map[muuid] = manga.attributes
+                self.database.set_manga_attributes(manga)
+        for muuid in latest_chapters_map.keys():
+            if muuid not in attribute_map:
+                continue
+            if attribute_map[muuid].latestUploadedChapter != latest_chapters_map[muuid]: # new != old
+                self.settings.logger.log(info, f"Update happened!")
+                self.settings.logger.log(info, f"{attribute_map[muuid].latestUploadedChapter} released")
+
+        for muuid in attribute_map.keys():
+            chapter = self.connection.get_chapter(attribute_map[muuid].latestUploadedChapter)
+            if chapter is not None:
+                self.database.set_latest_chapter(
+                    LatestChapter(
+                        muuid,
+                        attribute_map[muuid].latestUploadedChapter,
+                        chapter.attributes.updatedAt,
+                        chapter.attributes.createdAt,
+                        chapter.attributes.volume,
+                        chapter.attributes.chapter
+                    )
+                )
+
+    def sync_libraries(self, manga_uuids: List[str]=None):
+        if not manga_uuids:
+            self.connection.sync_custom_list([manga[0] for manga in self.database.all_manga_in_db()])
+        else:
+            self.connection.sync_custom_list(manga_uuids)
+
+    @perf_test
+    def get_updates(self, limit, offset):
+        # TODO: Store
+        sync_list_uuid, _ = self.connection.get_sync_list()
+        feed = self.connection.get_custom_list_feed(sync_list_uuid, limit, offset)
+        if feed is None:
+            self.settings.logger.log(error, "Could not get the feed")
+            return None
+        if isinstance(feed, int):
+            self.settings.logger.log(info, "Credentials are not set")
+            return None
+        return feed

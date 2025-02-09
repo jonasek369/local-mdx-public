@@ -135,7 +135,7 @@
 	<button class="login-button">{{ name }}</button>
 	{% else %}
 	<div class="login-container">
-		<button onClick="document.location.href='/login?from=/'" class="login-button">Login</button>
+		<button onClick="document.location.href='/auth?from=/'" class="login-button"></button>
 	</div>
 	{% endif %}
 	{% endblock content %}
@@ -256,6 +256,14 @@
         cache_cover_art()
         updateManga()
     })
+	fetch("/auth/check").then(response => response.json()).then(data => {
+        const login_button = document.getElementsByClassName("login-button")[0]
+		if(data.auth_status === "ok"){
+            login_button.innerText = "Logged in"
+		}else{
+            login_button.innerText = "Missing credentials"
+		}
+	})
     document.getElementById('manga-sub').addEventListener('click', (event) => {
         currentIndex = currentIndex - 1;
         if (currentIndex <= 0) {

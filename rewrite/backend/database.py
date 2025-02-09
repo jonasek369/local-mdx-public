@@ -6,7 +6,7 @@ from typing import List, Optional
 from rewrite.backend.connection import MangaDownloadJobInDatabase
 from rewrite.backend.utils import perf_test
 from rewrite.backend.schemas import MangaIdentifier, ChapterIdentifier, ChapterAttributes, Chapter, from_json, \
-    ChapterList, Manga, MangaAttributes
+    ChapterList, Manga, MangaAttributes, LatestChapter
 
 
 class Database:
@@ -65,6 +65,16 @@ class Database:
         cursor.execute("""CREATE TABLE IF NOT EXISTS cover_art_small(
             muuid CHAR(36) NOT NULL primary key,
             data BLOB NOT NULL
+        )""")
+
+
+        cursor.execute("""CREATE TABLE IF NOT EXISTS latest_chapter (
+            muuid CHAR(36) NOT NULL primary key,
+            latest_chapter CHAR(36) NOT NULL,
+            createdAt TEXT NOT NULL, -- ISO 8601 Date-Time as TEXT
+            updatedAt TEXT NOT NULL, -- ISO 8601 Date-Time as TEXT
+            volume TEXT,
+            chapter TEXT
         )""")
 
         cursor.execute("""
@@ -293,6 +303,30 @@ class Database:
 
         return _next, prev
 
+    def get_latest_chapters(self) -> Optional[List[LatestChapter]]:
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM latest_chapter")
+        chapters = cursor.fetchall()
+        cursor.close()
+        if chapters:
+            return [LatestChapter(*chapter) for chapter in chapters]
+        return None
+
+    def get_latest_chapter(self, muuid: str) -> Optional[LatestChapter]:
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM latest_chapter WHERE muuid=:muuid", {"muuid": muuid})
+        chapter = cursor.fetchone()
+        cursor.close()
+        if chapter:
+            return LatestChapter(*chapter)
+        return None
+
+    def set_latest_chapter(self, chapter: LatestChapter) -> None:
+        cursor = self.conn.cursor()
+        data = [value for value in asdict(chapter).values()]
+        cursor.execute("REPLACE INTO latest_chapter VALUES (?, ?, ?, ?, ?, ?)", data)
+        self.conn.commit()
+        cursor.close()
 
 if __name__ == "__main__":
     db = Database()
