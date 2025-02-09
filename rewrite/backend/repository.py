@@ -167,7 +167,7 @@ class MangaRepository:
 
     @perf_test
     def get_updates(self, limit, offset):
-        # TODO: Store
+        # TODO: Store in db
         sync_list_uuid, _ = self.connection.get_sync_list()
         feed = self.connection.get_custom_list_feed(sync_list_uuid, limit, offset)
         if feed is None:

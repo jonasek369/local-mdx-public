@@ -575,7 +575,7 @@ class MangadexConnection:
             return -1
         req = self.safe_request("GET", f"{self.API}/list/{custom_list_id}/feed",
                                 headers=self.credentials_manager.get_header_token(),
-                                params={"limit": limit, "offset": offset})
+                                params={"limit": limit, "offset": offset, "order[updatedAt]": "desc"})
         if req and req.status_code != 200:
             self.logger.log(error, f"API returned result {req.status_code} while getting feed")
             return None

@@ -82,12 +82,20 @@
             text-overflow: clip;
         }
 
+        .chapter-update.hidden-chapter {
+            display: none !important;
+        }
 	</style>
+	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
 </head>
 <body>
 <button class="button" onClick="window.location.href='/';">Back</button>
-<div id="updates">
+<div class="container py-4">
+	<h1 class="mb-4">Updates</h1>
+	<div id="updates-container"></div>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <div>
 	<button class="button" onclick="change_page(-1)">&larr;</button>
 	<a id="page-counter">1</a>
@@ -115,8 +123,162 @@
         fetch(`/updates/data?limit=32&offset=${page * 32}`, {
             method: "GET",
         }).then(res => res.json()).then(data => {
-            console.log(data);
-		})
+            const container = document.getElementById('updates-container');
+            while (container.hasChildNodes()) {
+                container.removeChild(container.lastChild);
+            }
+            createUpdateElement(data)
+        })
+    }
+
+    function getMuuidFromChapter(chapter) {
+        for (let relationship of chapter.relationships) {
+            if (relationship.type === "manga") {
+                return relationship.id
+            }
+        }
+        throw Error(`Chapter ${chapter.id} not found`)
+    }
+
+    async function createUpdateElement(chapterList) {
+        // Group chapters by their manga UUID
+        const chaptersByManga = {};
+        chapterList.data.forEach(chapter => {
+            const muuid = getMuuidFromChapter(chapter);
+            if (!chaptersByManga[muuid]) {
+                chaptersByManga[muuid] = [];
+            }
+            chaptersByManga[muuid].push(chapter);
+        });
+
+        // Get the container in which to render the update elements
+        const container = document.getElementById('updates-container');
+
+        // Iterate over each manga group
+        for (const muuid in chaptersByManga) {
+            const chapters = chaptersByManga[muuid];
+
+            // Fetch the manga attributes (for example, to get the title)
+            const response = await fetch("/manga/" + muuid + "/attributes");
+            const attributes = await response.json(); // assume attributes has a 'title' field
+
+            // Create the main update container
+            const updateDiv = document.createElement('div');
+            updateDiv.classList.add('mb-4', 'p-4', 'border', 'rounded', 'shadow', 'bg-white', 'd-flex', 'gap-3');
+
+            // Create and append the cover image
+            const coverImage = document.createElement('img');
+            coverImage.src = "/manga/cover/" + muuid + "?small=1";
+            coverImage.alt = `${attributes.title.en} Cover`;
+            coverImage.classList.add('img-fluid');
+            coverImage.style.width = "100px";
+            coverImage.style.height = "150px";
+            updateDiv.appendChild(coverImage);
+
+            // Create container for text and chapter updates
+            const textContent = document.createElement('div');
+            textContent.classList.add('flex-grow-1');
+
+            // Add the manga title
+            const titleEl = document.createElement('h2');
+            titleEl.classList.add('h5');
+            titleEl.textContent = attributes.title.en;
+            textContent.appendChild(titleEl);
+
+            // Create a container for the chapter updates
+            const chaptersContainer = document.createElement('div');
+
+            // Create a chapter element for each chapter in this manga group
+            chapters.forEach((chapter, index) => {
+                const chapterDiv = document.createElement('div');
+                chapterDiv.classList.add(
+                    'chapter-update',
+                    'mt-2',
+                    'p-2',
+                    'border',
+                    'rounded',
+                    'bg-light',
+                    'd-flex',
+                    'justify-content-between'
+                );
+                // If there are more than three chapters, initially hide the ones beyond index 2
+                if (index >= 3) {
+                    chapterDiv.classList.add('hidden-chapter');
+                }
+
+                // Left side: chapter information
+                const leftContent = document.createElement('div');
+
+                // Language indicator
+                const langSpan = document.createElement('span');
+                langSpan.classList.add('fw-bold');
+                langSpan.textContent = chapter.attributes.translatedLanguage;
+                leftContent.appendChild(langSpan);
+
+                // Chapter details (volume, chapter, and title)
+                const chapterInfo = document.createElement('p');
+                chapterInfo.classList.add('mb-1');
+                const volText = chapter.attributes.volume ? `Vol. ${chapter.attributes.volume}` : "";
+                const chText = chapter.attributes.chapter ? `Ch. ${chapter.attributes.chapter}` : "";
+                const separator = (volText && chText) ? " " : "";
+                const chapTitle = chapter.attributes.title || "";
+                chapterInfo.textContent = `${volText}${separator}${chText} - ${chapTitle}`;
+                leftContent.appendChild(chapterInfo);
+
+                // Uploader and creation time (or any other info you need)
+                const uploaderInfo = document.createElement('small');
+                uploaderInfo.classList.add('text-muted');
+                uploaderInfo.textContent = `${chapter.attributes.uploader || "Unknown"} • ${chapter.attributes.createdAt}`;
+                leftContent.appendChild(uploaderInfo);
+
+                // Right side: additional chapter data (for example, page count)
+                const rightContent = document.createElement('div');
+                rightContent.classList.add('text-muted', 'd-flex', 'align-items-center', 'gap-2');
+                const pagesIcon = document.createElement('i');
+                pagesIcon.classList.add('fas', 'fa-file');
+                rightContent.appendChild(pagesIcon);
+                const pagesSpan = document.createElement('span');
+                pagesSpan.textContent = chapter.attributes.pages;
+                rightContent.appendChild(pagesSpan);
+
+                // Assemble the chapter update
+                chapterDiv.appendChild(leftContent);
+                chapterDiv.appendChild(rightContent);
+                chaptersContainer.appendChild(chapterDiv);
+            });
+
+            textContent.appendChild(chaptersContainer);
+
+            // If there are more than three chapters, add a "Show All" button
+            if (chapters.length > 3) {
+                const showAllBtn = document.createElement('button');
+                showAllBtn.classList.add('btn', 'btn-link', 'p-0', 'mt-2');
+                showAllBtn.textContent = 'Show All';
+
+                let isExpanded = false;
+                showAllBtn.addEventListener('click', () => {
+                    if (!isExpanded) {
+                        // Show all hidden chapters
+                        chaptersContainer
+                            .querySelectorAll('.chapter-update.hidden-chapter')
+                            .forEach(chap => chap.classList.remove('hidden-chapter'));
+                        showAllBtn.textContent = 'Show Less';
+                        isExpanded = true;
+                    } else {
+                        // Hide chapters beyond the first three again
+                        chaptersContainer.querySelectorAll('.chapter-update').forEach((chap, idx) => {
+                            if (idx >= 3) chap.classList.add('hidden-chapter');
+                        });
+                        showAllBtn.textContent = 'Show All';
+                        isExpanded = false;
+                    }
+                });
+                textContent.appendChild(showAllBtn);
+            }
+
+            updateDiv.appendChild(textContent);
+            container.appendChild(updateDiv);
+        }
     }
 
     update_page()

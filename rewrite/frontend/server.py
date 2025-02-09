@@ -92,6 +92,14 @@ def get_manga_info(mangauuid):
         chapters[cuuid] = {"title": title, "volume": volume, "chapter": chapter}
     return jsonify(chapters)
 
+@server.route("/manga/<mangauuid>/attributes")
+def manga_attributes(mangauuid):
+    attributes = repository.get_manga_attributes(mangauuid)
+    if not attributes:
+        raise Exception("Could not fetch atrributes")
+    return asdict(attributes)
+
+
 
 @server.route("/page-image/<identifier>/<page>")
 def get_chapter_image(identifier, page):

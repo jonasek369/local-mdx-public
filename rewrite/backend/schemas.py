@@ -183,6 +183,7 @@ class MangaList:
     offset: int
     total: int
 
+
 @dataclass
 class CustomListAttributes:
     name: str
@@ -197,11 +198,13 @@ class CustomList:
     attributes: CustomListAttributes
     relationships: List[Relationship]
 
+
 @dataclass
 class CustomListResponse:
     result: str
     response: str
     data: List[CustomList]
+
 
 # Custom schema
 
