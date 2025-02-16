@@ -1,59 +1,29 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-	<meta charset="UTF-8">
-	<title>Title</title>
-	<style>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <style>
         body {
+            margin: 0;
+            padding: 0;
             background-color: #333333;
-        }
-
-        .page-content {
             display: flex;
-            justify-content: center;
-            align-items: flex-start;
-            height: 100vh; /* Adjust the height as needed */
+            flex-direction: column;
+            align-items: center;
+            overflow: auto;
         }
 
-        .page-content img {
-            object-fit: cover;
-            max-width: 100%;
-            max-height: 100%;
-            width: 550px;
-        }
-
-        .button {
-            display: inline-block;
-            padding: 8px 16px;
-            font-size: 14px;
-            font-weight: bold;
-            text-decoration: none;
-            background-color: #4CAF50;
-            color: #fff;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-
-        .button:hover {
-            background-color: #45a049;
-        }
-
-        .button:active {
-            background-color: #3e8e41;
-        }
-
+        /* Page header box */
         #page-header {
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-left: calc(50% - 100px);
-            margin-bottom: 50px;
+            margin: 20px 0;
             width: 200px;
             height: 50px;
             text-align: center;
             color: #333333;
-            text-decoration: none;
             background-color: #f2f2f2;
             border: 2px solid #999999;
             font-size: 30px;
@@ -61,18 +31,62 @@
             font-family: sans-serif;
         }
 
+        /* Back button */
+        .button {
+            display: inline-block;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            text-decoration: none;
+            background-color: hsl(12.25 100% 62.55%);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+        }
+
+        .button:hover {
+            background-color: hsl(12.5 77.06% 57.25%);
+        }
+
+        .button:active {
+            background-color: hsl(12.09 52.23% 48.43%);
+        }
+
+        /* Image container */
+        .page-content {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            height: 100vh; /* Full viewport height */
+        }
+
+        .page-content img {
+            object-fit: contain;
+            height: 100vh;
+            width: auto;
+            max-width: 100%;
+        }
+
         .hidden {
             visibility: hidden;
             display: none;
             pointer-events: none;
         }
-
-	</style>
+    </style>
 </head>
 <body>
 <button class="button" onClick="window.location.href='/manga/{{muuid}}';">Back</button>
 
+<!-- Page header box -->
 <h1 id="page-header">1/{{ pages }} pages</h1>
+
+<!-- Image container -->
 <div id="content" class="page-content"></div>
 
 <script>
@@ -89,7 +103,7 @@
     let pageCount = {{pages}};
     let page = {{page}};
 
-    // fetches all the pages at once
+    // Fetches all the pages at once
     function full_load() {
         fetch("/page-images/{{cuuid}}")
             .then(response => response.json())
@@ -106,37 +120,18 @@
             });
     }
 
-    /*
-    // this function loads one by one image but because this is local service the overhead of creating multiple
-    // requests and getting one by one from database costs about 8000ms for 100 chapters (to fetch it at once its 500ms)
-    function full_load() {
-        for (let i = 1; i < pageCount + 1; i++) {
-            const img = document.createElement("img");
-
-            img.id = "page-panel";
-            img.src = `/page-image/{{cuuid}}/${i}`;
-            img.classList.add("hidden");
-            content.appendChild(img);
-        }
-
-        page_header.innerHTML = `${page}/${pageCount} pages`;
-        set_page(page);
-    }*/
-
     function set_page(to_page) {
         if (content.children.length === 0) {
-            return
+            return;
         }
         let current_page = content.children.item(page - 1);
         let _set_page = content.children.item(to_page - 1);
 
-
         current_page.classList.add("hidden");
         current_page.removeEventListener("mousedown", handle_click);
-        _set_page.classList.remove("hidden")
+        _set_page.classList.remove("hidden");
         _set_page.addEventListener("mousedown", handle_click);
-        page_header.innerHTML = to_page + "/" + pageCount + " pages"
-
+        page_header.innerHTML = to_page + "/" + pageCount + " pages";
     }
 
     function handle_click(event) {
@@ -204,12 +199,13 @@
         }
     });
 
-    full_load()
-    fetch("/read/next-prev/{{cuuid}}").then(response => response.json()).then(data => {
-            nextChapter = data["next"]
-            prevChapter = data["prev"]
-        }
-    )
+    full_load();
+    fetch("/read/next-prev/{{cuuid}}")
+        .then(response => response.json())
+        .then(data => {
+            nextChapter = data["next"];
+            prevChapter = data["prev"];
+        });
 </script>
 </body>
 </html>

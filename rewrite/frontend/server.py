@@ -92,13 +92,13 @@ def get_manga_info(mangauuid):
         chapters[cuuid] = {"title": title, "volume": volume, "chapter": chapter}
     return jsonify(chapters)
 
+
 @server.route("/manga/<mangauuid>/attributes")
 def manga_attributes(mangauuid):
     attributes = repository.get_manga_attributes(mangauuid)
     if not attributes:
         raise Exception("Could not fetch atrributes")
     return asdict(attributes)
-
 
 
 @server.route("/page-image/<identifier>/<page>")
@@ -327,6 +327,7 @@ def updates_data():
         repository.settings.logger.log(error, "coudnt get updates")
         return {"status": "error"}
     return asdict(_updates)
+
 
 if __name__ == "__main__":
     USE_SERVER = 0

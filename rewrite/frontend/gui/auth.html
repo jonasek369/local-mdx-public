@@ -150,14 +150,14 @@
 
 <script>
     window.token = '{{ token }}';
-    var redirect = "{{ back_redirect }}";
+    let redirect = "{{ back_redirect }}";
 
     function handle_login() {
-        var name = document.getElementById("username").value;
-        var password = document.getElementById("password").value;
-        var client_id = document.getElementById("client-id").value;
-        var client_secret = document.getElementById("client-secret").value;
-        var payload = {
+        let name = document.getElementById("username").value;
+        let password = document.getElementById("password").value;
+        let client_id = document.getElementById("client-id").value;
+        let client_secret = document.getElementById("client-secret").value;
+        let payload = {
             "username": name,
             "password": password,
             "client_id": client_id,

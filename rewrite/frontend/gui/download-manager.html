@@ -6,143 +6,143 @@
 	<title>Download Manager</title>
 	<style>
 
-		body {
-			font-family: 'Inter', sans-serif;
-			background-color: hsl(0 0% 100%);
-			color: hsl(0 0% 14.12%);
-			margin: 0;
-			padding: 20px;
-		}
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: hsl(0 0% 100%);
+            color: hsl(0 0% 14.12%);
+            margin: 0;
+            padding: 20px;
+        }
 
-		h1 {
-			color: hsl(0 0% 14.12%);
-			margin-bottom: 30px;
-		}
+        h1 {
+            color: hsl(0 0% 14.12%);
+            margin-bottom: 30px;
+        }
 
-		.button {
-			display: inline-block;
-			padding: 10px 20px;
-			font-size: 14px;
-			font-weight: bold;
-			text-decoration: none;
-			background-color: hsl(12.25 100% 62.55%);
-			color: hsl(0 0% 14.12%);
-			border: none;
-			border-radius: 4px;
-			cursor: pointer;
-			transition: background-color 0.3s ease;
-			margin-right: 10px;
-		}
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: bold;
+            text-decoration: none;
+            background-color: hsl(12.25 100% 62.55%);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin-right: 10px;
+        }
 
-		.button:hover {
-			background-color: hsl(12.5 77.06% 57.25%);
-		}
+        .button:hover {
+            background-color: hsl(12.5 77.06% 57.25%);
+        }
 
-		.button:active {
-			background-color: hsl(12.09 52.23% 48.43%);
-		}
-
-
-		.table {
-			width: 100%;
-			border-collapse: collapse;
-			margin-bottom: 20px;
-			background-color: #ffffff;
-			box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-			border: 1px solid #e2e8f0;
-		}
-
-		.row {
-			display: flex;
-			justify-content: space-between;
-			padding: 10px;
-			border-bottom: 1px solid #e2e8f0;
-		}
-
-		.row:nth-child(odd) {
-			background-color: #f8fafc;
-		}
-
-		.cell {
-			flex: 1;
-			padding: 10px;
-			text-align: center;
-		}
+        .button:active {
+            background-color: hsl(12.09 52.23% 48.43%);
+        }
 
 
-		fieldset {
-			border: 1px solid #e2e8f0;
-			border-radius: 4px;
-			padding: 10px;
-			margin-bottom: 20px;
-			background-color: #ffffff;
-			box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-		}
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            background-color: #ffffff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e2e8f0;
+        }
 
-		legend {
-			font-weight: bold;
-			color: hsl(0 0% 14.12%);
-		}
+        .row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            border-bottom: 1px solid #e2e8f0;
+        }
 
-		input[type="radio"] {
-			margin-right: 10px;
-		}
+        .row:nth-child(odd) {
+            background-color: #f8fafc;
+        }
 
-		label {
-			margin-right: 15px;
-			color: #64748b;
-		}
+        .cell {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+        }
 
 
-		@media (max-width: 600px) {
-			.row {
-				flex-direction: column;
-				align-items: center;
-			}
+        fieldset {
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 20px;
+            background-color: #ffffff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
 
-			.cell {
-				width: 100%;
-				text-align: left;
-			}
-		}
+        legend {
+            font-weight: bold;
+            color: hsl(0 0% 14.12%);
+        }
+
+        input[type="radio"] {
+            margin-right: 10px;
+        }
+
+        label {
+            margin-right: 15px;
+            color: #64748b;
+        }
+
+
+        @media (max-width: 600px) {
+            .row {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .cell {
+                width: 100%;
+                text-align: left;
+            }
+        }
 	</style>
 </head>
 <body>
-	<button class="button" onClick="window.location.href='/';">Back</button>
-	<h1 id="downloader-state">Download Manager</h1>
+<button class="button" onClick="window.location.href='/';">Back</button>
+<h1 id="downloader-state">Download Manager</h1>
 
-	<!-- Queue Section -->
-	<h1>Queue</h1>
-	<div id="queue" class="table">
-		<div class="row">
-			<div class="cell">File Name</div>
-			<div class="cell">Size</div>
-			<div class="cell">Status</div>
-		</div>
-		<!-- Rows will be dynamically added here -->
+<!-- Queue Section -->
+<h1>Queue</h1>
+<div id="queue" class="table">
+	<div class="row">
+		<div class="cell">File Name</div>
+		<div class="cell">Size</div>
+		<div class="cell">Status</div>
 	</div>
-	<button onclick="start_download()" class="button">Start Download</button>
-	<button onclick="stop_download()" class="button">Stop Download</button>
+	<!-- Rows will be dynamically added here -->
+</div>
+<button onclick="start_download()" class="button">Start Download</button>
+<button onclick="stop_download()" class="button">Stop Download</button>
 
-	<!-- Speed Selection -->
-	<fieldset>
-		<legend>Select Speed</legend>
-		<label><input type="radio" name="speed-change" onchange="change_speed()" id="speed-no-limit"/> No Limit</label>
-		<label><input type="radio" name="speed-change" onchange="change_speed()" id="speed-fast"/> Fast</label>
-		<label><input type="radio" name="speed-change" onchange="change_speed()" id="speed-normal"/> Normal</label>
-		<label><input type="radio" name="speed-change" onchange="change_speed()" id="speed-slow"/> Slow</label>
-	</fieldset>
+<!-- Speed Selection -->
+<fieldset>
+	<legend>Select Speed</legend>
+	<label><input type="radio" name="speed-change" onchange="change_speed()" id="speed-no-limit"/> No Limit</label>
+	<label><input type="radio" name="speed-change" onchange="change_speed()" id="speed-fast"/> Fast</label>
+	<label><input type="radio" name="speed-change" onchange="change_speed()" id="speed-normal"/> Normal</label>
+	<label><input type="radio" name="speed-change" onchange="change_speed()" id="speed-slow"/> Slow</label>
+</fieldset>
 
-	<!-- Currently Downloading Section -->
-	<h1>Currently Downloading</h1>
-	<div id="currently-working-on" class="table">
-		<div class="row">
-			<div class="cell">File Name</div>
-			<div class="cell">Progress</div>
-			<div class="cell">Speed</div>
-		</div>
-		<!-- Rows will be dynamically added here -->
+<!-- Currently Downloading Section -->
+<h1>Currently Downloading</h1>
+<div id="currently-working-on" class="table">
+	<div class="row">
+		<div class="cell">File Name</div>
+		<div class="cell">Progress</div>
+		<div class="cell">Speed</div>
 	</div>
+	<!-- Rows will be dynamically added here -->
+</div>
 <script>
     window.token = '{{ token }}';
 
