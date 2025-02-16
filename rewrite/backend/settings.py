@@ -1,7 +1,9 @@
 import json
+import os
 from dataclasses import dataclass
 from typing import Optional, Callable, List
-from rewrite.backend.utils import Logger
+from rewrite.backend.utils import Logger, warning
+
 
 @dataclass
 class Settings:
@@ -34,6 +36,7 @@ def load_settings() -> Settings:
             Logger(json_settings.get('log_level', 1), json_settings.get('file_logger', False)),
         )
     except FileNotFoundError:
+        Logger().log(warning, f"Could not find settings.json in {os.getcwd()} using default")
         # return default if we cant find the settings
         return Settings(None, ["safe", "suggestive"], [], True, Logger(1, False))
 
@@ -48,6 +51,7 @@ def load_credentials() -> MangadexCredentials:
             credentials.get("client_secret", None),
         )
     except FileNotFoundError:
+        Logger().log(warning, f"Could not find mangadex_account.json in {os.getcwd()} using empty credentials")
         return MangadexCredentials(None, None, None, None)
 
 def credentials_from_json(_json):

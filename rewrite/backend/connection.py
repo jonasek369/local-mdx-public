@@ -315,6 +315,8 @@ class CredentialManager:
         return {"Authorization": f"{self.token['token_type']} {self.token['access_token']}"}
 
     def __refresh_token(self) -> Optional[dict]:
+        if not self.__credentials.is_valid():
+            return None
         self.settings.logger.log(info, "refreshing token")
         response = requests.post("https://auth.mangadex.org/realms/mangadex/protocol/openid-connect/token", data={
             "grant_type": "refresh_token",
@@ -323,7 +325,6 @@ class CredentialManager:
             "client_secret": self.__credentials.clientSecret,
         })
         if response.status_code != 200:
-            print(response.json())
             self.settings.logger.log(error, f"Failed to refresh token check if credentials are valid")
             return None
         token = response.json()
@@ -331,6 +332,8 @@ class CredentialManager:
         return token
 
     def __get_token(self) -> Optional[dict]:
+        if not self.__credentials.is_valid():
+            return None
         self.settings.logger.log(info, "refreshing token")
         response = requests.post("https://auth.mangadex.org/realms/mangadex/protocol/openid-connect/token", data={
             "grant_type": "password",
@@ -340,7 +343,6 @@ class CredentialManager:
             "client_secret": self.__credentials.clientSecret
         })
         if response.status_code != 200:
-            print(response.json())
             self.settings.logger.log(error, f"Failed to get token check if credentials are valid")
             return None
         token = response.json()
@@ -496,9 +498,15 @@ class MangadexConnection:
                 return self.safe_request("GET", coverurl).content
 
     def get_chapter_list(self, identifier: ChapterIdentifier, lang: str = "en") -> Optional[ChapterList]:
-        params = {"manga": identifier, "limit": 100, "offset": 0,
-                  "translatedLanguage[]": lang,
-                  "excludedGroups[]": self.exclude_groups}
+        params = {
+            "manga": identifier,
+            "limit": 100,
+            "offset": 0,
+            "translatedLanguage[]": lang,
+            "excludedGroups[]": self.exclude_groups,
+            "includeEmptyPages": 0,
+            "includeExternalUrl": 0
+        }
         req = self.safe_request("GET", url=f"{self.API}/chapter", params=params)
 
         if req and req.status_code != 200:

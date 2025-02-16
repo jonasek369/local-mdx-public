@@ -2,93 +2,129 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Library</title>
     <style>
-        #content {
-            display: flex;
-            flex-direction: column; /* Stack items vertically */
-            justify-content: center;
-            align-items: center;
-        }
 
-        #content .manga {
-            width: 500px;
-            height: 100px;
-            display: flex;
-            align-items: center;
-            margin-top: 10px;
-            color: #333333;
-            text-decoration: none;
-            background-color: #f2f2f2;
-            border: 2px solid #999999;
-            overflow: hidden;
-        }
-
-        #content .manga img {
-            width: 51px;
-            height: 80px;
-            margin-left: 10px;
-            object-fit: cover;
-            background-size: contain;
-            background-repeat: no-repeat;
-            background-position: center;
-            filter: drop-shadow(0px 0px 5px black);
-        }
-
-        #content .manga .name {
-            align-self: flex-start;
-            margin-top: 10px;
-            margin-left: 5px;
-
-            font-size: 28px;
-            font-weight: bold;
-            font-family: sans-serif;
-
-            white-space: nowrap;
-        }
-
-        #content .manga .description {
-            align-self: flex-start;
-            margin-top: 50px;
-            margin-left: 10px;
-
-            font-size: 16px;
-            font-weight: bold;
-            font-family: sans-serif;
-
-
-            overflow: hidden;
-            text-overflow: clip;
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f9f9f9;
+            color: #333;
         }
 
         .button {
             display: inline-block;
-            padding: 8px 16px;
-            font-size: 14px;
+            padding: 10px 20px;
+            font-size: 16px;
             font-weight: bold;
             text-decoration: none;
-            background-color: #4CAF50;
-            color: #fff;
+            background-color: hsl(12.25 100% 62.55%);
+            color: white;
             border: none;
-            border-radius: 4px;
+            border-radius: 5px;
             cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin: 20px;
         }
 
         .button:hover {
-            background-color: #45a049;
+            background-color: hsl(12.5 77.06% 57.25%);
         }
 
         .button:active {
-            background-color: #3e8e41;
+            background-color: hsl(12.09 52.23% 48.43%);
         }
 
+
+        #content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+
+        .manga {
+            width: 90%;
+            max-width: 600px;
+            height: 150px;
+            display: flex;
+            align-items: center;
+            margin: 15px 0;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .manga:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+        }
+
+        .manga img {
+            width: 80px;
+            height: 120px;
+            margin: 0 20px;
+            object-fit: cover;
+            border-radius: 5px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .manga .details {
+            flex: 1;
+            padding: 10px;
+        }
+
+        .manga .name {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 0;
+            color: #333;
+        }
+
+        .manga .description {
+            font-size: 14px;
+            color: #666;
+            margin: 10px 0 0;
+            line-height: 1.4;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+
+
+        @media (max-width: 600px) {
+            .manga {
+                height: auto;
+                flex-direction: column;
+                align-items: flex-start;
+                padding: 15px;
+            }
+
+            .manga img {
+                margin: 0 0 15px 0;
+            }
+
+            .manga .name {
+                font-size: 20px;
+            }
+
+            .manga .description {
+                font-size: 12px;
+            }
+        }
     </style>
 </head>
 <body>
-<button class="button" onClick="window.location.href='/';">Back</button>
-<div id="content">
-
-</div>
+    <button class="button" onClick="window.location.href='/';">Back</button>
+    <div id="content">
+    </div>
 <script>
     window.token = '{{ token }}';
     var ran = false;

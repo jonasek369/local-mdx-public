@@ -1,7 +1,7 @@
 import json
 import sqlite3
 from dataclasses import asdict
-from typing import List, Optional
+from typing import List, Optional, Set, Tuple
 
 from rewrite.backend.connection import MangaDownloadJobInDatabase
 from rewrite.backend.utils import perf_test
@@ -160,6 +160,13 @@ class Database:
         cursor = self.conn.cursor()
         cursor.execute("INSERT INTO chapter_page VALUES (:p_count, :p_content, :cuuid)",
                        {"p_count": page, "p_content": content, "cuuid": cuuid})
+        self.conn.commit()
+        cursor.close()
+
+    @perf_test
+    def set_chapter_pages(self, batch: List[Tuple[int, bytes, str]]):
+        cursor = self.conn.cursor()
+        cursor.executemany("INSERT INTO chapter_page VALUES (?, ?, ?)", batch)
         self.conn.commit()
         cursor.close()
 

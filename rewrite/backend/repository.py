@@ -25,14 +25,18 @@ class MangaRepository:
         self.credential_manager = CredentialManager(self.settings, load_credentials())
         self.connection = MangadexConnection(self.settings, self.credential_manager)
         self.downloader = MangaDownloader(self.settings)
+        self.cache = {}
 
     def store_downloaded_pages(self, muuid: MangaIdentifier, cuuid: ChapterIdentifier, downloader: MangaDownloader):
         chapter = self.database.get_chapter_attribute(cuuid)
         if not chapter:
             chapter_list = self.connection.get_chapter_list(muuid)
             self.database.set_chapter_attributes(muuid, chapter_list.data)
+        batch = []
         for page, content in enumerate(downloader.finished[muuid][cuuid]):
-            self.database.set_chapter_page(page + 1, content, cuuid)
+            batch.append((page + 1, content, cuuid))
+        self.database.set_chapter_pages(batch)
+        self.settings.logger.log(info, f"Saved {len(batch)} pages")
         del downloader.finished[muuid][cuuid]
 
     def get_manga_attributes(self, identifier: MangaIdentifier) -> Optional[MangaAttributes]:
@@ -53,13 +57,19 @@ class MangaRepository:
         raise NotImplemented("Error")
 
     def get_cover_art(self, identifier: MangaIdentifier, small=False) -> Optional[bytes]:
+        cache_identifier = identifier if not small else identifier + "_SMALL"
+        if cache_identifier in self.cache:
+            return self.cache[cache_identifier]
+
         if small:
             small_cover_art = self.database.get_small_cover_art(identifier)
             if not small_cover_art:
                 fetch_small_cover_art = self.connection.get_cover_art(identifier)
                 if fetch_small_cover_art is not None:
                     self.database.set_small_cover_art(identifier, fetch_small_cover_art)
+                self.cache[cache_identifier] = fetch_small_cover_art
                 return fetch_small_cover_art
+            self.cache[cache_identifier] = small_cover_art
             return small_cover_art
         else:
             cover_art = self.database.get_cover_art(identifier)
@@ -67,7 +77,9 @@ class MangaRepository:
                 fetch_cover_art = self.connection.get_cover_art(identifier)
                 if fetch_cover_art is not None:
                     self.database.set_cover_art(identifier, fetch_cover_art)
+                self.cache[cache_identifier] = fetch_cover_art
                 return fetch_cover_art
+            self.cache[cache_identifier] = cover_art
             return cover_art
 
     def get_chapter_attributes(self, identifier: MangaIdentifier, ids: Optional[dict[str, str]] = None) -> Optional[
@@ -111,7 +123,7 @@ class MangaRepository:
                 if relationship.type == "cover_art":
                     coverurl = f"https://mangadex.org/covers/{manga.id}/" + relationship.attributes["fileName"]
                     if not self.database.get_cover_art(manga.id):
-                        self.database.set_cover_art(manga.id, self.connection.safe_get_request(coverurl).content)
+                        self.database.set_cover_art(manga.id, self.connection.safe_request("GET", coverurl).content)
         if popular is None:
             return popular
         return asdict(popular)["data"]
@@ -141,7 +153,7 @@ class MangaRepository:
         for muuid in latest_chapters_map.keys():
             if muuid not in attribute_map:
                 continue
-            if attribute_map[muuid].latestUploadedChapter != latest_chapters_map[muuid]: # new != old
+            if attribute_map[muuid].latestUploadedChapter != latest_chapters_map[muuid]:  # new != old
                 self.settings.logger.log(info, f"Update happened!")
                 self.settings.logger.log(info, f"{attribute_map[muuid].latestUploadedChapter} released")
 
@@ -159,7 +171,9 @@ class MangaRepository:
                     )
                 )
 
-    def sync_libraries(self, manga_uuids: List[str]=None):
+    def sync_libraries(self, manga_uuids: List[str] = None):
+        if not self.credential_manager.validate_token(self.credential_manager.token):
+            return None
         if not manga_uuids:
             self.connection.sync_custom_list([manga[0] for manga in self.database.all_manga_in_db()])
         else:

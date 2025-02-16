@@ -1,205 +1,190 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-	<title>{{ name }}</title>
-	<style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ name }}</title>
+    <style>
+
         body {
             margin: 0;
             padding: 0;
-            font-family: Arial, sans-serif;
+            font-family: 'Inter', sans-serif;
+            background-color: #ffffff;
+            color: #ffffff;
         }
 
         .container {
             position: relative;
-            height: auto;
+            min-height: 60vh;
             overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.7);
         }
 
         .background-image {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 120%;
-            height: 150%;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             background-image: url("/manga/cover/{{ muuid }}");
             background-size: cover;
-            filter: blur(5px);
+            background-position: center;
+            filter: blur(10px) brightness(0.6);
+            z-index: -1;
+            transform: scale(1);
         }
 
         .content {
             position: relative;
             z-index: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            height: 100%;
+            text-align: center;
             padding: 20px;
-            color: #fff;
+            max-width: 800px;
+            width: 100%;
         }
 
         .logo {
-            display: flex;
-            width: 200px;
-            height: 200px;
+            width: 300px;
+            height: 300px;
             background-image: url("/manga/cover/{{ muuid }}");
-            background-size: contain;
-            background-repeat: no-repeat;
+            background-size: cover;
             background-position: center;
-            align-items: center;
-            margin-bottom: 20px;
-            filter: drop-shadow(0px 0px 20px black);
+            border-radius: 15px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+            margin: 0 auto 20px;
+            transition: transform 0.3s ease;
         }
 
+        .logo:hover {
+            transform: scale(1.05);
+        }
 
         .manga-name {
             font-size: 48px;
-            text-align: center;
+            font-weight: bold;
             margin-bottom: 20px;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8);
         }
 
         .manga-description {
-            font-size: 24px;
-            text-align: center;
-            margin-bottom: 20px;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            font-size: 20px;
+            line-height: 1.6;
+            margin-bottom: 30px;
+            text-shadow: 1px 1px 4px rgba(0, 0, 0, 0.8);
+        }
+
+        .button-group {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 30px;
         }
 
         .button {
             display: inline-block;
-            padding: 8px 16px;
-            margin-top: 4px;
-            font-size: 14px;
+            padding: 12px 24px;
+            font-size: 16px;
             font-weight: bold;
             text-decoration: none;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+        }
+
+        .button.green {
             background-color: #4CAF50;
-            color: #fff;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
         }
 
-        .button:hover {
+        .button.green:hover {
             background-color: #45a049;
+            transform: translateY(-2px);
         }
 
-        .button:active {
-            background-color: #3e8e41;
-        }
-
-        .red-button {
-            display: inline-block;
-            padding: 8px 16px;
-            margin-top: 4px;
-            font-size: 14px;
-            font-weight: bold;
-            text-decoration: none;
+        .button.red {
             background-color: #af4c4c;
-            color: #fff;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
         }
 
-        .red-button:hover {
+        .button.red:hover {
             background-color: #a04545;
+            transform: translateY(-2px);
         }
-
-        .red-button:active {
-            background-color: #8e3e3e;
-        }
-
-        .image-container {
-            max-width: 500px; /* Set the maximum width you want for the image */
-            max-height: 300px; /* Set the maximum height you want for the image */
-            overflow: hidden; /* Hide any overflowing parts of the image */
-        }
-
-        .image-container img {
-            width: 100%; /* Make the image occupy 100% of the container's width */
-            height: auto; /* Automatically adjust the height to maintain the image's aspect ratio */
-            object-fit: contain; /* Maintain the aspect ratio while fitting the image within the container */
-        }
-
 
         .additional-button {
             position: absolute;
-            top: 10px;
-            left: 10px;
-            padding: 10px;
-            background-color: rgba(0, 0, 0, 0.5);
-            color: #fff;
-            font-size: 14px;
+            top: 0;
+            left: 0;
+            padding: 10px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            text-decoration: none;
+            background-color: hsl(12.25 100% 62.55%);
+            color: white;
             border: none;
             border-radius: 5px;
             cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin: 20px;
+        }
+
+        .additional-button:hover {
+            background-color: hsl(12.5 77.06% 57.25%);
+        }
+
+		.additional-button:active {
+            background-color: hsl(12.09 52.23% 48.43%);
         }
 
         .chapters {
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
+            gap: 10px;
+            margin-top: 30px;
         }
 
         .chapters a {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
+            display: inline-block;
             width: 250px;
-            height: 50px;
-            margin-top: 10px;
-            color: #333333;
+            padding: 12px;
+            text-align: center;
+            color: #333;
             text-decoration: none;
             background-color: #f2f2f2;
-            border: 2px solid #999999;
-            font-size: 20px;
+            border: 2px solid #999;
+            border-radius: 8px;
+            font-size: 18px;
             font-weight: bold;
-            font-family: sans-serif;
+            transition: background-color 0.3s ease, color 0.3s ease;
         }
 
         .chapters a:hover {
             background-color: #dcdcdc;
-            color: #000000;
+            color: #000;
         }
 
         .chapters a.read {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            width: 250px;
-            height: 50px;
-            margin-top: 10px;
-            color: #333333;
-            text-decoration: none;
             background-color: #aaaaaa;
-            border: 2px solid #6e6e6e;
-            font-size: 20px;
-            font-weight: bold;
-            font-family: sans-serif;
+            border-color: #6e6e6e;
         }
 
         .chapters a.read:hover {
             background-color: #505050;
-            color: #000000;
-        }
-
-        .chapters a:hover {
-            background-color: #dcdcdc;
-            color: #000000;
+            color: #000;
         }
 
         .warning-box {
             display: none;
             border: 2px solid #ff9900;
             background-color: #ffeecc;
-            padding: 10px;
-            border-radius: 5px;
-            width: 300px;
+            padding: 15px;
+            border-radius: 8px;
+            max-width: 300px;
             text-align: center;
             margin: 20px auto;
         }
@@ -209,25 +194,54 @@
             font-weight: bold;
         }
 
-	</style>
+
+        @media (max-width: 768px) {
+            .manga-name {
+                font-size: 36px;
+            }
+
+            .manga-description {
+                font-size: 18px;
+            }
+
+            .button {
+                padding: 10px 20px;
+                font-size: 14px;
+            }
+
+            .chapters a {
+                width: 100%;
+                max-width: 250px;
+            }
+
+            .logo {
+                width: 200px;
+                height: 200px;
+            }
+        }
+    </style>
 </head>
 <body>
-<div class="container">
-	<div class="background-image"></div>
-	<div class="content">
-		<button class="additional-button" onClick="window.location.href='{{ back_redirect }}';">Back</button>
-		<div class="logo"></div>
-		<div class="manga-name">{{ name }}</div>
-		<div class="manga-description">{{ description }}</div>
-		<button type="button" onclick="push_job()" class="button">Push manga to download as job</button>
-		<button type="button" onclick="confirm()" class="red-button">Delete manga from database</button>
-	</div>
-</div>
-<br>
-<div class="warning-box" id="warningBox">
-</div>
-<button class="button" id="order" onclick="reverse_div()">Descending</button>
-<div id="content" class="chapters"></div>
+    <div class="container">
+		<button class="additional-button" onclick="window.location.href='{{ back_redirect }}';">Back</button>
+        <div class="background-image"></div>
+        <div class="content">
+            <div class="logo"></div>
+            <h1 class="manga-name">{{ name }}</h1>
+            <p class="manga-description">{{ description }}</p>
+            <div class="button-group">
+                <button type="button" onclick="push_job()" class="button green">Push manga to download as job</button>
+                <button type="button" onclick="confirm()" class="button red">Delete manga from database</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="warning-box" id="warningBox">
+        <p class="warning-text">Warning: This action cannot be undone.</p>
+    </div>
+
+    <button class="button green" id="order" onclick="reverse_div()">Descending</button>
+    <div id="content" class="chapters"></div>
 
 <script>
     window.token = '{{ token }}';

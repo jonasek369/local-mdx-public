@@ -292,7 +292,8 @@ def check_auth():
 
 @server.route("/auth")
 def authorize():
-    return render_template("auth.html")
+    back = request.args.get('from', "/")
+    return render_template("auth.html", back_redirect=back)
 
 
 @server.route("/auth/set-credentials", methods=["POST"])

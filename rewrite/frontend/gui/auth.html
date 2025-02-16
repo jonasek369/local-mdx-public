@@ -5,87 +5,149 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>Login Page</title>
 	<style>
+
         body {
-            font-family: Arial, sans-serif;
-            text-align: center;
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, hsl(0 0% 100%), hsl(200 10.71% 89.02%));
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
             margin: 0;
+            color: #333;
         }
 
-        button {
+
+        .back-button {
             position: absolute;
-            top: 10px;
-            left: 10px;
-            padding: 10px;
-            background-color: rgba(0, 0, 0, 0.5);
-            color: #fff;
+            top: 20px;
+            left: 20px;
+            padding: 10px 20px;
+            background-color: hsl(12.25 100% 62.55%);
+            color: hsl(0 0% 14.12%);
             font-size: 14px;
             border: none;
             border-radius: 5px;
             cursor: pointer;
+            transition: background-color 0.3s ease;
         }
+
+        .back-button:hover {
+            background-color: hsl(12.5 77.06% 57.25%);
+        }
+
+		.back-button:active {
+            background-color: hsl(12.09 52.23% 48.43%);
+        }
+
 
         .container {
-            width: 300px;
-            margin: 0 auto;
-            padding: 20px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            background: #fff;
+            width: 350px;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
             text-align: center;
+            animation: fadeIn 0.5s ease-in-out;
         }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        h2 {
+            margin-bottom: 20px;
+            color: hsl(0 0% 14.12%);
+            font-size: 24px;
+        }
+
 
         input[type="text"], input[type="password"] {
-            width: 80%;
-            padding: 10px;
-            border: 1px solid #ccc;
+            width: 90%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
             border-radius: 5px;
-            display: block;
-            margin: 0 auto;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
         }
+
+        input[type="text"]:focus, input[type="password"]:focus {
+            border-color: hsl(12.25 100% 62.55%);
+            outline: none;
+        }
+
 
         input[type="submit"] {
-            background-color: #4CAF50;
+            width: 100%;
+            padding: 12px;
+            background-color: hsl(12.25 100% 62.55%);
             color: #fff;
             border: none;
             border-radius: 5px;
-            padding: 10px 20px;
+            font-size: 16px;
             cursor: pointer;
+            transition: background-color 0.3s ease;
         }
 
-        .button {
-            background-color: #4CAF50;
-            color: #fff;
-            border: none;
-            border-radius: 5px;
-            padding: 10px 20px;
-            cursor: pointer;
+        input[type="submit"]:hover {
+            background-color: hsl(12.5 77.06% 57.25%);
         }
 
+		input[type="submit"]:active {
+            background-color: hsl(12.09 52.23% 48.43%);
+        }
+
+
+        label {
+            display: block;
+            text-align: left;
+            margin: 10px 0 5px;
+            font-size: 14px;
+            color: #555;
+        }
+
+
+        @media (max-width: 480px) {
+            .container {
+                width: 90%;
+                padding: 20px;
+            }
+
+            h2 {
+                font-size: 20px;
+            }
+        }
 	</style>
 </head>
 <body>
-<button class="button" onclick="document.location.href='{{back_redirect}}'">Back</button>
+<button class="back-button" onclick="document.location.href='{{back_redirect}}'">Back</button>
 <div class="container">
-	<h2>Mangadex app credentials</h2>
-	<label for="username">Username</label>
-	<input type="text" id="username" name="username" required><br>
+	<h2>Mangadex App Credentials</h2>
+	<form onsubmit="handle_login(); return false;">
+		<label for="username">Username</label>
+		<input type="text" id="username" name="username" required>
 
-	<label for="password">Password</label>
-	<input type="password" id="password" name="password" required><br>
+		<label for="password">Password</label>
+		<input type="password" id="password" name="password" required>
 
-	<label for="client-id">Client id</label>
-	<input type="text" id="client-id" name="client-id" required><br>
+		<label for="client-id">Client ID</label>
+		<input type="text" id="client-id" name="client-id" required>
 
-	<label for="client-secret">Client secret</label>
-	<input type="password" id="client-secret" name="client-secret" required><br>
+		<label for="client-secret">Client Secret</label>
+		<input type="password" id="client-secret" name="client-secret" required>
 
-	<input type="submit" value="Save credentials" onclick="handle_login()">
+		<input type="submit" value="Save Credentials">
+	</form>
 </div>
-</body>
+
 <script>
     window.token = '{{ token }}';
     var redirect = "{{ back_redirect }}";
@@ -108,15 +170,12 @@
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(payload)
-        }).then(response => response.json())
-            .then(data => {
+        }).then(response => response.json()).then(data => {
                 if (data.status === 'ok') {
-                    window.location.href = '/';
+                    window.location.href = redirect;
                 }
-            })
-
-
+            });
     }
-
 </script>
+</body>
 </html>

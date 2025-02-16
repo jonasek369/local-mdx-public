@@ -2,85 +2,147 @@
 <html lang="en">
 <head>
 	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>Download Manager</title>
 	<style>
-        .table {
-            display: table;
-            width: 100%;
-            border-collapse: collapse;
-            background-color: #f2f2f2;
-        }
 
-        .row {
-            display: table-row;
-        }
+		body {
+			font-family: 'Inter', sans-serif;
+			background-color: hsl(0 0% 100%);
+			color: hsl(0 0% 14.12%);
+			margin: 0;
+			padding: 20px;
+		}
 
-        .cell {
-            display: table-cell;
-            border: 1px solid #ccc;
-            padding: 10px;
-            text-align: center;
-        }
+		h1 {
+			color: hsl(0 0% 14.12%);
+			margin-bottom: 30px;
+		}
 
-        .row:nth-child(odd) {
-            background-color: #e6e6e6;
-        }
+		.button {
+			display: inline-block;
+			padding: 10px 20px;
+			font-size: 14px;
+			font-weight: bold;
+			text-decoration: none;
+			background-color: hsl(12.25 100% 62.55%);
+			color: hsl(0 0% 14.12%);
+			border: none;
+			border-radius: 4px;
+			cursor: pointer;
+			transition: background-color 0.3s ease;
+			margin-right: 10px;
+		}
 
-        .cell:first-child {
-            border-left: none;
-        }
+		.button:hover {
+			background-color: hsl(12.5 77.06% 57.25%);
+		}
 
-        .cell:last-child {
-            border-right: none;
-        }
+		.button:active {
+			background-color: hsl(12.09 52.23% 48.43%);
+		}
 
-        .row:last-child .cell {
-            border-bottom: none;
-        }
 
-        .button {
-            display: inline-block;
-            padding: 8px 16px;
-            font-size: 14px;
-            font-weight: bold;
-            text-decoration: none;
-            background-color: #4CAF50;
-            color: #fff;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
+		.table {
+			width: 100%;
+			border-collapse: collapse;
+			margin-bottom: 20px;
+			background-color: #ffffff;
+			box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+			border: 1px solid #e2e8f0;
+		}
 
-        .button:hover {
-            background-color: #45a049;
-        }
+		.row {
+			display: flex;
+			justify-content: space-between;
+			padding: 10px;
+			border-bottom: 1px solid #e2e8f0;
+		}
 
-        .button:active {
-            background-color: #3e8e41;
-        }
+		.row:nth-child(odd) {
+			background-color: #f8fafc;
+		}
+
+		.cell {
+			flex: 1;
+			padding: 10px;
+			text-align: center;
+		}
+
+
+		fieldset {
+			border: 1px solid #e2e8f0;
+			border-radius: 4px;
+			padding: 10px;
+			margin-bottom: 20px;
+			background-color: #ffffff;
+			box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+		}
+
+		legend {
+			font-weight: bold;
+			color: hsl(0 0% 14.12%);
+		}
+
+		input[type="radio"] {
+			margin-right: 10px;
+		}
+
+		label {
+			margin-right: 15px;
+			color: #64748b;
+		}
+
+
+		@media (max-width: 600px) {
+			.row {
+				flex-direction: column;
+				align-items: center;
+			}
+
+			.cell {
+				width: 100%;
+				text-align: left;
+			}
+		}
 	</style>
 </head>
 <body>
-<button class="button" onClick="window.location.href='/';">Back</button>
-<h1 id="downloader-state"></h1>
+	<button class="button" onClick="window.location.href='/';">Back</button>
+	<h1 id="downloader-state">Download Manager</h1>
 
-<h1>Queue</h1>
-<div id="queue" class="table">
-</div>
-<button onclick="start_download()" class="button">Start download</button>
-<button onclick="stop_download()" class="button">Stop download</button>
-<fieldset>
-	<legend>Select speed</legend>
-	<input type="radio" name="speed-change" onchange="change_speed()" id="speed-no-limit"/><a>No limit</a>
-	<input type="radio" name="speed-change" onchange="change_speed()" id="speed-fast"/><a>Fast</a>
-	<input type="radio" name="speed-change" onchange="change_speed()" id="speed-normal"/><a>Normal</a>
-	<input type="radio" name="speed-change" onchange="change_speed()" id="speed-slow"/><a>Slow</a>
-</fieldset>
+	<!-- Queue Section -->
+	<h1>Queue</h1>
+	<div id="queue" class="table">
+		<div class="row">
+			<div class="cell">File Name</div>
+			<div class="cell">Size</div>
+			<div class="cell">Status</div>
+		</div>
+		<!-- Rows will be dynamically added here -->
+	</div>
+	<button onclick="start_download()" class="button">Start Download</button>
+	<button onclick="stop_download()" class="button">Stop Download</button>
 
-<h1>Currently downloading</h1>
-<div id="currently-working-on" class="table">
-</div>
+	<!-- Speed Selection -->
+	<fieldset>
+		<legend>Select Speed</legend>
+		<label><input type="radio" name="speed-change" onchange="change_speed()" id="speed-no-limit"/> No Limit</label>
+		<label><input type="radio" name="speed-change" onchange="change_speed()" id="speed-fast"/> Fast</label>
+		<label><input type="radio" name="speed-change" onchange="change_speed()" id="speed-normal"/> Normal</label>
+		<label><input type="radio" name="speed-change" onchange="change_speed()" id="speed-slow"/> Slow</label>
+	</fieldset>
 
+	<!-- Currently Downloading Section -->
+	<h1>Currently Downloading</h1>
+	<div id="currently-working-on" class="table">
+		<div class="row">
+			<div class="cell">File Name</div>
+			<div class="cell">Progress</div>
+			<div class="cell">Speed</div>
+		</div>
+		<!-- Rows will be dynamically added here -->
+	</div>
 <script>
     window.token = '{{ token }}';
 
@@ -174,12 +236,6 @@
 
     function stop_download() {
         doAjax("/manga/download/stop", "GET", null);
-
-        /*if(currently_working_updater != null){
-            window.clearInterval(currently_working_updater);
-        }else{
-
-        }*/
     }
 
     function status_handler(response) {

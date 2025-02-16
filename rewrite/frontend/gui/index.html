@@ -4,115 +4,246 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Lmdx</title>
+	<title>Lmdx - Manga Reader</title>
 	<style>
+
         body {
             margin: 0;
-            font-family: Arial, sans-serif;
+            font-family: 'Inter', sans-serif;
+            background-color: hsl(0 0% 100%);
+            color: hsl(0 0% 14.12%);
         }
 
+
         .navbar {
-            background-color: #333;
-            overflow: hidden;
+            background-color: hsl(210 7.14% 94.51%);
+            padding: 1rem 2rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
+
+        .navbar .button {
+            background-color: hsl(12.25 100% 62.55%);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+
+        .navbar .button:hover {
+            background-color: hsl(12.5 77.06% 57.25%);
+        }
+
+        .navbar .button:active {
+            background-color: hsl(12.09 52.23% 48.43%);
+        }
+
 
         .search-container {
             flex: 1;
-            display: flex;
-            justify-content: center;
+            max-width: 600px;
+            margin: 0 2rem;
+            position: relative;
         }
 
-        .search-container input[type=text] {
-            padding: 10px;
-            margin: 0;
-            width: 70%;
-            border: none;
-            border-radius: 5px 0 0 5px;
+        .search-container input[type="text"] {
+            width: 100%;
+            padding: 0.5rem 1rem;
+            border: 2px solid #cbd5e1;
+            border-radius: 0.375rem;
+            outline: none;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+        }
+
+        .search-container input[type="text"]:focus {
+            border-color: hsl(12.25 100% 62.55%);
         }
 
         .search-container button {
-            padding: 10px 20px;
-            background-color: #4CAF50;
+            position: absolute;
+            right: 0;
+            top: 0;
+            height: 100%;
+            padding: 0 1rem;
+            background-color: hsl(12.25 100% 62.55%);
             color: white;
             border: none;
-            border-radius: 0 5px 5px 0;
+            border-radius: 0 0.375rem 0.375rem 0;
             cursor: pointer;
+            transition: background-color 0.2s;
         }
 
         .search-container button:hover {
-            background-color: #45a049;
-        }
-
-        .search-container button:active {
-            background-color: #3e8e41;
-        }
-
-        .login-container {
-            display: flex;
-            align-items: center;
+            background-color: hsl(12.5 77.06% 57.25%);
         }
 
         .login-button {
-            padding: 10px 20px;
-            background-color: #f44336;
+            background-color: hsl(0 100% 62.55%);
             color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+
+        .login-button:hover {
+            background-color: hsl(0 70.54% 43.92%);
+        }
+
+
+        .main-content {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+
+        .manga-card {
+            background-color: white;
+			height: 400px;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            padding: 1.5rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .manga-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .manga-card img {
+            width: 200px;
+            height: 280px;
+            object-fit: cover;
+            border-radius: 0.375rem;
+            margin-right: 1.5rem;
+        }
+
+        .manga-card h3 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .manga-card .genre-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .manga-card .genre-tags span {
+            background-color: #e2e8f0;
+            color: #1e293b;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+        }
+
+        .manga-card .description {
+            color: hsl(0 0% 14.12%);
+            font-size: 0.875rem;
+            line-height: 1.5;
+            margin-bottom: 1rem;
+        }
+
+        .manga-card .authors {
+            color: hsl(0 0% 14.12%);
+            font-style: italic;
+            font-size: 0.875rem;
+        }
+
+
+        .navigation-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 1.5rem;
+        }
+
+        .navigation-controls button {
+            background-color: hsl(200 10.71% 89.02%);
+            color: hsl(0 0% 14.12%);
+            padding: 0.5rem 1rem;
             border: none;
-            border-radius: 5px;
+            border-radius: 0.375rem;
             cursor: pointer;
+            transition: background-color 0.2s;
         }
 
-        .button {
-            display: inline-block;
-            padding: 8px 16px;
-            font-size: 14px;
-            font-weight: bold;
-            text-decoration: none;
-            background-color: #4CAF50;
-            color: #fff;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
+        .navigation-controls button:hover {
+            background-color: #cbd5e1;
         }
 
-        .button:hover {
-            background-color: #45a049;
+        .navigation-controls span {
+            font-size: 1rem;
+            color: #64748b;
         }
 
-        .button:active {
-            background-color: #3e8e41;
-        }
 
-        /* Responsive styles */
-        @media screen and (max-width: 600px) {
-            .search-container input[type=text] {
-                width: 100%;
+        @media (max-width: 768px) {
+            .manga-card {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .manga-card img {
+                margin-right: 0;
+                margin-bottom: 1rem;
+            }
+
+            .search-container {
+                margin: 0 1rem;
             }
         }
 
         .search-results-dropdown {
             display: none;
             position: absolute;
-            background-color: #f9f9f9;
-            min-width: 50%;
-            box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
-            z-index: 1;
-            margin-top: 35px;
-
+            background-color: white;
+            width: 100%;
+            max-height: 300px;
+            overflow-y: auto;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+            border-radius: 0.375rem;
+            z-index: 1000;
+            margin-top: 0.5rem;
+            border: 1px solid #e2e8f0;
         }
 
         .search-results-dropdown a {
-            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            padding: 0.75rem;
             text-decoration: none;
-            display: block;
-            color: black;
+            color: #1e293b;
+            border-bottom: 1px solid #e2e8f0;
+            transition: background-color 0.2s;
         }
 
         .search-results-dropdown a:hover {
-            background-color: #f1f1f1;
+            background-color: #f8fafc;
+        }
+
+        .search-results-dropdown img {
+            width: 51px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 0.25rem;
+            margin-right: 1rem;
+        }
+
+        .search-results-dropdown span {
+            font-size: 0.875rem;
+            font-weight: 500;
         }
 
 	</style>
@@ -120,55 +251,56 @@
 </head>
 
 <body>
+<!-- Navbar -->
 <div class="navbar">
-	<button onClick="redirect_to_download_manager()" class="button">Download manager</button>
-	<button onClick="redirect_to_library()" class="button">Library</button>
-	<button onClick="redirect_to_updates()" class="button">Updates</button>
+	<div class="flex gap-2">
+		<button onClick="redirect_to_download_manager()" class="button">Download Manager</button>
+		<button onClick="redirect_to_library()" class="button">Library</button>
+		<button onClick="redirect_to_updates()" class="button">Updates</button>
+	</div>
 
 	<div class="search-container">
-		<input type="text" id="searchInput" placeholder="Search...">
+		<input type="text" id="searchInput" placeholder="Search manga..." oninput="searchManga()">
 		<button type="submit" onclick="searchManga()">Search</button>
 		<div class="search-results-dropdown" id="searchResultsDropdown"></div>
 	</div>
+
 	{% block content %}
 	{% if login == 1 %}
 	<button class="login-button">{{ name }}</button>
 	{% else %}
-	<div class="login-container">
-		<button onClick="document.location.href='/auth?from=/'" class="login-button"></button>
-	</div>
+	<button onClick="document.location.href='/auth?from=/'" class="login-button">Login</button>
 	{% endif %}
 	{% endblock content %}
 </div>
 
-<div class="max-w-4xl mx-auto bg-white shadow-lg rounded-lg p-6">
-	<h2 class="text-xl font-semibold text-gray-700">Popular New Titles</h2>
+<!-- Main Content -->
+<div class="main-content">
+	<h2 class="text-2xl font-bold mb-4">Popular New Titles</h2>
 
-	<div class="mt-4 flex items-center space-x-6 h-[400px]" onclick="to_manga()">
-		<!-- Book Cover -->
-		<img src="" alt="Book Cover" class="w-[193px] h-[276px] object-cover rounded-lg shadow-md" id="cover-art">
-
-		<!-- Book Details -->
+	<!-- Manga Card -->
+	<div class="manga-card" onclick="to_manga()">
+		<img src="" alt="Book Cover" id="cover-art">
 		<div>
-			<h3 class="text-2xl font-bold" id="manga-title">Sample Title</h3>
-
-			<!-- Dynamic Genre Tags -->
-			<ul id="genre-tags" class="flex space-x-2 mt-2">
-
-			</ul>
-
-			<p class="mt-2 text-gray-700 text-sm h-[200px] overflow-hidden" id="description">
-				Sample Description
+			<h3 id="manga-title">Sample Title</h3>
+			<div class="genre-tags" id="genre-tags">
+				<span>Action</span>
+				<span>Adventure</span>
+				<span>Fantasy</span>
+			</div>
+			<p class="description" id="description">
+				Sample Description: Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nulla vel justo nec
+				libero tincidunt aliquet.
 			</p>
-			<p class="mt-3 italic text-gray-500" id="authors">Sample Author</p>
+			<p class="authors" id="authors">Sample Author</p>
 		</div>
 	</div>
 
 	<!-- Navigation Controls -->
-	<div class="flex justify-between items-center mt-4">
-		<button class="bg-gray-200 px-3 py-1 rounded-lg text-gray-700" id="manga-sub">&larr;</button>
-		<span class="text-gray-600" id="number">NO. 7</span>
-		<button class="bg-gray-200 px-3 py-1 rounded-lg text-gray-700" id="manga-add">&rarr;</button>
+	<div class="navigation-controls">
+		<button id="manga-sub">&larr; Previous</button>
+		<span id="number">NO. 7</span>
+		<button id="manga-add">Next &rarr;</button>
 	</div>
 </div>
 
@@ -198,40 +330,54 @@
     function searchManga() {
         var searchResultsDropdown = document.getElementById("searchResultsDropdown");
 
+        // Clear previous results
         while (searchResultsDropdown.firstChild) {
             searchResultsDropdown.removeChild(searchResultsDropdown.firstChild);
         }
 
         // Display search results dropdown
         searchResultsDropdown.style.display = "block";
+
+        // Fetch search results
         fetch("/search/manga", {
             method: "POST",
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({searchTerm: document.getElementById('searchInput').value})
-        }).then(response => response.json())
+        })
+            .then(response => response.json())
             .then(data => {
-                data.forEach(function (result) {
-                    console.log(result)
-                    var resultItem = document.createElement("a");
-                    resultItem.href = "/manga/" + result["id"];
-                    var image = document.createElement("img");
-                    image.src = "/manga/cover/" + result["id"] + "?small=1";
-                    image.alt = "Result Image";
-                    image.width = 51;
-                    image.height = 80;
+                if (data.length === 0) {
+                    // If no results, show a message
+                    var noResults = document.createElement("div");
+                    noResults.textContent = "No results found.";
+                    noResults.style.padding = "0.75rem";
+                    noResults.style.color = "#64748b";
+                    searchResultsDropdown.appendChild(noResults);
+                } else {
+                    // Populate dropdown with results
+                    data.forEach(function (result) {
+                        var resultItem = document.createElement("a");
+                        resultItem.href = "/manga/" + result["id"];
 
-                    var text = document.createElement("span");
-                    text.textContent = result["attributes"]["title"]["en"];
+                        var image = document.createElement("img");
+                        image.src = "/manga/cover/" + result["id"] + "?small=1";
+                        image.alt = "Result Image";
+                        image.width = 51;
+                        image.height = 80;
 
-                    resultItem.appendChild(image);
-                    resultItem.appendChild(text);
-                    searchResultsDropdown.appendChild(resultItem);
-                });
+                        var text = document.createElement("span");
+                        text.textContent = result["attributes"]["title"]["en"];
+
+                        resultItem.appendChild(image);
+                        resultItem.appendChild(text);
+                        searchResultsDropdown.appendChild(resultItem);
+                    });
+                }
             })
             .catch(error => {
-                console.error('Error:', error); // Handle any errors here
+                console.error('Error:', error);
             });
     }
 
@@ -256,14 +402,14 @@
         cache_cover_art()
         updateManga()
     })
-	fetch("/auth/check").then(response => response.json()).then(data => {
+    fetch("/auth/check").then(response => response.json()).then(data => {
         const login_button = document.getElementsByClassName("login-button")[0]
-		if(data.auth_status === "ok"){
+        if (data.auth_status === "ok") {
             login_button.innerText = "Logged in"
-		}else{
+        } else {
             login_button.innerText = "Missing credentials"
-		}
-	})
+        }
+    })
     document.getElementById('manga-sub').addEventListener('click', (event) => {
         currentIndex = currentIndex - 1;
         if (currentIndex <= 0) {
