@@ -1,14 +1,19 @@
+import asyncio
 import base64
+import copy
 import json
 import os
+import time
 from dataclasses import asdict
 
+from adodbapi import connect
 from werkzeug.exceptions import UnsupportedMediaType
 
 from rewrite.backend.connection import MangaDownloadJob, DownloaderState, save_credentials
 from rewrite.backend.repository import MangaRepository
+from rewrite.backend.schemas import COVER_ART_MAX_SIZE, COVER_ART_256_SIZE, COVER_ART_512_SIZE
 from rewrite.backend.settings import credentials_from_json
-from rewrite.backend.utils import is_valid_uuid, info, error
+from rewrite.backend.utils import is_valid_uuid, info, error, get_correct_language
 
 try:
     import webview
@@ -20,10 +25,7 @@ except ImportError:
 
 
     webview = wv()
-
 from flask import Flask, jsonify, render_template, request, make_response
-
-from gzip import compress
 
 gui_dir = os.path.join(os.getcwd(), 'gui')
 
@@ -59,17 +61,18 @@ def search():
 
 @server.route("/manga/cover/<identifier>")
 def get_cover_art(identifier):
-    small = request.args.get('small', 0)
-    if small and small.isdigit():
-        small = int(small)
-    image_binary = repository.get_cover_art(identifier, bool(small))
+    size = request.args.get('size', 0)
+    if size and size.isdigit():
+        size = int(size)
+    if size not in [COVER_ART_MAX_SIZE, COVER_ART_256_SIZE, COVER_ART_512_SIZE]:
+        size = COVER_ART_MAX_SIZE
+    image_binary = repository.get_cover_art(identifier, size)
     if image_binary is not None:
-        response = make_response(compress(image_binary))
+        response = make_response(image_binary)
         response.headers.set('Content-Type', 'image/jpeg')
         response.headers.set('Content-Disposition', 'inline', filename=f'{identifier}.jpg')
-        response.headers.set("Content-Encoding", "gzip")
         return response
-    return "Error: no image found"
+    return "Error: no image found", 404
 
 
 @server.route("/manga/<mangauuid>", methods=["GET"])
@@ -79,8 +82,8 @@ def server_manga(mangauuid):
     manga = repository.get_manga_attributes(mangauuid)
     return render_template("manga.html",
                            muuid=mangauuid,
-                           name=manga.title["en"],
-                           description=manga.description["en"],
+                           name=get_correct_language(manga.title, repository.settings),
+                           description=get_correct_language(manga.description, repository.settings),
                            back_redirect=back)
 
 
@@ -107,10 +110,9 @@ def get_chapter_image(identifier, page):
         return "Error: page is not an number"
     image_binary = repository.database.get_page(identifier, int(page))
     if image_binary is not None:
-        response = make_response(compress(image_binary))
+        response = make_response(image_binary)
         response.headers.set('Content-Type', 'image/jpeg')
         response.headers.set('Content-Disposition', 'inline', filename=f'{identifier}-{page}.png')
-        response.headers.set("Content-Encoding", "gzip")
         return response
     return "Error: no image found"
 
@@ -118,13 +120,18 @@ def get_chapter_image(identifier, page):
 @server.route("/page-images/<identifier>/")
 def get_chapter_images(identifier):
     image_binary = repository.database.get_pages(identifier)
+    start = time.perf_counter()
     if image_binary is not None:
         data = {}
         for page, image in image_binary:
             encoded_image = base64.b64encode(image).decode('utf-8')
             data[page] = encoded_image
+        end = time.perf_counter()
+        print(f"Took to pack and encode {end - start}s")
         return jsonify(data)
     return "Error: no image found", 404
+
+
 
 
 @server.route("/read/next-prev/<chapteruuid>")
@@ -149,7 +156,8 @@ def push_job():
             data.get("id"),
             repository.get_manga_attributes(data.get("id")),
             repository.get_chapter_list(data.get("id")),
-            repository.database.get_manga_job(data.get("id"))
+            repository.database.get_manga_job(data.get("id")),
+            repository.settings
         )
     )
     return {"status": "success"}
@@ -264,7 +272,10 @@ def library_data():
     for manga in mangas:
         pages = repository.database.get_downloaded_pages(manga[0])
         if pages:
-            to_send[manga[0]] = [json.loads(manga[1])["en"], json.loads(manga[2])["en"]]
+            to_send[manga[0]] = [
+                get_correct_language(json.loads(manga[1]), repository.settings),
+                get_correct_language(json.loads(manga[2]), repository.settings)
+            ]
 
     repository.sync_libraries(list(to_send.keys()))
     return {"status": "ok", "response": to_send}
@@ -277,8 +288,16 @@ def library():
 
 @server.route("/popular-new-titles", methods=["GET"])
 def popular_new_titles():
-    return repository.popular_new_titles()
-
+    popular = asyncio.run(repository.popular_new_titles())
+    new_popular = []
+    for manga in popular.data:
+        if not manga:
+            continue
+        new_manga = asdict(copy.deepcopy(manga))
+        new_manga["attributes"]["title"] = get_correct_language(manga.attributes.title, repository.settings)
+        new_manga["attributes"]["description"] = get_correct_language(manga.attributes.description, repository.settings)
+        new_popular.append(new_manga)
+    return new_popular
 
 @server.route("/auth/check")
 def check_auth():
@@ -314,7 +333,7 @@ def set_credentials():
 def updates():
     auth = check_auth()
     if auth["auth_status"] != "ok":
-        return {"status": "error", "response": "Credentials are not set properly. Updates require them"}
+        return {"status": "error", "response": "Credentials are not set properly. Updates require them"}, 403
     return render_template("updates.html")
 
 
@@ -329,13 +348,32 @@ def updates_data():
     return asdict(_updates)
 
 
+@server.route("/local-port")
+def local_port():
+    token = repository.credential_manager.token
+    if not repository.credential_manager.validate_token(token):
+        return {"status": "error", "response": "Invalid credentials"}, 403
+    port = repository.connection.get_followed_manga()
+    for manga in port.data:
+        repository.downloader.queue.add_job(
+            MangaDownloadJob(
+                manga.id,
+                repository.get_manga_attributes(manga.id),
+                repository.get_chapter_list(manga.id),
+                repository.database.get_manga_job(manga.id),
+                repository.settings
+            )
+        )
+    return {"status": "ok"}, 200
+
+
+
 if __name__ == "__main__":
     USE_SERVER = 0
     if not USE_SERVER:
         server.run(host="127.0.0.1", port=5000, threaded=False)
     else:
         print("starting server")
-        # testing performance on other devices
         from waitress import serve
 
         serve(server, listen="127.0.0.1:5000")

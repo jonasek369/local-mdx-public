@@ -260,7 +260,7 @@
 	</div>
 
 	<div class="search-container">
-		<input type="text" id="searchInput" placeholder="Search manga..." oninput="searchManga()">
+		<input type="text" id="searchInput" placeholder="Search manga...">
 		<button type="submit" onclick="searchManga()">Search</button>
 		<div class="search-results-dropdown" id="searchResultsDropdown"></div>
 	</div>
@@ -381,6 +381,8 @@
             });
     }
 
+    /*
+    TODO: too slow to use right not maybe try diffrend approach
     document.getElementById('searchInput').onkeydown = function (event) {
 
         if (event.keyCode === 13) {
@@ -394,7 +396,7 @@
                 searchResultsDropdown.style.display = "none";
             }
         }
-    }
+    }*/
 
     let popular_manga = null;
     fetch("popular-new-titles").then(response => response.json()).then(data => {
@@ -463,8 +465,8 @@
             genreTags.removeChild(genreTags.firstChild);
         }
         image.src = cached_cover_arts[popular_manga[currentIndex - 1]["id"]].src
-        title.innerText = popular_manga[currentIndex - 1]["attributes"]["title"]["en"];
-        description.innerText = popular_manga[currentIndex - 1]["attributes"]["description"]["en"]
+        title.innerText = popular_manga[currentIndex - 1]["attributes"]["title"];
+        description.innerText = popular_manga[currentIndex - 1]["attributes"]["description"]
 
         authors.innerText = ""; // TODO: add
 

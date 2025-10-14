@@ -19,6 +19,9 @@ Links = dict
 ChapterIdentifier = str
 MangaIdentifier = str
 
+COVER_ART_MAX_SIZE = 0
+COVER_ART_256_SIZE = 256
+COVER_ART_512_SIZE = 512
 
 def from_json(dataclass_type, json_data):
     """

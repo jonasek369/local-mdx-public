@@ -1,13 +1,15 @@
+import asyncio
 from dataclasses import asdict
 from typing import Optional, List
 
+import aiohttp
 import requests
 from attr import attributes
 
 from rewrite.backend.connection import MangadexConnection, MangaDownloader, CredentialManager
 from rewrite.backend.database import Database
 from rewrite.backend.schemas import MangaIdentifier, ChapterIdentifier, ChapterList, Manga, MangaAttributes, \
-    ChapterAttributes, LatestChapter
+    ChapterAttributes, LatestChapter, MangaList, COVER_ART_MAX_SIZE
 from rewrite.backend.settings import load_settings, load_credentials
 from rewrite.backend.utils import resize_image, perf_test, info, warning, error
 
@@ -54,33 +56,23 @@ class MangaRepository:
         if chapter_list:
             self.database.set_chapter_attributes(identifier, chapter_list.data)
             return chapter_list
-        raise NotImplemented("Error")
+        raise NotImplemented("Error. Offline usage of get_chapter_list is not Implemented!")
 
-    def get_cover_art(self, identifier: MangaIdentifier, small=False) -> Optional[bytes]:
-        cache_identifier = identifier if not small else identifier + "_SMALL"
-        if cache_identifier in self.cache:
-            return self.cache[cache_identifier]
+    def get_cover_art(self, identifier: MangaIdentifier, size: int, size_any=False) -> Optional[bytes]:
+        cache_identifier = f"{identifier}:{size}"
+        cache_hit = self.cache.get(cache_identifier, None)
+        if cache_hit is not None:
+            return cache_hit
 
-        if small:
-            small_cover_art = self.database.get_small_cover_art(identifier)
-            if not small_cover_art:
-                fetch_small_cover_art = self.connection.get_cover_art(identifier)
-                if fetch_small_cover_art is not None:
-                    self.database.set_small_cover_art(identifier, fetch_small_cover_art)
-                self.cache[cache_identifier] = fetch_small_cover_art
-                return fetch_small_cover_art
-            self.cache[cache_identifier] = small_cover_art
-            return small_cover_art
-        else:
-            cover_art = self.database.get_cover_art(identifier)
-            if not cover_art:
-                fetch_cover_art = self.connection.get_cover_art(identifier)
-                if fetch_cover_art is not None:
-                    self.database.set_cover_art(identifier, fetch_cover_art)
-                self.cache[cache_identifier] = fetch_cover_art
-                return fetch_cover_art
-            self.cache[cache_identifier] = cover_art
-            return cover_art
+        cover_art = self.database.get_cover_art(identifier, size=size, size_any=size_any)
+        if not cover_art:
+            fetch_cover_art = self.connection.get_cover_art(identifier, size=size)
+            if fetch_cover_art is not None:
+                self.database.set_cover_art(identifier, size, fetch_cover_art)
+            self.cache[cache_identifier] = fetch_cover_art
+            return fetch_cover_art
+        self.cache[cache_identifier] = cover_art
+        return cover_art
 
     def get_chapter_attributes(self, identifier: MangaIdentifier, ids: Optional[dict[str, str]] = None) -> Optional[
         ChapterAttributes]:
@@ -115,18 +107,44 @@ class MangaRepository:
         next_prev = self.database.get_next_prev(identifier)
         return next_prev
 
-    @perf_test
-    def popular_new_titles(self):
+    # @perf_test
+    # def popular_new_titles(self):
+    #     popular = self.connection.get_popular_new_titles()
+    #     for manga in popular.data:
+    #         for relationship in manga.relationships:
+    #             if relationship.type == "cover_art":
+    #                 coverurl = f"https://mangadex.org/covers/{manga.id}/" + relationship.attributes["fileName"]
+    #                 if not self.database.get_cover_art(manga.id):
+    #                     self.database.set_cover_art(manga.id, self.connection.safe_request("GET", coverurl).content)
+    #     if popular is None:
+    #         return popular
+    #     return asdict(popular)["data"]
+
+    async def _fetch_and_store_cover(self, session, identifier: MangaIdentifier, coverurl: str) -> MangaList | None:
+        async with session.get(coverurl) as resp:
+            resp.raise_for_status()
+            content = await resp.read()
+            self.database.set_cover_art(identifier, COVER_ART_MAX_SIZE, content)
+
+    async def popular_new_titles(self):
         popular = self.connection.get_popular_new_titles()
-        for manga in popular.data:
-            for relationship in manga.relationships:
-                if relationship.type == "cover_art":
-                    coverurl = f"https://mangadex.org/covers/{manga.id}/" + relationship.attributes["fileName"]
-                    if not self.database.get_cover_art(manga.id):
-                        self.database.set_cover_art(manga.id, self.connection.safe_request("GET", coverurl).content)
         if popular is None:
-            return popular
-        return asdict(popular)["data"]
+            return None
+
+        async with aiohttp.ClientSession() as session:
+            tasks = []
+            for manga in popular.data:
+                for relationship in manga.relationships:
+                    if relationship.type == "cover_art":
+                        coverurl = f"https://mangadex.org/covers/{manga.id}/{relationship.attributes['fileName']}"
+                        if not self.database.get_cover_art(manga.id):
+                            # Create async download task
+                            tasks.append(self._fetch_and_store_cover(session, manga.id, coverurl))
+
+            if tasks:
+                await asyncio.gather(*tasks)
+
+        return popular
 
     @perf_test
     def __get_updates(self):

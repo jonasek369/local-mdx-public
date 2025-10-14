@@ -6,6 +6,7 @@ import os
 import time
 import uuid
 from enum import Enum
+from typing import Dict
 
 from PIL import Image
 
@@ -25,6 +26,21 @@ def perf_test(func):
 
     return wrapper
 
+
+def get_correct_language(langs: Dict, settings) -> str | None:
+    """
+    settings is of type Settings
+    """
+    default_fallback = "jp"
+    for accepted_language in settings.translatedLanguage:
+        if accepted_language in langs:
+            return langs[accepted_language]
+    if default_fallback in langs:
+        return langs[default_fallback]
+    else:
+        if len(langs) == 0:
+            return None
+        return langs[list(langs.keys())[0]]
 
 def is_valid_uuid(val):
     try:

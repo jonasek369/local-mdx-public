@@ -1,23 +1,26 @@
+import asyncio
 import json
 import os
 import sys
 import threading
 import time
 from dataclasses import dataclass, asdict
-from typing import Optional, Sequence, Tuple, Callable, Dict, Union, List
+from typing import Optional, Sequence, Tuple, Callable, Dict, Union, List, Any
 
+import aiohttp
 import requests
 from dateutil.relativedelta import relativedelta
 
 from rewrite.backend.schemas import MangaList, from_json, Manga, MangaIdentifier, ChapterIdentifier, ChapterList, \
     Chapter, \
-    DirectSearchManga, MangaAttributes, DirectSearchChapter, CustomList, CustomListResponse
+    DirectSearchManga, MangaAttributes, DirectSearchChapter, CustomList, CustomListResponse, COVER_ART_256_SIZE, \
+    COVER_ART_512_SIZE, COVER_ART_MAX_SIZE, Relationship
 from enum import Enum, auto
 from rewrite.backend.settings import Settings, MangadexCredentials
 import concurrent.futures
 from datetime import datetime
 
-from rewrite.backend.utils import Logger, error, info, warning, perf_test
+from rewrite.backend.utils import Logger, error, info, warning, perf_test, get_correct_language
 
 
 class DownloaderState(Enum):
@@ -38,13 +41,18 @@ class MangaDownloadJobInDatabase:
 class MangaDownloadJob:
     # pages_in_db = {"cuuid": [1,2, 3, 4, 5]}
     def __init__(self, identifier: MangaIdentifier, manga_attribute: MangaAttributes, chapter_list: ChapterList,
-                 database_info: MangaDownloadJobInDatabase):
+                 database_info: MangaDownloadJobInDatabase, settings: Settings):
         self.identifier = identifier
         self.downloaded = False
         self.chapter_info = chapter_list
         self.database_info = database_info
         if self.chapter_info.data is not None:
-            self.title = manga_attribute.title["en"]
+            self.title = get_correct_language(manga_attribute.title, settings)
+        self.settings = settings
+        self.settings.logger.log(info, "Created job sucesfully")
+
+    def __del__(self):
+        self.settings.logger.log(warning, "Deleting job")
 
     def __eq__(self, other):
         if isinstance(other, MangaDownloadJob):
@@ -121,7 +129,7 @@ class MangaDownload:
 
 
 def threaded_get_chapter_page(
-        identifier: MangaIdentifier,
+        identifier: ChapterIdentifier,
         db_pages: Sequence,
         logger: Logger,
         rate_limit_callback: Optional[Callable] = None,
@@ -133,8 +141,9 @@ def threaded_get_chapter_page(
     metadata = requests.get(f"https://api.mangadex.org/at-home/server/{identifier}")
     remaining = metadata.headers.get("X-RateLimit-Remaining")
     retry_after = metadata.headers.get("X-RateLimit-Retry-After")
+    logger.log(info, f"RateLimit Rem. {remaining}. RateLimit after {retry_after}")
     if int(remaining) <= 0:
-        if rate_limit_callback(float(retry_after)):
+        if rate_limit_callback(float(retry_after) - time.time()):
             return None
         else:
             logger.log(warning, "Recursing!")
@@ -170,6 +179,85 @@ def threaded_get_chapter_page(
         manga_download.data.append(i[1])
 
     return manga_download
+
+
+async def async_get_chapter_page(
+        identifier,
+        db_pages: Sequence,
+        logger: Logger,
+        rate_limit_callback: Optional[Callable[[float], bool]] = None,
+        can_continue_download: Optional[Callable[[], bool]] = None,
+        page_download_cb: Optional[Callable] = None
+) -> Optional[MangaDownload]:
+    """
+    Async version of threaded_get_chapter_page.
+    If rate_limit_callback returns False, retries after waiting.
+    """
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(f"https://api.mangadex.org/at-home/server/{identifier}") as metadata:
+            remaining = metadata.headers.get("X-RateLimit-Remaining", "1")
+            retry_after = metadata.headers.get("X-RateLimit-Retry-After", "1")
+            logger.log(info, f"RateLimit Rem. {remaining}. RateLimit after {retry_after}")
+
+            if int(remaining) <= 0:
+                wait_time = float(retry_after) - time.time()
+                if rate_limit_callback and rate_limit_callback(wait_time):
+                    return None
+                else:
+                    logger.log(warning, f"Rate limited, retrying after {wait_time}s...")
+                    await asyncio.sleep(wait_time)
+                    return await async_get_chapter_page(identifier, db_pages, logger,
+                                                        rate_limit_callback, can_continue_download, page_download_cb)
+
+            metadata_json = await metadata.json()
+        try:
+            _hash = metadata_json["chapter"]["hash"]
+            base_url = metadata_json['baseUrl']
+            pages = len(metadata_json["chapter"]["data"])
+        except KeyError as e:
+            logger.log(error, f"KeyError {e}: {metadata_json}")
+        manga_download = MangaDownload(int(pages), [])
+
+
+        sem = asyncio.Semaphore(min(max(pages, 4), os.cpu_count() or 4))
+        downloaded_pages = []
+
+        async def download_page(page_count: int, page_digest: str):
+            if can_continue_download and not can_continue_download():
+                return None
+
+            async with sem:
+                url = f"{base_url}/data/{_hash}/{page_digest}"
+                try:
+                    async with session.get(url) as resp:
+                        resp.raise_for_status()
+                        content = await resp.read()
+                        logger.log(info, f"Downloaded {page_digest}")
+
+                        if page_download_cb:
+                            page_download_cb(identifier, page_count + 1, pages)
+
+                        return page_count + 1, content
+                except Exception as e:
+                    logger.log(error, f"Error downloading {page_digest}: {e}")
+                    return None
+
+        tasks = [
+            download_page(page_count, page_digest)
+            for page_count, page_digest in enumerate(metadata_json["chapter"]["data"])
+            if page_count + 1 not in db_pages
+        ]
+
+        results = await asyncio.gather(*tasks)
+
+        for result in filter(None, results):
+            downloaded_pages.append(result)
+
+        for i in sorted(downloaded_pages, key=lambda x: x[0]):
+            manga_download.data.append(i[1])
+
+        return manga_download
 
 
 timeouts = {
@@ -213,9 +301,9 @@ class MangaDownloader:
         self.currently_working_on["page_status"] = ["?", "?"]
 
     def rate_limit_callback(self, retry_after) -> bool:
-        self.logger.log(warning, "Halting execution of downloader")
+        self.logger.log(warning, f"Halting execution of downloader. Sleeping for {retry_after + 30}s")
         # pause execution until we can try again
-        time.sleep((retry_after + 30) - time.time())
+        time.sleep((retry_after + 30))
         return False
 
     def can_continue_downloading(self):
@@ -238,14 +326,16 @@ class MangaDownloader:
                 continue
 
             job = self.queue.next()
-
             if not job:
-                time.sleep(0.01)
                 self.state = DownloaderState.Awaiting
+                time.sleep(0.01)
                 continue
 
             self.state = DownloaderState.Downloading
             self.currently_working_on = job.to_cwo()
+
+            if not job.chapter_info.data:
+                self.logger.log(warning, f"{job.identifier} data is empty!")
 
             for chapter in job.chapter_info.data:
                 if self.stop_event.is_set() or self.exit_event.is_set():  # Check both events
@@ -263,14 +353,14 @@ class MangaDownloader:
                     pass
 
                 pages_in_db = job.database_info.pages_in_db.get(chapter.id, [])
-                downloaded_data = threaded_get_chapter_page(
+                downloaded_data = asyncio.run(async_get_chapter_page(
                     chapter.id,
                     pages_in_db,
                     self.logger,
-                    self.rate_limit_callback,
+                    None,
                     self.can_continue_downloading,
                     self.page_download_callback
-                )
+                ))
 
                 if job.identifier not in self.finished:
                     self.finished[job.identifier] = {}
@@ -281,7 +371,7 @@ class MangaDownloader:
                                 f"Downloaded {chapter.attributes.volume} Volume {chapter.attributes.chapter} Chapter")
                 self.add_chapter()
                 time.sleep(timeouts[self.speed + "_CHAPTER_FINISH"])
-
+            self.logger.log(info, f"Finished downloading {job}!")
             self.currently_working_on = None
 
 
@@ -427,6 +517,8 @@ class MangadexConnection:
         self.logger = settings.logger
         self.credentials_manager = credentials_manager
 
+        self.cover_file_name_cache = {}
+
     def safe_request(self, method: str, url: str, params=None, headers=None, _json=None, default_parameters=True,
                      default_parameter_exclude: List[str] = None) -> Optional[requests.Response]:
         if params is None:
@@ -450,8 +542,24 @@ class MangadexConnection:
             self.logger.log(error, f"An error occurred: {e}")
             return None
 
+    def cache_cover_art_from_relationships(self, identifier: str, relationships: [Relationship]):
+        for relationship in relationships:
+            if relationship.type == "cover_art" and relationship.attributes is not None:
+                self.cover_file_name_cache[identifier] = relationship.attributes["fileName"]
+
+
+    def cache_cover_art_filename(self, manga_object: Any):
+        if isinstance(manga_object, MangaList):
+            for manga in manga_object.data:
+                self.cache_cover_art_from_relationships(manga.id, manga.relationships)
+
+        elif isinstance(manga_object, DirectSearchManga):
+            self.cache_cover_art_from_relationships(manga_object.data.id, manga_object.data.relationships)
+        else:
+            self.logger.log(warning, f"Unsupported type {type(manga_object)}")
+
     def search_manga(self, name: str, limit: int) -> Optional[MangaList]:
-        params = {"title": name, "limit": limit}
+        params = {"title": name, "limit": limit, "includes[]": ["cover_art"]}
         req = self.safe_request("GET", f"{self.API}/manga", params, default_parameter_exclude=["translatedLanguage[]"])
         if req and req.status_code != 200:
             return None
@@ -461,7 +569,9 @@ class MangadexConnection:
         if query["result"] != "ok":
             return None
         try:
-            return from_json(MangaList, query)
+            manga_list = from_json(MangaList, query)
+            self.cache_cover_art_filename(manga_list)
+            return manga_list
         except AttributeError:
             return None
 
@@ -476,11 +586,26 @@ class MangadexConnection:
         if query["result"] != "ok":
             return None
         try:
-            return from_json(DirectSearchManga, query).data
+            direct_manga = from_json(DirectSearchManga, query).data
+            self.cache_cover_art_filename(direct_manga)
+            return direct_manga
         except AttributeError:
             return None
 
-    def get_cover_art(self, identifier: MangaIdentifier) -> Optional[bytes]:
+    @perf_test
+    def get_cover_art(self, identifier: MangaIdentifier, size=COVER_ART_MAX_SIZE) -> Optional[bytes]:
+        # as defined in https://api.mangadex.org/docs/03-manga/covers/
+        size_suffix = ""
+        if size == COVER_ART_256_SIZE:
+            size_suffix = ".256.jpg"
+        elif size == COVER_ART_512_SIZE:
+            size_suffix = ".512.jpg"
+
+        cache_hit: str | None = self.cover_file_name_cache.get(identifier, None)
+        if cache_hit is not None:
+            cover_url = f"https://uploads.mangadex.org/covers/{identifier}/" + cache_hit + size_suffix
+            cover_art = self.safe_request("GET", cover_url)
+            return cover_art.content
 
         req = self.safe_request("GET", f"{self.API}/manga/{identifier}?includes%5B%5D=cover_art")
 
@@ -494,7 +619,9 @@ class MangadexConnection:
 
         for relationship in from_json(DirectSearchManga, query).data.relationships:
             if relationship.type == "cover_art":
-                coverurl = f"https://mangadex.org/covers/{identifier}/" + relationship.attributes["fileName"]
+                coverurl = f"https://uploads.mangadex.org/covers/{identifier}/" + relationship.attributes[
+                    "fileName"] + size_suffix
+                self.cover_file_name_cache[identifier] = relationship.attributes["fileName"]
                 return self.safe_request("GET", coverurl).content
 
     def get_chapter_list(self, identifier: ChapterIdentifier, lang: str = "en") -> Optional[ChapterList]:
@@ -529,8 +656,10 @@ class MangadexConnection:
             if query["result"] != "ok":
                 self.logger.log(error, f"API returned result {query['result']} while getting rest of the chapters")
                 return None
-
+            if not query["data"]:
+                return chapter_list
             new_chapter_list: ChapterList = from_json(ChapterList, query)
+
             chapter_list.data.extend(new_chapter_list.data)
 
         return chapter_list
@@ -565,6 +694,7 @@ class MangadexConnection:
         # TODO: parse out data that is usefull like a cover art
         try:
             manga_list: MangaList = from_json(MangaList, data.json())
+            self.cache_cover_art_filename(manga_list)
         except AttributeError as e:
             self.logger.log(error, str(e))
             return None
@@ -572,6 +702,7 @@ class MangadexConnection:
             return None
         return manga_list
 
+    # TODO: Replace with /user/follows/manga/feed
     def get_custom_list_feed(self, custom_list_id, limit, offset) -> Union[None, ChapterList, int]:
         """
         int is returned when credentials are not set right
@@ -652,6 +783,50 @@ class MangadexConnection:
         if response.status_code == 409:
             self.logger.log(info, "Conflict! If you have opened the MDlist in your browser please close it")
         return response.status_code == 200
+
+    def get_followed_manga(self) -> MangaList | None:
+        params = {"limit": 100, "offset": 0}
+        req = self.safe_request("GET",
+                                url=f"{self.API}/user/follows/manga",
+                                headers=self.credentials_manager.get_header_token(),
+                                default_parameters=False,
+                                params=params
+                                )
+
+        if req and req.status_code != 200:
+            return None
+
+        query = req.json()
+
+        if query["result"] != "ok":
+            return None
+
+        manga_list: MangaList = from_json(MangaList, req.json())
+        while manga_list.total > len(manga_list.data):
+            params["offset"] += 100
+            req = self.safe_request("GET",
+                                    url=f"{self.API}/user/follows/manga",
+                                    headers=self.credentials_manager.get_header_token(),
+                                    default_parameters=False,
+                                    params=params
+                                    )
+
+            if req and req.status_code != 200:
+                self.logger.log(error, f"API returned {req.status_code} while getting rest of the chapters")
+                return manga_list
+            query = req.json()
+
+            if query["result"] != "ok":
+                self.logger.log(error, f"API returned result {query['result']} while getting rest of the chapters")
+                return None
+
+            if not query["data"]:
+                return manga_list
+
+            new_manga_list: MangaList = from_json(MangaList, query)
+            manga_list.data.extend(new_manga_list.data)
+
+        return manga_list
 
 
 # simple download to FS

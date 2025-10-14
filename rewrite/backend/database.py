@@ -6,7 +6,7 @@ from typing import List, Optional, Set, Tuple
 from rewrite.backend.connection import MangaDownloadJobInDatabase
 from rewrite.backend.utils import perf_test
 from rewrite.backend.schemas import MangaIdentifier, ChapterIdentifier, ChapterAttributes, Chapter, from_json, \
-    ChapterList, Manga, MangaAttributes, LatestChapter
+    ChapterList, Manga, MangaAttributes, LatestChapter, COVER_ART_MAX_SIZE, COVER_ART_256_SIZE, COVER_ART_512_SIZE
 
 
 class Database:
@@ -59,12 +59,10 @@ class Database:
             FOREIGN KEY (cuuid) REFERENCES chapter_attributes(cuuid) ON DELETE CASCADE
         );""")
         cursor.execute("""CREATE TABLE IF NOT EXISTS cover_art(
-            muuid CHAR(36) NOT NULL primary key,
-            data BLOB NOT NULL
-        )""")
-        cursor.execute("""CREATE TABLE IF NOT EXISTS cover_art_small(
-            muuid CHAR(36) NOT NULL primary key,
-            data BLOB NOT NULL
+            muuid CHAR(36) NOT NULL,
+            size INTEGER NOT NULL,
+            data BLOB NOT NULL,
+            PRIMARY KEY(muuid, size)
         )""")
 
 
@@ -204,9 +202,14 @@ class Database:
         return mdj
 
     @perf_test
-    def get_cover_art(self, identifier: MangaIdentifier) -> Optional[bytes]:
+    def get_cover_art(self, identifier: MangaIdentifier, size=COVER_ART_MAX_SIZE, size_any=False) -> Optional[
+        bytes]:
         cursor = self.conn.cursor()
-        cursor.execute("SELECT data FROM cover_art WHERE muuid=:id", {"id": identifier})
+        if size_any:
+            cursor.execute("SELECT data FROM cover_art WHERE muuid=:id", {"id": identifier})
+        else:
+            cursor.execute("SELECT data FROM cover_art WHERE muuid=:id and size=:size",
+                           {"id": identifier, "size": size})
         fetch = cursor.fetchone()
         cursor.close()
         if fetch:
@@ -214,26 +217,11 @@ class Database:
         return fetch
 
     @perf_test
-    def get_small_cover_art(self, identifier: MangaIdentifier) -> Optional[bytes]:
+    def set_cover_art(self, identifier: MangaIdentifier, size: int, content: bytes) -> None:
         cursor = self.conn.cursor()
-        cursor.execute("SELECT data FROM cover_art_small WHERE muuid=:id", {"id": identifier})
-        fetch = cursor.fetchone()
-        cursor.close()
-        if fetch:
-            return fetch[0]
-        return None
-
-    @perf_test
-    def set_cover_art(self, identifier: MangaIdentifier, content: bytes) -> None:
-        cursor = self.conn.cursor()
-        cursor.execute("REPLACE INTO cover_art (muuid, data) VALUES (?, ?)", (identifier, content))
-        self.conn.commit()
-        cursor.close()
-
-    @perf_test
-    def set_small_cover_art(self, identifier: MangaIdentifier, content):
-        cursor = self.conn.cursor()
-        cursor.execute("REPLACE INTO cover_art_small (muuid, data) VALUES (?, ?)", (identifier, content))
+        # TODO: Remove after testing
+        assert size in [COVER_ART_MAX_SIZE, COVER_ART_256_SIZE, COVER_ART_512_SIZE], "Unsupported cover art size"
+        cursor.execute("""INSERT INTO cover_art (muuid, size, data) VALUES (?, ?, ?) ON CONFLICT(muuid, size) DO UPDATE SET data = excluded.data""", (identifier, size, content))
         self.conn.commit()
         cursor.close()
 

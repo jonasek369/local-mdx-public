@@ -258,22 +258,32 @@
 
             const stateText = document.getElementById("downloader-state");
 
+            const nolimit = document.getElementById("speed-no-limit");
             const fast = document.getElementById("speed-fast");
             const normal = document.getElementById("speed-normal");
             const slow = document.getElementById("speed-slow");
 
             switch (resp.speed_mode) {
+				case "NO_LIMIT":
+                    nolimit.checked = true;
+                    fast.checked = false;
+                    normal.checked = false;
+                    slow.checked = false;
+                    break;
                 case "FAST":
+                    nolimit.checked = false;
                     fast.checked = true;
                     normal.checked = false;
                     slow.checked = false;
                     break;
                 case "NORMAL":
+                    nolimit.checked = false;
                     fast.checked = false;
                     normal.checked = true;
                     slow.checked = false;
                     break;
                 case "SLOW":
+                    nolimit.checked = false;
                     fast.checked = false;
                     normal.checked = false;
                     slow.checked = true;
