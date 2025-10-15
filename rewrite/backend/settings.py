@@ -12,6 +12,7 @@ class Settings:
     translatedLanguage: List[str]
     cacheTokenToDisk: bool
     logger: Logger
+    darkTheme: bool
 
 
 @dataclass
@@ -34,11 +35,12 @@ def load_settings() -> Settings:
             json_settings.get('translated_language', []), # [] means all languages will be fetched
             json_settings.get('cache_token_to_disk', True),
             Logger(json_settings.get('log_level', 1), json_settings.get('file_logger', False)),
+            json_settings.get('dark_theme', False),
         )
     except FileNotFoundError:
         Logger().log(warning, f"Could not find settings.json in {os.getcwd()} using default")
         # return default if we cant find the settings
-        return Settings(None, ["safe", "suggestive"], [], True, Logger(1, False))
+        return Settings(None, ["safe", "suggestive"], [], True, Logger(1, False), False)
 
 def load_credentials() -> MangadexCredentials:
     try:

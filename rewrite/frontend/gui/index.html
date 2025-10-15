@@ -6,262 +6,445 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>Lmdx - Manga Reader</title>
 	<style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            {% if darktheme %}
+            --md-bg: #1a1a1a;
+            --md-surface: #242424;
+            --md-surface-hover: #2a2a2a;
+            --md-border: #3a3a3a;
+            --md-text: #e8e8e8;
+            --md-text-secondary: #a0a0a0;
+            --md-accent: #ff6740;
+            --md-accent-hover: #ff7d5c;
+            --md-success: #4caf50;
+            --md-danger: #f44336;
+            --md-shadow: rgba(0, 0, 0, 0.3);
+            {% else %}
+            --md-bg: #f5f5f5;
+            --md-surface: #ffffff;
+            --md-surface-hover: #f9f9f9;
+            --md-border: #e0e0e0;
+            --md-text: #1a1a1a;
+            --md-text-secondary: #666666;
+            --md-accent: #ff6740;
+            --md-accent-hover: #ff7d5c;
+            --md-success: #4caf50;
+            --md-danger: #f44336;
+            --md-shadow: rgba(0, 0, 0, 0.1);
+            {% endif %}
+        }
 
         body {
             margin: 0;
-            font-family: 'Inter', sans-serif;
-            background-color: hsl(0 0% 100%);
-            color: hsl(0 0% 14.12%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
+            background-color: var(--md-bg);
+            color: var(--md-text);
         }
 
-
         .navbar {
-            background-color: hsl(210 7.14% 94.51%);
-            padding: 1rem 2rem;
+            background-color: var(--md-surface);
+            border-bottom: 1px solid var(--md-border);
+            padding: 16px 24px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
         }
 
-        .navbar .button {
-            background-color: hsl(12.25 100% 62.55%);
+        .nav-left {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--md-accent);
+            margin-right: 12px;
+        }
+
+        .button {
+            background-color: var(--md-accent);
             color: white;
-            padding: 0.5rem 1rem;
-            border-radius: 0.375rem;
+            padding: 8px 16px;
+            border-radius: 4px;
             font-weight: 500;
+            font-size: 14px;
+            border: none;
+            cursor: pointer;
             transition: background-color 0.2s;
         }
 
-        .navbar .button:hover {
-            background-color: hsl(12.5 77.06% 57.25%);
+        .button:hover {
+            background-color: var(--md-accent-hover);
         }
 
-        .navbar .button:active {
-            background-color: hsl(12.09 52.23% 48.43%);
+        .button-secondary {
+            background-color: transparent;
+            color: var(--md-text);
+            border: 1px solid var(--md-border);
         }
 
+        .button-secondary:hover {
+            background-color: var(--md-surface-hover);
+        }
 
         .search-container {
             flex: 1;
             max-width: 600px;
-            margin: 0 2rem;
+            margin: 0 24px;
             position: relative;
         }
 
-        .search-container input[type="text"] {
-            width: 100%;
-            padding: 0.5rem 1rem;
-            border: 2px solid #cbd5e1;
-            border-radius: 0.375rem;
-            outline: none;
-            font-size: 1rem;
+        .search-wrapper {
+            display: flex;
+            border: 1px solid var(--md-border);
+            border-radius: 4px;
+            background-color: var(--md-surface);
             transition: border-color 0.2s;
         }
 
-        .search-container input[type="text"]:focus {
-            border-color: hsl(12.25 100% 62.55%);
+        .search-wrapper:focus-within {
+            border-color: var(--md-accent);
+        }
+
+        .search-container input[type="text"] {
+            flex: 1;
+            padding: 8px 12px;
+            border: none;
+            background: transparent;
+            color: var(--md-text);
+            outline: none;
+            font-size: 14px;
+        }
+
+        .search-container input[type="text"]::placeholder {
+            color: var(--md-text-secondary);
         }
 
         .search-container button {
-            position: absolute;
-            right: 0;
-            top: 0;
-            height: 100%;
-            padding: 0 1rem;
-            background-color: hsl(12.25 100% 62.55%);
+            padding: 8px 16px;
+            background-color: var(--md-accent);
             color: white;
             border: none;
-            border-radius: 0 0.375rem 0.375rem 0;
+            border-radius: 0 4px 4px 0;
             cursor: pointer;
             transition: background-color 0.2s;
+            font-size: 14px;
+            font-weight: 500;
         }
 
         .search-container button:hover {
-            background-color: hsl(12.5 77.06% 57.25%);
-        }
-
-        .login-button {
-            background-color: hsl(0 100% 62.55%);
-            color: white;
-            padding: 0.5rem 1rem;
-            border-radius: 0.375rem;
-            font-weight: 500;
-            transition: background-color 0.2s;
-        }
-
-        .login-button:hover {
-            background-color: hsl(0 70.54% 43.92%);
-        }
-
-
-        .main-content {
-            max-width: 1200px;
-            margin: 2rem auto;
-            padding: 0 1rem;
-        }
-
-
-        .manga-card {
-            background-color: white;
-			height: 400px;
-            border-radius: 0.5rem;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-            display: flex;
-            align-items: center;
-            padding: 1.5rem;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .manga-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
-        }
-
-        .manga-card img {
-            width: 200px;
-            height: 280px;
-            object-fit: cover;
-            border-radius: 0.375rem;
-            margin-right: 1.5rem;
-        }
-
-        .manga-card h3 {
-            font-size: 1.5rem;
-            font-weight: 700;
-            margin-bottom: 0.5rem;
-        }
-
-        .manga-card .genre-tags {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-            margin-bottom: 1rem;
-        }
-
-        .manga-card .genre-tags span {
-            background-color: #e2e8f0;
-            color: #1e293b;
-            padding: 0.25rem 0.5rem;
-            border-radius: 0.25rem;
-            font-size: 0.875rem;
-        }
-
-        .manga-card .description {
-            color: hsl(0 0% 14.12%);
-            font-size: 0.875rem;
-            line-height: 1.5;
-            margin-bottom: 1rem;
-        }
-
-        .manga-card .authors {
-            color: hsl(0 0% 14.12%);
-            font-style: italic;
-            font-size: 0.875rem;
-        }
-
-
-        .navigation-controls {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: 1.5rem;
-        }
-
-        .navigation-controls button {
-            background-color: hsl(200 10.71% 89.02%);
-            color: hsl(0 0% 14.12%);
-            padding: 0.5rem 1rem;
-            border: none;
-            border-radius: 0.375rem;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-
-        .navigation-controls button:hover {
-            background-color: #cbd5e1;
-        }
-
-        .navigation-controls span {
-            font-size: 1rem;
-            color: #64748b;
-        }
-
-
-        @media (max-width: 768px) {
-            .manga-card {
-                flex-direction: column;
-                text-align: center;
-            }
-
-            .manga-card img {
-                margin-right: 0;
-                margin-bottom: 1rem;
-            }
-
-            .search-container {
-                margin: 0 1rem;
-            }
+            background-color: var(--md-accent-hover);
         }
 
         .search-results-dropdown {
             display: none;
             position: absolute;
-            background-color: white;
+            background-color: var(--md-surface);
             width: 100%;
-            max-height: 300px;
+            max-height: 400px;
             overflow-y: auto;
-            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
-            border-radius: 0.375rem;
+            box-shadow: 0 8px 16px var(--md-shadow);
+            border-radius: 4px;
             z-index: 1000;
-            margin-top: 0.5rem;
-            border: 1px solid #e2e8f0;
+            margin-top: 8px;
+            border: 1px solid var(--md-border);
         }
 
         .search-results-dropdown a {
             display: flex;
             align-items: center;
-            padding: 0.75rem;
+            padding: 12px;
             text-decoration: none;
-            color: #1e293b;
-            border-bottom: 1px solid #e2e8f0;
+            color: var(--md-text);
+            border-bottom: 1px solid var(--md-border);
             transition: background-color 0.2s;
         }
 
+        .search-results-dropdown a:last-child {
+            border-bottom: none;
+        }
+
         .search-results-dropdown a:hover {
-            background-color: #f8fafc;
+            background-color: var(--md-surface-hover);
         }
 
         .search-results-dropdown img {
-            width: 51px;
-            height: 80px;
+            width: 48px;
+            height: 72px;
             object-fit: cover;
-            border-radius: 0.25rem;
-            margin-right: 1rem;
+            border-radius: 4px;
+            margin-right: 12px;
         }
 
         .search-results-dropdown span {
-            font-size: 0.875rem;
+            font-size: 14px;
             font-weight: 500;
         }
 
+        .no-results {
+            padding: 16px;
+            text-align: center;
+            color: var(--md-text-secondary);
+            font-size: 14px;
+        }
+
+        .login-button {
+            background-color: transparent;
+            color: var(--md-text);
+            padding: 8px 16px;
+            border: 1px solid var(--md-border);
+            border-radius: 4px;
+            font-weight: 500;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .login-button:hover {
+            background-color: var(--md-surface-hover);
+        }
+
+        .main-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 32px 24px;
+        }
+
+        .section-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--md-text);
+            margin-bottom: 24px;
+        }
+
+        .manga-card {
+            background-color: var(--md-surface);
+            border: 1px solid var(--md-border);
+            border-radius: 6px;
+            overflow: hidden;
+            display: flex;
+            padding: 24px;
+            transition: all 0.2s;
+            cursor: pointer;
+            min-height: 380px;
+        }
+
+        .manga-card:hover {
+            border-color: var(--md-accent);
+            box-shadow: 0 4px 12px var(--md-shadow);
+        }
+
+        .manga-card-image {
+            flex-shrink: 0;
+            width: 220px;
+            height: 330px;
+            margin-right: 24px;
+        }
+
+        .manga-card-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 4px;
+        }
+
+        .manga-card-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .manga-card h3 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: var(--md-text);
+        }
+
+        .genre-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .tag {
+            background-color: var(--md-bg);
+            color: var(--md-text);
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            border: 1px solid var(--md-border);
+        }
+
+        .tag.rating-suggestive {
+            background-color: #ff8c00;
+            color: white;
+            border-color: #ff8c00;
+        }
+
+        .tag.rating-nsfw {
+            background-color: var(--md-danger);
+            color: white;
+            border-color: var(--md-danger);
+        }
+
+        .description {
+            color: var(--md-text-secondary);
+            font-size: 14px;
+            line-height: 1.6;
+            margin-bottom: 16px;
+            flex: 1;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 6;
+            -webkit-box-orient: vertical;
+        }
+
+        .authors {
+            color: var(--md-text-secondary);
+            font-size: 13px;
+            font-style: italic;
+        }
+
+        .navigation-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 24px;
+            gap: 16px;
+        }
+
+        .navigation-controls button {
+            background-color: var(--md-surface);
+            color: var(--md-text);
+            padding: 10px 20px;
+            border: 1px solid var(--md-border);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .navigation-controls button:hover {
+            background-color: var(--md-surface-hover);
+            border-color: var(--md-accent);
+        }
+
+        .navigation-controls span {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--md-text-secondary);
+            padding: 10px 20px;
+            background-color: var(--md-surface);
+            border: 1px solid var(--md-border);
+            border-radius: 4px;
+        }
+
+        @media (max-width: 1024px) {
+            .manga-card {
+                flex-direction: column;
+                align-items: center;
+                min-height: auto;
+            }
+
+            .manga-card-image {
+                width: 200px;
+                height: 300px;
+                margin-right: 0;
+                margin-bottom: 20px;
+            }
+
+            .search-container {
+                margin: 0 16px;
+                max-width: 400px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .navbar {
+                flex-wrap: wrap;
+                gap: 12px;
+                padding: 12px 16px;
+            }
+
+            .nav-left {
+                order: 1;
+                width: 100%;
+                justify-content: space-between;
+            }
+
+            .search-container {
+                order: 2;
+                width: 100%;
+                margin: 0;
+                max-width: none;
+            }
+
+            .login-button {
+                order: 3;
+            }
+
+            .main-content {
+                padding: 20px 16px;
+            }
+
+            .section-title {
+                font-size: 20px;
+            }
+
+            .manga-card {
+                padding: 16px;
+            }
+
+            .manga-card-image {
+                width: 160px;
+                height: 240px;
+            }
+
+            .navigation-controls {
+                flex-wrap: wrap;
+            }
+
+            .navigation-controls button,
+            .navigation-controls span {
+                flex: 1;
+                min-width: 100px;
+                text-align: center;
+            }
+        }
 	</style>
-	<script src="https://cdn.tailwindcss.com"></script>
 </head>
 
 <body>
 <!-- Navbar -->
 <div class="navbar">
-	<div class="flex gap-2">
-		<button onClick="redirect_to_download_manager()" class="button">Download Manager</button>
-		<button onClick="redirect_to_library()" class="button">Library</button>
-		<button onClick="redirect_to_updates()" class="button">Updates</button>
+	<div class="nav-left">
+		<div class="logo">LMDX</div>
+		<button onClick="redirect_to_download_manager()" class="button button-secondary">Download Manager</button>
+		<button onClick="redirect_to_library()" class="button button-secondary">Library</button>
+		<button onClick="redirect_to_updates()" class="button button-secondary">Updates</button>
 	</div>
 
 	<div class="search-container">
-		<input type="text" id="searchInput" placeholder="Search manga...">
-		<button type="submit" onclick="searchManga()">Search</button>
+		<div class="search-wrapper">
+			<input type="text" id="searchInput" placeholder="Search manga...">
+			<button type="submit" onclick="searchManga()">Search</button>
+		</div>
 		<div class="search-results-dropdown" id="searchResultsDropdown"></div>
 	</div>
 
@@ -276,31 +459,32 @@
 
 <!-- Main Content -->
 <div class="main-content">
-	<h2 class="text-2xl font-bold mb-4">Popular New Titles</h2>
+	<h2 class="section-title">Popular New Titles</h2>
 
 	<!-- Manga Card -->
 	<div class="manga-card" onclick="to_manga()">
-		<img src="" alt="Book Cover" id="cover-art">
-		<div>
-			<h3 id="manga-title">Sample Title</h3>
+		<div class="manga-card-image">
+			<img src="" alt="Book Cover" id="cover-art">
+		</div>
+		<div class="manga-card-content">
+			<h3 id="manga-title">Loading...</h3>
 			<div class="genre-tags" id="genre-tags">
-				<span>Action</span>
-				<span>Adventure</span>
-				<span>Fantasy</span>
+				<span class="tag">Action</span>
+				<span class="tag">Adventure</span>
+				<span class="tag">Fantasy</span>
 			</div>
 			<p class="description" id="description">
-				Sample Description: Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nulla vel justo nec
-				libero tincidunt aliquet.
+				Loading manga information...
 			</p>
-			<p class="authors" id="authors">Sample Author</p>
+			<p class="authors" id="authors"></p>
 		</div>
 	</div>
 
 	<!-- Navigation Controls -->
 	<div class="navigation-controls">
-		<button id="manga-sub">&larr; Previous</button>
-		<span id="number">NO. 7</span>
-		<button id="manga-add">Next &rarr;</button>
+		<button id="manga-sub">← Previous</button>
+		<span id="number">NO. 1</span>
+		<button id="manga-add">Next →</button>
 	</div>
 </div>
 
@@ -317,7 +501,6 @@
         window.location.replace("/updates");
     }
 
-
     let currentIndex = 1;
     const title = document.getElementById("manga-title");
     const description = document.getElementById("description");
@@ -325,10 +508,9 @@
     const image = document.getElementById("cover-art");
     const number = document.getElementById("number");
     const genreTags = document.getElementById("genre-tags");
-    const cached_cover_arts = {}
 
     function searchManga() {
-        var searchResultsDropdown = document.getElementById("searchResultsDropdown");
+        let searchResultsDropdown = document.getElementById("searchResultsDropdown");
 
         // Clear previous results
         while (searchResultsDropdown.firstChild) {
@@ -351,9 +533,8 @@
                 if (data.length === 0) {
                     // If no results, show a message
                     var noResults = document.createElement("div");
+                    noResults.className = "no-results";
                     noResults.textContent = "No results found.";
-                    noResults.style.padding = "0.75rem";
-                    noResults.style.color = "#64748b";
                     searchResultsDropdown.appendChild(noResults);
                 } else {
                     // Populate dropdown with results
@@ -361,16 +542,14 @@
                         var resultItem = document.createElement("a");
                         resultItem.href = "/manga/" + result["id"];
 
-                        var image = document.createElement("img");
-                        image.src = "/manga/cover/" + result["id"] + "?small=1";
-                        image.alt = "Result Image";
-                        image.width = 51;
-                        image.height = 80;
+                        var img = document.createElement("img");
+                        img.src = "/manga/cover/" + result["id"] + "?size=256";
+                        img.alt = "Result Image";
 
                         var text = document.createElement("span");
                         text.textContent = result["attributes"]["title"]["en"];
 
-                        resultItem.appendChild(image);
+                        resultItem.appendChild(img);
                         resultItem.appendChild(text);
                         searchResultsDropdown.appendChild(resultItem);
                     });
@@ -378,48 +557,47 @@
             })
             .catch(error => {
                 console.error('Error:', error);
+                searchResultsDropdown.style.display = "none";
             });
     }
 
-    /*
-    TODO: too slow to use right not maybe try diffrend approach
-    document.getElementById('searchInput').onkeydown = function (event) {
-
-        if (event.keyCode === 13) {
-            searchManga()
-        } else if (event.keyCode === 8) {
-            if (document.getElementById("searchInput").value.length === 0) {
-                let searchResultsDropdown = document.getElementById("searchResultsDropdown");
-                while (searchResultsDropdown.firstChild) {
-                    searchResultsDropdown.removeChild(searchResultsDropdown.firstChild);
-                }
-                searchResultsDropdown.style.display = "none";
-            }
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(event) {
+        const searchContainer = document.querySelector('.search-container');
+        const dropdown = document.getElementById('searchResultsDropdown');
+        if (!searchContainer.contains(event.target)) {
+            dropdown.style.display = 'none';
         }
-    }*/
+    });
 
     let popular_manga = null;
     fetch("popular-new-titles").then(response => response.json()).then(data => {
         popular_manga = data
-        cache_cover_art()
-        updateManga()
+		updateManga()
     })
+
     fetch("/auth/check").then(response => response.json()).then(data => {
         const login_button = document.getElementsByClassName("login-button")[0]
-        if (data.auth_status === "ok") {
+        if (data.status === "ok") {
             login_button.innerText = "Logged in"
         } else {
             login_button.innerText = "Missing credentials"
         }
     })
+
     document.getElementById('manga-sub').addEventListener('click', (event) => {
+        event.stopPropagation();
+        clearInterval(scroll_interval)
         currentIndex = currentIndex - 1;
         if (currentIndex <= 0) {
             currentIndex = 10;
         }
         updateManga()
     })
+
     document.getElementById('manga-add').addEventListener('click', (event) => {
+        event.stopPropagation();
+        clearInterval(scroll_interval)
         currentIndex = currentIndex + 1;
         if (currentIndex > 10) {
             currentIndex = 1;
@@ -431,32 +609,6 @@
         window.location.replace("/manga/" + popular_manga[currentIndex - 1]["id"]);
     }
 
-    function cache_cover_art() {
-        popular_manga.forEach(manga => {
-            const img = new Image();
-            img.src = "/manga/cover/" + manga.id;
-            img.onerror = function () {
-                const maxRetries = 5;
-                let retryCount = parseInt(img.getAttribute("data-retry-count"));
-
-                if (retryCount < maxRetries) {
-                    retryCount++;
-                    img.setAttribute("data-retry-count", retryCount);
-
-                    setTimeout(() => {
-                        console.log(`Retrying ${img.src}, attempt ${retryCount}`);
-                        img.src = "/manga/cover/" + manga.id;
-                    }, 1000 * retryCount);
-                } else {
-                    console.error(`Failed to load ${img.src} after ${maxRetries} retries.`);
-                }
-            };
-            cached_cover_arts[manga.id] = img
-        })
-        console.log(cached_cover_arts)
-        updateManga()
-    }
-
     function updateManga() {
         if (popular_manga === null) {
             return null
@@ -464,7 +616,7 @@
         while (genreTags.firstChild) {
             genreTags.removeChild(genreTags.firstChild);
         }
-        image.src = cached_cover_arts[popular_manga[currentIndex - 1]["id"]].src
+		image.src = "/manga/cover/"+popular_manga[currentIndex - 1]["id"]+"?size=512"
         title.innerText = popular_manga[currentIndex - 1]["attributes"]["title"];
         description.innerText = popular_manga[currentIndex - 1]["attributes"]["description"]
 
@@ -474,42 +626,36 @@
 
         let rating = popular_manga[currentIndex - 1]["attributes"]["contentRating"];
         if (rating !== "safe") {
-            let li = document.createElement("li");
-            li.textContent = popular_manga[currentIndex - 1]["attributes"]["contentRating"];
-            switch (rating) {
-                case "suggestive":
-                    li.classList.add("px-2", "py-1", "rounded-lg", "text-xs", "font-medium");
-                    li.style.backgroundColor = "rgb(218, 117, 0)";
-                    li.style.color = "rgb(255, 255, 255)";
-                    break
-                default:
-                    li.classList.add("px-2", "py-1", "rounded-lg", "text-xs", "font-medium");
-                    li.style.backgroundColor = "rgb(255, 64, 64)";
-                    li.style.color = "rgb(255, 255, 255)";
-                    break
+            let tag = document.createElement("span");
+            tag.className = "tag";
+            tag.textContent = popular_manga[currentIndex - 1]["attributes"]["contentRating"].toUpperCase();
+
+            if (rating === "suggestive") {
+                tag.classList.add("rating-suggestive");
+            } else {
+                tag.classList.add("rating-nsfw");
             }
-            genreTags.appendChild(li);
+            genreTags.appendChild(tag);
         }
 
         popular_manga[currentIndex - 1]["attributes"]["tags"].forEach(tag => {
-            if (tag["attributes"]["group"] !== "genre" || genreTags.children.length === 4) {
+            if (tag["attributes"]["group"] !== "genre" || genreTags.children.length === 5) {
                 return
             }
-            let li = document.createElement("li");
-            li.textContent = tag["attributes"]["name"]["en"];
-            li.classList.add("bg-gray-200", "px-2", "py-1", "rounded-lg", "text-xs", "font-medium");
-            genreTags.appendChild(li);
+            let tagElement = document.createElement("span");
+            tagElement.className = "tag";
+            tagElement.textContent = tag["attributes"]["name"]["en"];
+            genreTags.appendChild(tagElement);
         })
     }
 
-    setInterval(function () {
+    const scroll_interval = setInterval(function () {
         currentIndex = currentIndex + 1;
         if (currentIndex > 10) {
             currentIndex = 1;
         }
         updateManga()
     }, 10000)
-
 </script>
 </body>
 

@@ -201,7 +201,7 @@ class Database:
         cursor.close()
         return mdj
 
-    @perf_test
+
     def get_cover_art(self, identifier: MangaIdentifier, size=COVER_ART_MAX_SIZE, size_any=False) -> Optional[
         bytes]:
         cursor = self.conn.cursor()

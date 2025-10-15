@@ -5,156 +5,446 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>Download Manager</title>
 	<style>
-
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: hsl(0 0% 100%);
-            color: hsl(0 0% 14.12%);
+        * {
             margin: 0;
-            padding: 20px;
+            padding: 0;
+            box-sizing: border-box;
         }
 
-        h1 {
-            color: hsl(0 0% 14.12%);
-            margin-bottom: 30px;
+        :root {
+            {% if darktheme %}
+            --md-bg: #1a1a1a;
+            --md-surface: #242424;
+            --md-surface-hover: #2a2a2a;
+            --md-border: #3a3a3a;
+            --md-text: #e8e8e8;
+            --md-text-secondary: #a0a0a0;
+            --md-accent: #ff6740;
+            --md-accent-hover: #ff7d5c;
+            --md-success: #4caf50;
+            --md-danger: #f44336;
+            --md-shadow: rgba(0, 0, 0, 0.5);
+            {% else %}
+            --md-bg: #f5f5f5;
+            --md-surface: #ffffff;
+            --md-surface-hover: #f9f9f9;
+            --md-border: #e0e0e0;
+            --md-text: #1a1a1a;
+            --md-text-secondary: #666666;
+            --md-accent: #ff6740;
+            --md-accent-hover: #ff7d5c;
+            --md-success: #4caf50;
+            --md-danger: #f44336;
+            --md-shadow: rgba(0, 0, 0, 0.1);
+            {% endif %}
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
+            background: var(--md-bg);
+            color: var(--md-text);
+            min-height: 100vh;
+            padding: 0;
+        }
+
+        .header {
+            background: var(--md-surface);
+            border-bottom: 1px solid var(--md-border);
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header h1 {
+            color: var(--md-text);
+            font-size: 20px;
+            font-weight: 600;
+            flex: 1;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background: var(--md-bg);
+            border-radius: 4px;
+            font-size: 13px;
+            color: var(--md-text-secondary);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--md-success);
+        }
+
+        .status-dot.paused {
+            background: var(--md-text-secondary);
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 24px;
         }
 
         .button {
-            display: inline-block;
-            padding: 10px 20px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 16px;
             font-size: 14px;
-            font-weight: bold;
+            font-weight: 500;
             text-decoration: none;
-            background-color: hsl(12.25 100% 62.55%);
+            background: var(--md-accent);
             color: white;
             border: none;
             border-radius: 4px;
             cursor: pointer;
-            transition: background-color 0.3s ease;
-            margin-right: 10px;
+            transition: all 0.2s ease;
+            gap: 6px;
         }
 
         .button:hover {
-            background-color: hsl(12.5 77.06% 57.25%);
+            background: var(--md-accent-hover);
         }
 
-        .button:active {
-            background-color: hsl(12.09 52.23% 48.43%);
+        .button-secondary {
+            background: var(--md-surface);
+            color: var(--md-text);
+            border: 1px solid var(--md-border);
         }
 
+        .button-secondary:hover {
+            background: var(--md-surface-hover);
+        }
 
-        .table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-            background-color: #ffffff;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            border: 1px solid #e2e8f0;
+        .button-small {
+            padding: 4px 10px;
+            font-size: 13px;
+        }
+
+        .button-danger {
+            background: transparent;
+            color: var(--md-danger);
+            border: 1px solid var(--md-danger);
+        }
+
+        .button-danger:hover {
+            background: var(--md-danger);
+            color: white;
+        }
+
+        .button-success {
+            background: transparent;
+            color: var(--md-success);
+            border: 1px solid var(--md-success);
+        }
+
+        .button-success:hover {
+            background: var(--md-success);
+            color: white;
+        }
+
+        .section {
+            margin-bottom: 32px;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--md-text);
+        }
+
+        .controls {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .card {
+            background: var(--md-surface);
+            border: 1px solid var(--md-border);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .table-header {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            padding: 12px 16px;
+            background: var(--md-bg);
+            border-bottom: 1px solid var(--md-border);
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--md-text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         .row {
-            display: flex;
-            justify-content: space-between;
-            padding: 10px;
-            border-bottom: 1px solid #e2e8f0;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            padding: 16px;
+            border-bottom: 1px solid var(--md-border);
+            transition: background 0.2s ease;
+            align-items: center;
         }
 
-        .row:nth-child(odd) {
-            background-color: #f8fafc;
+        .row:hover {
+            background: var(--md-surface-hover);
+        }
+
+        .row:last-child {
+            border-bottom: none;
         }
 
         .cell {
-            flex: 1;
-            padding: 10px;
+            color: var(--md-text);
+            font-size: 14px;
+        }
+
+        .cell-title {
+            font-weight: 500;
+        }
+
+        .cell-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .empty-state {
+            padding: 48px 24px;
             text-align: center;
+            color: var(--md-text-secondary);
+            font-size: 14px;
         }
 
+        .speed-selector {
+            background: var(--md-surface);
+            border: 1px solid var(--md-border);
+            border-radius: 6px;
+            padding: 20px;
+        }
 
-        fieldset {
-            border: 1px solid #e2e8f0;
+        .speed-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--md-text);
+            margin-bottom: 16px;
+        }
+
+        .speed-options {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+        }
+
+        .radio-option {
+            display: flex;
+            align-items: center;
+            padding: 10px 14px;
+            background: var(--md-bg);
+            border: 1px solid var(--md-border);
             border-radius: 4px;
-            padding: 10px;
-            margin-bottom: 20px;
-            background-color: #ffffff;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            cursor: pointer;
+            transition: all 0.2s ease;
         }
 
-        legend {
-            font-weight: bold;
-            color: hsl(0 0% 14.12%);
+        .radio-option:hover {
+            border-color: var(--md-accent);
+        }
+
+        .radio-option.selected {
+            background: rgba(255, 103, 64, 0.1);
+            border-color: var(--md-accent);
         }
 
         input[type="radio"] {
+            width: 16px;
+            height: 16px;
             margin-right: 10px;
+            cursor: pointer;
+            accent-color: var(--md-accent);
         }
 
         label {
-            margin-right: 15px;
-            color: #64748b;
+            color: var(--md-text);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            user-select: none;
+            flex: 1;
         }
 
+        .progress-container {
+            margin-top: 8px;
+        }
 
-        @media (max-width: 600px) {
-            .row {
-                flex-direction: column;
-                align-items: center;
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: var(--md-bg);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 6px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--md-accent);
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            font-size: 12px;
+            color: var(--md-text-secondary);
+        }
+
+        .download-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .download-title {
+            font-weight: 500;
+            color: var(--md-text);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 16px;
             }
 
-            .cell {
+            .header {
+                padding: 12px 16px;
+            }
+
+            .header h1 {
+                font-size: 18px;
+            }
+
+            .table-header {
+                display: none;
+            }
+
+            .row {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .cell-actions {
                 width: 100%;
-                text-align: left;
+                justify-content: flex-start;
+            }
+
+            .speed-options {
+                grid-template-columns: 1fr;
             }
         }
 	</style>
 </head>
 <body>
-<button class="button" onClick="window.location.href='/';">Back</button>
-<h1 id="downloader-state">Download Manager</h1>
-
-<!-- Queue Section -->
-<h1>Queue</h1>
-<div id="queue" class="table">
-	<div class="row">
-		<div class="cell">File Name</div>
-		<div class="cell">Size</div>
-		<div class="cell">Status</div>
-	</div>
-	<!-- Rows will be dynamically added here -->
+<div class="header">
+    <button class="button button-secondary" onClick="window.location.href='/';">← Back</button>
+    <h1>Download Manager</h1>
+    <div class="status-indicator">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="downloader-state">Ready</span>
+    </div>
 </div>
-<button onclick="start_download()" class="button">Start Download</button>
-<button onclick="stop_download()" class="button">Stop Download</button>
 
-<!-- Speed Selection -->
-<fieldset>
-	<legend>Select Speed</legend>
-	<label><input type="radio" name="speed-change" onchange="change_speed()" id="speed-no-limit"/> No Limit</label>
-	<label><input type="radio" name="speed-change" onchange="change_speed()" id="speed-fast"/> Fast</label>
-	<label><input type="radio" name="speed-change" onchange="change_speed()" id="speed-normal"/> Normal</label>
-	<label><input type="radio" name="speed-change" onchange="change_speed()" id="speed-slow"/> Slow</label>
-</fieldset>
+<div class="container">
+    <!-- Queue Section -->
+    <div class="section">
+        <div class="section-header">
+            <h2 class="section-title">Queue</h2>
+            <div class="controls">
+                <button onclick="start_download()" class="button">Start Download</button>
+                <button onclick="stop_download()" class="button button-secondary">Stop Download</button>
+            </div>
+        </div>
+        <div id="queue" class="card">
+            <div class="table-header">
+                <div>Title</div>
+                <div>Actions</div>
+            </div>
+            <div class="empty-state">No items in queue</div>
+        </div>
+    </div>
 
-<!-- Currently Downloading Section -->
-<h1>Currently Downloading</h1>
-<div id="currently-working-on" class="table">
-	<div class="row">
-		<div class="cell">File Name</div>
-		<div class="cell">Progress</div>
-		<div class="cell">Speed</div>
-	</div>
-	<!-- Rows will be dynamically added here -->
+    <!-- Speed Selection -->
+    <div class="section">
+        <div class="speed-selector">
+            <div class="speed-title">Download Speed</div>
+            <div class="speed-options">
+                <div class="radio-option" onclick="document.getElementById('speed-no-limit').click()">
+                    <input type="radio" name="speed-change" onchange="change_speed()" id="speed-no-limit"/>
+                    <label for="speed-no-limit">No Limit</label>
+                </div>
+                <div class="radio-option" onclick="document.getElementById('speed-fast').click()">
+                    <input type="radio" name="speed-change" onchange="change_speed()" id="speed-fast"/>
+                    <label for="speed-fast">Fast</label>
+                </div>
+                <div class="radio-option" onclick="document.getElementById('speed-normal').click()">
+                    <input type="radio" name="speed-change" onchange="change_speed()" id="speed-normal"/>
+                    <label for="speed-normal">Normal</label>
+                </div>
+                <div class="radio-option" onclick="document.getElementById('speed-slow').click()">
+                    <input type="radio" name="speed-change" onchange="change_speed()" id="speed-slow"/>
+                    <label for="speed-slow">Slow</label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Currently Downloading Section -->
+    <div class="section">
+        <h2 class="section-title">Currently Downloading</h2>
+        <div id="currently-working-on" class="card">
+            <div class="empty-state">No active downloads</div>
+        </div>
+    </div>
 </div>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 <script>
     window.token = '{{ token }}';
 
-    var queue_updater = null;
-    var currently_working_updater = null;
+    const socket = io();
+
+    function updateRadioStyles() {
+        document.querySelectorAll('.radio-option').forEach(option => {
+            const radio = option.querySelector('input[type="radio"]');
+            if (radio && radio.checked) {
+                option.classList.add('selected');
+            } else {
+                option.classList.remove('selected');
+            }
+        });
+    }
 
     function change_speed() {
         const no_limit = document.getElementById("speed-no-limit");
         const fast = document.getElementById("speed-fast");
         const normal = document.getElementById("speed-normal");
         const slow = document.getElementById("speed-slow");
-        var reply = "NORMAL"; // default
+        let reply = "NORMAL"; // default
         if (no_limit.checked) {
             reply = "NO_LIMIT";
         } else if (fast.checked) {
@@ -164,228 +454,166 @@
         } else if (slow.checked) {
             reply = "SLOW"
         }
-        doAjax("/manga/download/speed", "POST", null, {"speed": reply});
-    }
-
-    function getMethods(obj) {
-        var result = [];
-        for (var id in obj) {
-            try {
-                if (typeof (obj[id]) == "function") {
-                    result.push(id + ": " + obj[id].toString());
-                }
-            } catch (err) {
-                result.push(id + ": inaccessible");
-            }
-        }
-        return result;
-    }
-
-    // From https://gist.github.com/dharmavir/936328
-    function getHttpRequestObject() {
-        // Define and initialize as false
-        var xmlHttpRequst = false;
-
-        // Mozilla/Safari/Non-IE
-        if (window.XMLHttpRequest) {
-            xmlHttpRequst = new XMLHttpRequest();
-        }
-        // IE
-        else if (window.ActiveXObject) {
-            xmlHttpRequst = new ActiveXObject("Microsoft.XMLHTTP");
-        }
-        return xmlHttpRequst;
-    }
-
-    // Does the AJAX call to URL specific with rest of the parameters
-    function doAjax(url, method, responseHandler, data) {
-        // Set the variables
-        url = url || "";
-        method = method || "GET";
-        async = true;
-        data = data || {};
-        data.token = window.token;
-
-        if (url == "") {
-            alert("URL can not be null/blank");
-            return false;
-        }
-        var xmlHttpRequest = getHttpRequestObject();
-
-        // If AJAX supported
-        if (xmlHttpRequest != false) {
-            xmlHttpRequest.open(method, url, async);
-            // Set request header (optional if GET method is used)
-            if (method == "POST") {
-                xmlHttpRequest.setRequestHeader("Content-Type", "application/json");
-            }
-            // Assign (or define) response-handler/callback when ReadyState is changed.
-            xmlHttpRequest.onreadystatechange = responseHandler;
-            // Send data
-            xmlHttpRequest.send(JSON.stringify(data));
-        } else {
-            alert("Please use browser with Ajax support.!");
-        }
-    }
+        updateRadioStyles();
+        fetch("/manga/download/speed", {
+            method: "POST",
+			body: JSON.stringify({"speed": reply})
+        })
+	}
 
     function start_download() {
-        doAjax("/manga/download/start", "GET", null);
-        refresh_queue();
-        refresh_status();
+        fetch("/manga/download/start")
     }
 
     function stop_download() {
-        doAjax("/manga/download/stop", "GET", null);
-    }
+        fetch("/manga/download/stop")
+	}
 
-    function status_handler(response) {
-        if (this.responseText) {
-            const resp = JSON.parse(this.responseText);
+    function update_state(data){
+		const queue = document.getElementById("queue");
 
-            console.log(resp);
-
-            const divUpdates = document.getElementById("currently-working-on");
-
-            if (!resp.in_progress) {
-                while (divUpdates.firstChild) {
-                    divUpdates.removeChild(divUpdates.firstChild);
-                }
-                return;
-            }
-
-            const divRow = document.createElement("div");
-            divRow.className = "row";
-
-            const stateText = document.getElementById("downloader-state");
-
-            const nolimit = document.getElementById("speed-no-limit");
-            const fast = document.getElementById("speed-fast");
-            const normal = document.getElementById("speed-normal");
-            const slow = document.getElementById("speed-slow");
-
-            switch (resp.speed_mode) {
-				case "NO_LIMIT":
-                    nolimit.checked = true;
-                    fast.checked = false;
-                    normal.checked = false;
-                    slow.checked = false;
-                    break;
-                case "FAST":
-                    nolimit.checked = false;
-                    fast.checked = true;
-                    normal.checked = false;
-                    slow.checked = false;
-                    break;
-                case "NORMAL":
-                    nolimit.checked = false;
-                    fast.checked = false;
-                    normal.checked = true;
-                    slow.checked = false;
-                    break;
-                case "SLOW":
-                    nolimit.checked = false;
-                    fast.checked = false;
-                    normal.checked = false;
-                    slow.checked = true;
-                    break;
-                default:
-                    console.log("Unexpected data from server: " + resp.speed_mode)
-                    break;
-            }
-
-            if (resp.in_progress) {
-                stateText.innerHTML = "Downloading. Speed set to: " + resp.speed_mode;
-            } else {
-                stateText.innerHTML = "Paused";
-            }
-
-            while (divUpdates.firstChild) {
-                divUpdates.removeChild(divUpdates.firstChild);
-            }
-
-            if (!resp.in_progress) {
-                return;
-            }
-
-            if (resp.status.length !== 0) {
-                const a = document.createElement("a");
-                a.className = "cell"
-                for (let status in resp.status) {
-                    const value = resp.status[status];
-                    // Old way of showing the progress keeping it here if i change my mind but i think percentages
-                    // are better for now
-                    // a.innerHTML = `downloading ${value.name} currently at chapter (${value.chapter_status[0]}/${value.chapter_status[1]}) page (${value.page_status[0]}/${value.page_status[1]})`;
-                    let chapter_perc = Math.round((100 * value.chapter_status[0]) / value.chapter_status[1]);
-                    let page_perc = 0;
-                    if (value.page_status[0] === "?" || value.page_status[1] === "?") {
-                        page_perc = 0;
-                    } else {
-                        page_perc = Math.round((100 * value.page_status[0]) / value.page_status[1]);
-                    }
-                    a.innerHTML = `downloading ${value.name} chapter progress ${chapter_perc}% page progress ${page_perc}%`;
-                }
-                divRow.appendChild(a);
-                divUpdates.append(divRow);
-            }
-        }
-    }
-
-    function refresh_status() {
-        doAjax("/manga/download/status", "GET", status_handler);
-    }
-
-    function queue_handler(resp) {
-        if (!this.responseText) {
-            return;
-        }
-        const queue_json = JSON.parse(this.responseText);
-        const queue = document.getElementById("queue");
-
+		// TODO: Dont remove all the cells
         while (queue.firstChild) {
             queue.removeChild(queue.firstChild);
         }
 
-        for (let index in queue_json.queue) {
-            const value = queue_json.queue[index]
+        // Add header
+        const headerDiv = document.createElement("div");
+        headerDiv.className = "table-header";
+        headerDiv.innerHTML = `
+            <div>Title</div>
+            <div>Actions</div>
+        `;
+        queue.appendChild(headerDiv);
 
-            const EntryDiv = document.createElement("div");
-            EntryDiv.className = "row";
+        if (Object.keys(data.queue).length === 0) {
+            const emptyDiv = document.createElement("div");
+            emptyDiv.className = "empty-state";
+            emptyDiv.textContent = "No items in queue";
+            queue.appendChild(emptyDiv);
+        } else {
+            Object.keys(data.queue).forEach((key, index) => {
+                const title = data.queue[key]
 
-            const EntryText = document.createElement("a");
-            EntryText.className = "cell";
-            EntryText.innerHTML = value.name
+                const EntryDiv = document.createElement("div");
+                EntryDiv.className = "row";
 
-            const RemoveButton = document.createElement("button");
-            RemoveButton.className = "cell button";
-            RemoveButton.innerHTML = "Remove entry";
-            RemoveButton.addEventListener("click", function () {
-                doAjax("/manga/download/pop-job", "POST", null, {"index": index});
-                refresh_queue();
+                const EntryText = document.createElement("div");
+                EntryText.className = "cell cell-title";
+                EntryText.innerHTML = title
+
+                const ActionsCell = document.createElement("div");
+                ActionsCell.className = "cell cell-actions";
+
+                const PushToTopButton = document.createElement("button");
+                PushToTopButton.className = "button button-small button-success";
+                PushToTopButton.innerHTML = "↑ Priority";
+                PushToTopButton.addEventListener("click", function () {
+                    fetch("/manga/download/push-to-top", {method: "POST", body: JSON.stringify({"index": index})});
+                });
+
+                const RemoveButton = document.createElement("button");
+                RemoveButton.className = "button button-small button-danger";
+                RemoveButton.innerHTML = "Remove";
+                RemoveButton.addEventListener("click", function () {
+                    fetch("/manga/download/pop-job", {method: "POST", body: JSON.stringify({"index": index})});
+                });
+
+                ActionsCell.appendChild(PushToTopButton);
+                ActionsCell.appendChild(RemoveButton);
+
+                EntryDiv.appendChild(EntryText);
+                EntryDiv.appendChild(ActionsCell);
+                queue.append(EntryDiv);
             });
-
-            const PushToTopButton = document.createElement("button");
-            PushToTopButton.className = "cell button";
-            PushToTopButton.innerHTML = "Push to top";
-            PushToTopButton.addEventListener("click", function () {
-                doAjax("/manga/download/push-to-top", "POST", null, {"index": index});
-                refresh_queue();
-            });
-
-            EntryDiv.appendChild(EntryText);
-            EntryDiv.appendChild(RemoveButton);
-            EntryDiv.appendChild(PushToTopButton);
-            queue.append(EntryDiv);
         }
-    }
 
-    function refresh_queue() {
-        doAjax("/manga/download/queue", "GET", queue_handler)
-    }
+		const nolimit = document.getElementById("speed-no-limit");
+        const fast = document.getElementById("speed-fast");
+        const normal = document.getElementById("speed-normal");
+        const slow = document.getElementById("speed-slow");
 
-    refresh_status()
-    refresh_queue()
-    queue_updater = setInterval(refresh_queue, 1000);
-    currently_working_updater = setInterval(refresh_status, 1000);
+        switch (data.speed) {
+			case "NO_LIMIT":
+                nolimit.checked = true;
+                fast.checked = false;
+                normal.checked = false;
+                slow.checked = false;
+                break;
+            case "FAST":
+                nolimit.checked = false;
+                fast.checked = true;
+                normal.checked = false;
+                slow.checked = false;
+                break;
+            case "NORMAL":
+                nolimit.checked = false;
+                fast.checked = false;
+                normal.checked = true;
+                slow.checked = false;
+                break;
+            case "SLOW":
+                nolimit.checked = false;
+                fast.checked = false;
+                normal.checked = false;
+                slow.checked = true;
+                break;
+            default:
+                console.log("Unexpected data from server: " + data.speed)
+                break;
+        }
+
+        updateRadioStyles();
+
+        const divUpdates = document.getElementById("currently-working-on");
+		while (divUpdates.firstChild) {
+            divUpdates.removeChild(divUpdates.firstChild);
+		}
+
+		if(data.currently_working_on == null){
+            const emptyDiv = document.createElement("div");
+            emptyDiv.className = "empty-state";
+            emptyDiv.textContent = "No active downloads";
+            divUpdates.appendChild(emptyDiv);
+            return;
+		}
+
+		const divRow = document.createElement("div");
+        divRow.className = "row";
+
+        const stateText = document.getElementById("downloader-state");
+        const statusDot = document.getElementById("status-dot");
+
+		if (data.state === "DOWNLOADING") {
+            stateText.innerHTML = data.speed.replace('_', ' ').toLowerCase();
+            statusDot.classList.remove('paused');
+        } else {
+            stateText.innerHTML = "Paused";
+            statusDot.classList.add('paused');
+        }
+		const a = document.createElement("div");
+        a.className = "cell download-info"
+		a.id = "cwo"
+        let chapter_perc = Math.round((100 * data.currently_working_on.chapter_status[0]) / data.currently_working_on.chapter_status[1]);
+        a.innerHTML = `
+            <div class="download-title">${data.currently_working_on.title}</div>
+            <div class="progress-container">
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${chapter_perc}%"></div>
+                </div>
+                <div class="progress-text">${chapter_perc}% complete</div>
+            </div>
+        `;
+        divRow.appendChild(a);
+        divUpdates.append(divRow);
+	}
+
+	socket.on("update", data => {
+		update_state(data);
+	})
+
+    // Initialize radio styles
+    updateRadioStyles();
 </script>
 </body>
 </html>

@@ -1,17 +1,19 @@
 import asyncio
+import time
 from dataclasses import asdict
 from typing import Optional, List
 
 import aiohttp
 import requests
 from attr import attributes
+from flask_socketio import SocketIO
 
 from rewrite.backend.connection import MangadexConnection, MangaDownloader, CredentialManager
 from rewrite.backend.database import Database
 from rewrite.backend.schemas import MangaIdentifier, ChapterIdentifier, ChapterList, Manga, MangaAttributes, \
     ChapterAttributes, LatestChapter, MangaList, COVER_ART_MAX_SIZE
 from rewrite.backend.settings import load_settings, load_credentials
-from rewrite.backend.utils import resize_image, perf_test, info, warning, error
+from rewrite.backend.utils import resize_image, perf_test, info, warning, error, success
 
 
 # Taking inspiration from how android works utilizing repositories which take connection nad database
@@ -19,14 +21,15 @@ from rewrite.backend.utils import resize_image, perf_test, info, warning, error
 
 
 class MangaRepository:
-    def __init__(self):
+    def __init__(self, socketio):
         self.settings = load_settings()
         self.settings.onMangaDownloadFinishHandler = self.store_downloaded_pages
 
         self.database = Database()
         self.credential_manager = CredentialManager(self.settings, load_credentials())
         self.connection = MangadexConnection(self.settings, self.credential_manager)
-        self.downloader = MangaDownloader(self.settings)
+        self.downloader = MangaDownloader(self.settings, socketio)
+        self.socketio: SocketIO | None = socketio
         self.cache = {}
 
     def store_downloaded_pages(self, muuid: MangaIdentifier, cuuid: ChapterIdentifier, downloader: MangaDownloader):
@@ -42,9 +45,19 @@ class MangaRepository:
         del downloader.finished[muuid][cuuid]
 
     def get_manga_attributes(self, identifier: MangaIdentifier) -> Optional[MangaAttributes]:
+        cache_identifier = f"MA:{identifier}"
+        cache_hit: tuple | None = self.cache.get(cache_identifier, None)
+        if cache_hit:
+            if (time.time() - cache_hit[1]) > 600:
+                del self.cache[cache_identifier]
+            else:
+                return cache_hit[0].attributes
+
+
         manga = self.connection.get_manga(identifier)
         if manga is not None:
             self.database.set_manga_attributes(manga)
+            self.cache[cache_identifier] = (manga, time.time())
             return manga.attributes
         db_manga = self.database.get_manga_attributes(identifier)
         if db_manga:
@@ -59,19 +72,13 @@ class MangaRepository:
         raise NotImplemented("Error. Offline usage of get_chapter_list is not Implemented!")
 
     def get_cover_art(self, identifier: MangaIdentifier, size: int, size_any=False) -> Optional[bytes]:
-        cache_identifier = f"{identifier}:{size}"
-        cache_hit = self.cache.get(cache_identifier, None)
-        if cache_hit is not None:
-            return cache_hit
-
+        # Cache here is useless because user caches it inside the browser
         cover_art = self.database.get_cover_art(identifier, size=size, size_any=size_any)
         if not cover_art:
             fetch_cover_art = self.connection.get_cover_art(identifier, size=size)
             if fetch_cover_art is not None:
                 self.database.set_cover_art(identifier, size, fetch_cover_art)
-            self.cache[cache_identifier] = fetch_cover_art
             return fetch_cover_art
-        self.cache[cache_identifier] = cover_art
         return cover_art
 
     def get_chapter_attributes(self, identifier: MangaIdentifier, ids: Optional[dict[str, str]] = None) -> Optional[

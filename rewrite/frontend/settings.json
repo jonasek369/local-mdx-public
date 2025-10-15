@@ -1,5 +1,6 @@
 {
     "content_rating": ["safe", "suggestive", "erotica"],
     "translated_language": ["en"],
-    "cache_token_to_disk": true
+    "cache_token_to_disk": true,
+    "dark_theme": true
 }

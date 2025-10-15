@@ -27,6 +27,7 @@ def perf_test(func):
     return wrapper
 
 
+
 def get_correct_language(langs: Dict, settings) -> str | None:
     """
     settings is of type Settings
@@ -42,13 +43,20 @@ def get_correct_language(langs: Dict, settings) -> str | None:
             return None
         return langs[list(langs.keys())[0]]
 
-def is_valid_uuid(val):
-    try:
-        uuid.UUID(str(val))
-        return True
-    except ValueError:
-        return False
 
+def is_uuid4(value: str) -> bool:
+    try:
+        val = uuid.UUID(value, version=4)
+    except (ValueError, AttributeError, TypeError):
+        return False
+    return str(val) == value.lower()
+
+
+def run_async(func, *args, **kwargs):
+    import asyncio
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    return loop.run_until_complete(func(*args, **kwargs))
 
 def resize_image(image_data, resize_factor=4):
     try:

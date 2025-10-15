@@ -5,23 +5,55 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ name }}</title>
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            {% if darktheme %}
+            --md-bg: #1a1a1a;
+            --md-surface: #242424;
+            --md-surface-hover: #2a2a2a;
+            --md-border: #3a3a3a;
+            --md-text: #e8e8e8;
+            --md-text-secondary: #a0a0a0;
+            --md-accent: #ff6740;
+            --md-accent-hover: #ff7d5c;
+            --md-success: #4caf50;
+            --md-danger: #f44336;
+            --md-shadow: rgba(0, 0, 0, 0.5);
+            {% else %}
+            --md-bg: #f5f5f5;
+            --md-surface: #ffffff;
+            --md-surface-hover: #f9f9f9;
+            --md-border: #e0e0e0;
+            --md-text: #1a1a1a;
+            --md-text-secondary: #666666;
+            --md-accent: #ff6740;
+            --md-accent-hover: #ff7d5c;
+            --md-success: #4caf50;
+            --md-danger: #f44336;
+            --md-shadow: rgba(0, 0, 0, 0.15);
+            {% endif %}
+        }
 
         body {
             margin: 0;
             padding: 0;
-            font-family: 'Inter', sans-serif;
-            background-color: #ffffff;
-            color: #ffffff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
+            background-color: var(--md-bg);
+            color: var(--md-text);
         }
 
-        .container {
+        .header {
             position: relative;
-            min-height: 60vh;
+            min-height: 400px;
             overflow: hidden;
             display: flex;
-            justify-content: center;
             align-items: center;
-            background: rgba(0, 0, 0, 0.7);
+            background: var(--md-surface);
         }
 
         .background-image {
@@ -33,215 +65,358 @@
             background-image: url("/manga/cover/{{ muuid }}");
             background-size: cover;
             background-position: center;
-            filter: blur(10px) brightness(0.6);
-            z-index: -1;
-            transform: scale(1);
+            filter: blur(20px) brightness(0.3);
+            transform: scale(1.1);
+            z-index: 0;
         }
 
-        .content {
+        .header-content {
             position: relative;
             z-index: 1;
-            text-align: center;
-            padding: 20px;
-            max-width: 800px;
+            max-width: 1400px;
             width: 100%;
+            margin: 0 auto;
+            padding: 40px 24px;
+            display: flex;
+            gap: 32px;
+            align-items: flex-start;
         }
 
-        .logo {
-            width: 300px;
-            height: 300px;
+        .back-button {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            background-color: var(--md-surface);
+            color: var(--md-text);
+            border: 1px solid var(--md-border);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            z-index: 2;
+        }
+
+        .back-button:hover {
+            background-color: var(--md-surface-hover);
+        }
+
+        .cover-image {
+            flex-shrink: 0;
+            width: 240px;
+            height: 360px;
             background-image: url("/manga/cover/{{ muuid }}");
             background-size: cover;
             background-position: center;
-            border-radius: 15px;
-            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
-            margin: 0 auto 20px;
+            border-radius: 6px;
+            box-shadow: 0 8px 24px var(--md-shadow);
             transition: transform 0.3s ease;
         }
 
-        .logo:hover {
-            transform: scale(1.05);
+        .cover-image:hover {
+            transform: translateY(-4px);
+        }
+
+        .manga-info {
+            flex: 1;
+            color: white;
         }
 
         .manga-name {
-            font-size: 48px;
-            font-weight: bold;
-            margin-bottom: 20px;
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 16px;
             text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8);
         }
 
         .manga-description {
-            font-size: 20px;
-            line-height: 1.6;
-            margin-bottom: 30px;
+            font-size: 16px;
+            line-height: 1.7;
+            margin-bottom: 24px;
             text-shadow: 1px 1px 4px rgba(0, 0, 0, 0.8);
+            max-width: 800px;
         }
 
-        .button-group {
+        .action-buttons {
             display: flex;
-            justify-content: center;
-            gap: 15px;
-            margin-bottom: 30px;
+            gap: 12px;
+            flex-wrap: wrap;
         }
 
         .button {
-            display: inline-block;
-            padding: 12px 24px;
-            font-size: 16px;
-            font-weight: bold;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: 600;
             text-decoration: none;
-            color: #fff;
+            color: white;
             border: none;
-            border-radius: 8px;
+            border-radius: 4px;
             cursor: pointer;
-            transition: background-color 0.3s ease, transform 0.2s ease;
+            transition: all 0.2s ease;
         }
 
-        .button.green {
-            background-color: #4CAF50;
+        .button-success {
+            background-color: var(--md-success);
         }
 
-        .button.green:hover {
+        .button-success:hover {
             background-color: #45a049;
             transform: translateY(-2px);
         }
 
-        .button.red {
-            background-color: #af4c4c;
+        .button-danger {
+            background-color: var(--md-danger);
         }
 
-        .button.red:hover {
-            background-color: #a04545;
+        .button-danger:hover {
+            background-color: #d32f2f;
             transform: translateY(-2px);
         }
 
-        .additional-button {
-            position: absolute;
+        .main-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 32px 24px;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--md-text);
+        }
+
+        .sort-button {
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            background-color: var(--md-surface);
+            color: var(--md-text);
+            border: 1px solid var(--md-border);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .sort-button:hover {
+            background-color: var(--md-surface-hover);
+            border-color: var(--md-accent);
+        }
+
+        .chapters-list {
+            display: grid;
+            gap: 12px;
+        }
+
+        .chapter-item {
+            display: flex;
+            align-items: center;
+            padding: 16px 20px;
+            background-color: var(--md-surface);
+            border: 1px solid var(--md-border);
+            border-radius: 6px;
+            text-decoration: none;
+            color: var(--md-text);
+            font-size: 15px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .chapter-item:hover {
+            background-color: var(--md-surface-hover);
+            border-color: var(--md-accent);
+            transform: translateX(4px);
+        }
+
+        .chapter-item.read {
+            opacity: 0.5;
+            background-color: var(--md-bg);
+        }
+
+        .chapter-item.read:hover {
+            opacity: 0.7;
+        }
+
+        .warning-modal {
+            display: none;
+            position: fixed;
             top: 0;
             left: 0;
-            padding: 10px 20px;
-            font-size: 16px;
-            font-weight: bold;
-            text-decoration: none;
-            background-color: hsl(12.25 100% 62.55%);
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
-            margin: 20px;
-        }
-
-        .additional-button:hover {
-            background-color: hsl(12.5 77.06% 57.25%);
-        }
-
-		.additional-button:active {
-            background-color: hsl(12.09 52.23% 48.43%);
-        }
-
-        .chapters {
-            display: flex;
-            flex-direction: column;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            justify-content: center;
             align-items: center;
-            gap: 10px;
-            margin-top: 30px;
         }
 
-        .chapters a {
-            display: inline-block;
-            width: 250px;
-            padding: 12px;
-            text-align: center;
-            color: #333;
-            text-decoration: none;
-            background-color: #f2f2f2;
-            border: 2px solid #999;
+        .warning-modal.active {
+            display: flex;
+        }
+
+        .warning-content {
+            background-color: var(--md-surface);
+            border: 1px solid var(--md-border);
             border-radius: 8px;
-            font-size: 18px;
-            font-weight: bold;
-            transition: background-color 0.3s ease, color 0.3s ease;
-        }
-
-        .chapters a:hover {
-            background-color: #dcdcdc;
-            color: #000;
-        }
-
-        .chapters a.read {
-            background-color: #aaaaaa;
-            border-color: #6e6e6e;
-        }
-
-        .chapters a.read:hover {
-            background-color: #505050;
-            color: #000;
-        }
-
-        .warning-box {
-            display: none;
-            border: 2px solid #ff9900;
-            background-color: #ffeecc;
-            padding: 15px;
-            border-radius: 8px;
-            max-width: 300px;
+            padding: 32px;
+            max-width: 400px;
             text-align: center;
-            margin: 20px auto;
+        }
+
+        .warning-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .warning-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--md-text);
+            margin-bottom: 12px;
         }
 
         .warning-text {
-            color: #ff9900;
-            font-weight: bold;
+            color: var(--md-text-secondary);
+            margin-bottom: 24px;
+            line-height: 1.5;
         }
 
+        .warning-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
 
-        @media (max-width: 768px) {
-            .manga-name {
-                font-size: 36px;
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--md-text-secondary);
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        @media (max-width: 1024px) {
+            .header-content {
+                flex-direction: column;
+                align-items: center;
+                text-align: center;
+            }
+
+            .manga-info {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
             }
 
             .manga-description {
-                font-size: 18px;
+                text-align: center;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                min-height: 300px;
             }
 
-            .button {
-                padding: 10px 20px;
+            .header-content {
+                padding: 30px 16px;
+                gap: 20px;
+            }
+
+            .cover-image {
+                width: 180px;
+                height: 270px;
+            }
+
+            .manga-name {
+                font-size: 28px;
+            }
+
+            .manga-description {
                 font-size: 14px;
             }
 
-            .chapters a {
-                width: 100%;
-                max-width: 250px;
+            .main-content {
+                padding: 24px 16px;
             }
 
-            .logo {
-                width: 200px;
-                height: 200px;
+            .section-title {
+                font-size: 20px;
+            }
+
+            .action-buttons {
+                width: 100%;
+            }
+
+            .button {
+                flex: 1;
+                justify-content: center;
+                min-width: 140px;
             }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-		<button class="additional-button" onclick="window.location.href='{{ back_redirect }}';">Back</button>
+    <div class="header">
+        <button class="back-button" onclick="window.location.href='{{ back_redirect }}';">← Back</button>
         <div class="background-image"></div>
-        <div class="content">
-            <div class="logo"></div>
-            <h1 class="manga-name">{{ name }}</h1>
-            <p class="manga-description">{{ description }}</p>
-            <div class="button-group">
-                <button type="button" onclick="push_job()" class="button green">Push manga to download as job</button>
-                <button type="button" onclick="confirm()" class="button red">Delete manga from database</button>
+        <div class="header-content">
+            <div class="cover-image"></div>
+            <div class="manga-info">
+                <h1 class="manga-name">{{ name }}</h1>
+                <p class="manga-description">{{ description }}</p>
+                <div class="action-buttons">
+                    <button type="button" onclick="push_job()" class="button button-success">
+                        ⬇ Download Manga
+                    </button>
+                    <button type="button" onclick="showDeleteWarning()" class="button button-danger">
+                        🗑 Delete from Database
+                    </button>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="warning-box" id="warningBox">
-        <p class="warning-text">Warning: This action cannot be undone.</p>
+    <div class="main-content">
+        <div class="section-header">
+            <h2 class="section-title">Chapters</h2>
+            <button class="sort-button" id="order" onclick="reverse_div()">
+                ↓ Descending
+            </button>
+        </div>
+        <div id="content" class="chapters-list">
+            <div class="empty-state">
+                <div class="empty-state-icon">📚</div>
+                <p>Loading chapters...</p>
+            </div>
+        </div>
     </div>
 
-    <button class="button green" id="order" onclick="reverse_div()">Descending</button>
-    <div id="content" class="chapters"></div>
+    <div class="warning-modal" id="warningModal">
+        <div class="warning-content">
+            <div class="warning-icon">⚠️</div>
+            <h3 class="warning-title">Delete Manga</h3>
+            <p class="warning-text">Are you sure you want to delete this manga from the database? This action cannot be undone.</p>
+            <div class="warning-buttons">
+                <button class="button button-danger" onclick="confirmDelete()">Delete</button>
+                <button class="sort-button" onclick="hideDeleteWarning()">Cancel</button>
+            </div>
+        </div>
+    </div>
 
 <script>
     window.token = '{{ token }}';
@@ -253,26 +428,60 @@
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                id: "{{muuid}}" // Replace this with the actual value of muuid
+                id: "{{muuid}}"
             })
         })
+    }
+
+    function showDeleteWarning() {
+        document.getElementById('warningModal').classList.add('active');
+    }
+
+    function hideDeleteWarning() {
+        document.getElementById('warningModal').classList.remove('active');
+    }
+
+    function confirmDelete() {
+        // Add your delete logic here
+        console.log('Manga deleted');
+        hideDeleteWarning();
     }
 
     fetch("/manga/{{muuid}}/info").then(response => response.json()).then(data => sortVolumesDescending(data)).then(data => {
         var contdiv = document.getElementById("content");
 
+        // Clear loading state
+        while (contdiv.firstChild) {
+            contdiv.removeChild(contdiv.firstChild);
+        }
+
+        if (Object.keys(data).length === 0) {
+            const emptyState = document.createElement("div");
+            emptyState.className = "empty-state";
+            emptyState.innerHTML = `
+                <div class="empty-state-icon">📖</div>
+                <p>No chapters available</p>
+            `;
+            contdiv.appendChild(emptyState);
+            return;
+        }
+
         for (const key in data) {
             var a = document.createElement("a");
+            a.className = "chapter-item";
 
-            chapter = data[key]
+            chapter = data[key];
 
-            // Customize the text content and style of the link
+            // Customize the text content
             a.textContent = "Volume " + chapter.volume + " Chapter " + chapter.chapter;
+            if (chapter.title) {
+                a.textContent += " - " + chapter.title;
+            }
 
             // Set the link's href attribute
             a.setAttribute('href', "/read/" + key);
 
-            // Append the link and line break to the container div
+            // Append the link to the container div
             contdiv.appendChild(a);
         }
     })
@@ -289,9 +498,9 @@
             if (a.volume === b.volume) {
                 const chapterA = parseFloat(a.chapter);
                 const chapterB = parseFloat(b.chapter);
-                return chapterB - chapterA; // Sort chapters in descending order if volumes are the same
+                return chapterB - chapterA;
             } else {
-                return b.volume - a.volume; // Sort volumes in descending order
+                return b.volume - a.volume;
             }
         });
 
@@ -304,7 +513,6 @@
             }
         })
 
-
         return sorted_dictionary;
     }
 
@@ -316,47 +524,20 @@
         items.reverse();
 
         items.forEach(item => contdiv.appendChild(item));
-        if(orderButton.innerText === "Descending"){
-            orderButton.innerText = "Ascending";
-		}else{
-            orderButton.innerText = "Descending";
-		}
-        /*
 
-		if (contdiv.childNodes.length !== 0) {
-			const firstElement = contdiv.firstChild;
-			const ElementText = firstElement.textContent;
-			if (firstElement.textContent.includes("Volume")) {
-				if (parseInt(ElementText.slice(7, 8)) <= 1) {
-					orderButton.innerHTML = "Descending";
-				} else {
-					orderButton.innerHTML = "Ascending";
-				}
-			} else {
-				if (parseInt(ElementText.slice(8, 9)) <= 1) {
-					orderButton.innerHTML = "Descending";
-				} else {
-					orderButton.innerHTML = "Ascending";
-				}
-			}
-		} else {
-			return;
-		}
-
-		var elements = [];
-		while (contdiv.firstChild) {
-			elements.push(contdiv.firstChild);
-			contdiv.removeChild(contdiv.firstChild);
-		}
-		elements.reverse();
-		for (var i = 0; i < elements.length; i++) {
-			if (i == 0 && elements[i].tagName.toLowerCase() == "br") {
-				elements.push(elements[i]);
-				continue;
-			}
-			contdiv.appendChild(elements[i])
-		}*/
+        if(orderButton.innerText.includes("Descending")){
+            orderButton.innerHTML = "↑ Ascending";
+        } else {
+            orderButton.innerHTML = "↓ Descending";
+        }
     }
+
+    // Close modal when clicking outside
+    document.getElementById('warningModal').addEventListener('click', function(event) {
+        if (event.target === this) {
+            hideDeleteWarning();
+        }
+    });
 </script>
 </body>
 </html>

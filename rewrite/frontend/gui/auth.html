@@ -3,58 +3,82 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Login Page</title>
+	<title>LMDX - Login</title>
 	<style>
-
-        body {
-            font-family: 'Inter', sans-serif;
-            background: linear-gradient(135deg, hsl(0 0% 100%), hsl(200 10.71% 89.02%));
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
+        * {
             margin: 0;
-            color: #333;
+            padding: 0;
+            box-sizing: border-box;
         }
 
+        :root {
+            {% if darktheme %}
+            --md-bg: #1a1a1a;
+            --md-surface: #242424;
+            --md-surface-hover: #2a2a2a;
+            --md-border: #3a3a3a;
+            --md-text: #e8e8e8;
+            --md-text-secondary: #a0a0a0;
+            --md-accent: #ff6740;
+            --md-accent-hover: #ff7d5c;
+            --md-shadow: rgba(0, 0, 0, 0.3);
+            {% else %}
+            --md-bg: #f5f5f5;
+            --md-surface: #ffffff;
+            --md-surface-hover: #f9f9f9;
+            --md-border: #e0e0e0;
+            --md-text: #1a1a1a;
+            --md-text-secondary: #666666;
+            --md-accent: #ff6740;
+            --md-accent-hover: #ff7d5c;
+            --md-shadow: rgba(0, 0, 0, 0.1);
+            {% endif %}
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
+            background-color: var(--md-bg);
+            color: var(--md-text);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
 
         .back-button {
             position: absolute;
-            top: 20px;
-            left: 20px;
-            padding: 10px 20px;
-            background-color: hsl(12.25 100% 62.55%);
-            color: hsl(0 0% 14.12%);
+            top: 24px;
+            left: 24px;
+            background: none;
+            color: var(--md-text);
+            border: 1px solid var(--md-border);
+            padding: 8px 16px;
+            border-radius: 6px;
             font-size: 14px;
-            border: none;
-            border-radius: 5px;
             cursor: pointer;
-            transition: background-color 0.3s ease;
+            transition: all 0.2s ease;
         }
 
         .back-button:hover {
-            background-color: hsl(12.5 77.06% 57.25%);
+            background-color: var(--md-surface-hover);
+            border-color: var(--md-accent);
+            color: var(--md-accent);
         }
-
-		.back-button:active {
-            background-color: hsl(12.09 52.23% 48.43%);
-        }
-
 
         .container {
-            background: #fff;
-            width: 350px;
-            padding: 30px;
+            background-color: var(--md-surface);
+            border: 1px solid var(--md-border);
             border-radius: 10px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-            text-align: center;
-            animation: fadeIn 0.5s ease-in-out;
+            padding: 40px 32px;
+            box-shadow: 0 8px 24px var(--md-shadow);
+            width: 360px;
+            animation: fadeIn 0.4s ease-in-out;
         }
 
         @keyframes fadeIn {
             from {
                 opacity: 0;
-                transform: translateY(-20px);
+                transform: translateY(10px);
             }
             to {
                 opacity: 1;
@@ -63,62 +87,69 @@
         }
 
         h2 {
-            margin-bottom: 20px;
-            color: hsl(0 0% 14.12%);
-            font-size: 24px;
+            text-align: center;
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 24px;
+            color: var(--md-text);
         }
-
-
-        input[type="text"], input[type="password"] {
-            width: 90%;
-            padding: 12px;
-            margin: 10px 0;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-size: 14px;
-            transition: border-color 0.3s ease;
-        }
-
-        input[type="text"]:focus, input[type="password"]:focus {
-            border-color: hsl(12.25 100% 62.55%);
-            outline: none;
-        }
-
-
-        input[type="submit"] {
-            width: 100%;
-            padding: 12px;
-            background-color: hsl(12.25 100% 62.55%);
-            color: #fff;
-            border: none;
-            border-radius: 5px;
-            font-size: 16px;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
-        }
-
-        input[type="submit"]:hover {
-            background-color: hsl(12.5 77.06% 57.25%);
-        }
-
-		input[type="submit"]:active {
-            background-color: hsl(12.09 52.23% 48.43%);
-        }
-
 
         label {
             display: block;
-            text-align: left;
-            margin: 10px 0 5px;
+            margin-top: 16px;
+            margin-bottom: 6px;
             font-size: 14px;
-            color: #555;
+            color: var(--md-text-secondary);
         }
 
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid var(--md-border);
+            border-radius: 6px;
+            background-color: var(--md-surface-hover);
+            color: var(--md-text);
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+
+        input[type="text"]:focus,
+        input[type="password"]:focus {
+            border-color: var(--md-accent);
+            outline: none;
+            background-color: var(--md-surface);
+        }
+
+        input[type="submit"] {
+            margin-top: 24px;
+            width: 100%;
+            padding: 12px 16px;
+            background-color: var(--md-accent);
+            border: none;
+            border-radius: 6px;
+            color: white;
+            font-weight: 600;
+            font-size: 15px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        input[type="submit"]:hover {
+            background-color: var(--md-accent-hover);
+        }
+
+        .footer-note {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 13px;
+            color: var(--md-text-secondary);
+        }
 
         @media (max-width: 480px) {
             .container {
                 width: 90%;
-                padding: 20px;
+                padding: 28px 20px;
             }
 
             h2 {
@@ -128,53 +159,53 @@
 	</style>
 </head>
 <body>
-<button class="back-button" onclick="document.location.href='{{back_redirect}}'">Back</button>
-<div class="container">
-	<h2>Mangadex App Credentials</h2>
-	<form onsubmit="handle_login(); return false;">
-		<label for="username">Username</label>
-		<input type="text" id="username" name="username" required>
+    <button class="back-button" onclick="document.location.href='{{back_redirect}}'">← Back</button>
 
-		<label for="password">Password</label>
-		<input type="password" id="password" name="password" required>
+    <div class="container">
+        <h2>Mangadex App Credentials</h2>
+        <form onsubmit="handle_login(); return false;">
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" required>
 
-		<label for="client-id">Client ID</label>
-		<input type="text" id="client-id" name="client-id" required>
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required>
 
-		<label for="client-secret">Client Secret</label>
-		<input type="password" id="client-secret" name="client-secret" required>
+            <label for="client-id">Client ID</label>
+            <input type="text" id="client-id" name="client-id" required>
 
-		<input type="submit" value="Save Credentials">
-	</form>
-</div>
+            <label for="client-secret">Client Secret</label>
+            <input type="password" id="client-secret" name="client-secret" required>
+
+            <input type="submit" value="Save Credentials">
+        </form>
+	</div>
 
 <script>
     window.token = '{{ token }}';
-    let redirect = "{{ back_redirect }}";
+    const redirect = "{{ back_redirect }}";
 
     function handle_login() {
-        let name = document.getElementById("username").value;
-        let password = document.getElementById("password").value;
-        let client_id = document.getElementById("client-id").value;
-        let client_secret = document.getElementById("client-secret").value;
-        let payload = {
-            "username": name,
-            "password": password,
-            "client_id": client_id,
-            "client_secret": client_secret
+        const payload = {
+            username: document.getElementById("username").value,
+            password: document.getElementById("password").value,
+            client_id: document.getElementById("client-id").value,
+            client_secret: document.getElementById("client-secret").value
         };
 
         fetch('auth/set-credentials', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
-        }).then(response => response.json()).then(data => {
-                if (data.status === 'ok') {
-                    window.location.href = redirect;
-                }
-            });
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'ok') {
+                window.location.href = redirect;
+            } else {
+                alert('Login failed. Please check your credentials.');
+            }
+        })
+        .catch(() => alert('An error occurred while saving credentials.'));
     }
 </script>
 </body>
