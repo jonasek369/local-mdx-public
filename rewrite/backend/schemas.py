@@ -1,6 +1,6 @@
-from dataclasses import dataclass, is_dataclass, asdict
+from dataclasses import dataclass, is_dataclass
 from pprint import pprint
-from typing import Optional, get_type_hints, Union, Type, get_origin, get_args, Dict, List
+from typing import Optional, get_type_hints, Union, Dict, List
 
 # Schema for https://api.mangadex.org/docs/swagger.html
 # Version 5.10.2

@@ -1,5 +1,3 @@
-import json
-from dataclasses import asdict
 from datetime import datetime
 import io
 import os
@@ -9,6 +7,7 @@ from enum import Enum
 from typing import Dict
 
 from PIL import Image
+import asyncio
 
 
 def perf_test(func):
@@ -53,7 +52,6 @@ def is_uuid4(value: str) -> bool:
 
 
 def run_async(func, *args, **kwargs):
-    import asyncio
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     return loop.run_until_complete(func(*args, **kwargs))

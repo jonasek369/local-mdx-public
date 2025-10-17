@@ -1,19 +1,16 @@
 import asyncio
 import time
-from dataclasses import asdict
 from typing import Optional, List
 
 import aiohttp
-import requests
-from attr import attributes
 from flask_socketio import SocketIO
 
 from rewrite.backend.connection import MangadexConnection, MangaDownloader, CredentialManager
 from rewrite.backend.database import Database
-from rewrite.backend.schemas import MangaIdentifier, ChapterIdentifier, ChapterList, Manga, MangaAttributes, \
+from rewrite.backend.schemas import MangaIdentifier, ChapterIdentifier, ChapterList, MangaAttributes, \
     ChapterAttributes, LatestChapter, MangaList, COVER_ART_MAX_SIZE
 from rewrite.backend.settings import load_settings, load_credentials
-from rewrite.backend.utils import resize_image, perf_test, info, warning, error, success
+from rewrite.backend.utils import perf_test, info, error
 
 
 # Taking inspiration from how android works utilizing repositories which take connection nad database

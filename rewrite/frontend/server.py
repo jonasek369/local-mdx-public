@@ -1,20 +1,16 @@
 import asyncio
 import base64
-import copy
 import json
 import os
 from dataclasses import asdict
 
-
 from flask_socketio import SocketIO
-from werkzeug.exceptions import UnsupportedMediaType
 
 from rewrite.backend.connection import MangaDownloadJob, save_credentials
 from rewrite.backend.repository import MangaRepository
 from rewrite.backend.schemas import COVER_ART_MAX_SIZE, COVER_ART_256_SIZE, COVER_ART_512_SIZE
 from rewrite.backend.settings import credentials_from_json
 from rewrite.backend.utils import info, error, get_correct_language, is_uuid4
-
 
 try:
     import webview
@@ -38,6 +34,7 @@ socketio = SocketIO(server, async_mode='eventlet')
 repository = MangaRepository(socketio)
 
 repository.settings.logger.log(info, gui_dir + " is static and template dir!")
+
 
 @server.route("/")
 def landing():
@@ -157,8 +154,6 @@ def get_chapter_images(identifier):
     return {"status": "error", "response": "no image found"}, 404
 
 
-
-
 @server.route("/read/next-prev/<chapteruuid>")
 def chapter_next_previous(chapteruuid):
     next_prev_tuple = repository.get_next_prev(chapteruuid)
@@ -167,31 +162,6 @@ def chapter_next_previous(chapteruuid):
     else:
         next_prev = {"next": None, "prev": None}
     return jsonify(next_prev), 200
-
-
-@server.route("/manga/download/push-job", methods=["POST"])
-def push_job():
-    try:
-        data = request.get_json(force=True)
-    except Exception as e:
-        repository.settings.logger.log(error, f"Caught exception while search! {e}")
-        return {"status": "error", "response": "Invalid JSON body"}, 400
-
-    if "id" not in data:
-        return {"status": "error", "response": "id not in JSON body"}, 400
-    if not is_uuid4(data.get("id")):
-        return {"status": "error", "response": "invalid id"}, 400
-    socketio.emit("update", repository.downloader.get_downloader_state())
-    repository.downloader.queue.add_job(
-        MangaDownloadJob(
-            data.get("id"),
-            repository.get_manga_attributes(data.get("id")),
-            repository.get_chapter_list(data.get("id")),
-            repository.database.get_manga_job(data.get("id")),
-            repository.settings
-        )
-    )
-    return {"status": "success"}
 
 
 @server.route("/read/<chapteruuid>", methods=["GET"], defaults={"page": 1})
@@ -219,6 +189,53 @@ def read_manga(chapteruuid, page):
                            ), 200
 
 
+@server.route("/manga/download/push-job", methods=["POST"])
+def push_job():
+    try:
+        data = request.get_json(force=True)
+    except Exception as e:
+        repository.settings.logger.log(error, f"Caught exception while search! {e}")
+        return {"status": "error", "response": "Invalid JSON body"}, 400
+
+    if "id" not in data:
+        return {"status": "error", "response": "id not in JSON body"}, 400
+    if not is_uuid4(data.get("id")):
+        return {"status": "error", "response": "invalid id"}, 400
+    socketio.emit("update", repository.downloader.get_downloader_state())
+    repository.downloader.queue.add_job(
+        MangaDownloadJob(
+            data.get("id"),
+            repository.get_manga_attributes(data.get("id")),
+            repository.get_chapter_list(data.get("id")),
+            repository.database.get_manga_job(data.get("id")),
+            repository.settings
+        )
+    )
+    return {"status": "success"}
+
+@server.route("/manga/download/contains", methods=["POST"])
+def downloader_contains():
+    try:
+        data = request.get_json(force=True)
+    except Exception as e:
+        repository.settings.logger.log(error, f"Caught exception while search! {e}")
+        return {"status": "error", "response": "Invalid JSON body"}, 400
+    if "id" not in data:
+        return {"status": "error", "response": "id not in JSON body"}, 400
+    if not is_uuid4(data.get("id")):
+        return {"status": "error", "response": "invalid id"}, 400
+
+    muuid = data.get("id")
+
+    dl_state = repository.downloader.get_downloader_state()
+    if dl_state["currently_working_on"] is not None:
+        contains = muuid in dl_state["queue"] or dl_state["currently_working_on"]["id"] == dl_state
+    else:
+        contains = muuid in dl_state["queue"]
+
+    return {"status": "success", "data": {"contains": contains}}, 200
+
+
 @server.route("/manga/download/manager", methods=["GET"])
 def download_manager():
     return render_template("download-manager.html", darktheme=repository.settings.darkTheme), 200
@@ -243,9 +260,9 @@ def push_to_top():
     try:
         data = request.get_json(force=True)
     except Exception:
-        return {"status": "error no JSON provided"}, 400
+        return {"status": "error", "response": "no JSON provided"}, 400
     if "index" not in data:
-        return {"error": "Index not in JSON"}, 400
+        return {"status": "error", "response": "Index not in JSON"}, 400
     repository.downloader.queue.push_to_top(int(data["index"]))
     socketio.emit("update", repository.downloader.get_downloader_state())
     return {"status": "success", "response": "pushed job to top"}, 200
@@ -256,9 +273,9 @@ def pop_job():
     try:
         data = request.get_json(force=True)
     except Exception:
-        return {"status": "error no JSON provided"}, 400
+        return {"status": "error", "response": "no JSON provided"}, 400
     if "index" not in data:
-        return {"error": "Index not in JSON"}, 400
+        return {"status": "error", "response": "Index not in JSON"}, 400
 
     repository.downloader.queue.remove_job(
         repository.downloader.queue.pop_job_index(int(data["index"])).identifier
@@ -312,11 +329,13 @@ def popular_new_titles():
     for manga in popular.data:
         if not manga:
             continue
-        new_manga = asdict(copy.deepcopy(manga))
-        new_manga["attributes"]["title"] = get_correct_language(manga.attributes.title, repository.settings)
-        new_manga["attributes"]["description"] = get_correct_language(manga.attributes.description, repository.settings)
+        new_manga = asdict(manga)
+        attrs = new_manga["attributes"]
+        attrs["title"] = get_correct_language(manga.attributes.title, repository.settings)
+        attrs["description"] = get_correct_language(manga.attributes.description, repository.settings)
         new_popular.append(new_manga)
     return jsonify(new_popular), 200
+
 
 @server.route("/auth/check")
 def check_auth():
@@ -339,8 +358,8 @@ def authorize():
 @server.route("/auth/set-credentials", methods=["POST"])
 def set_credentials():
     try:
-        data = request.json
-    except UnsupportedMediaType:
+        data = request.get_json(force=True)
+    except Exception:
         return {"status": "error", "response": "Endpoint requires json"}, 400
     credentials = credentials_from_json(data)
     repository.credential_manager.set_credentials(credentials)
@@ -395,14 +414,7 @@ def handle_connect():
 
 
 if __name__ == "__main__":
-    USE_SERVER = 0
-    if not USE_SERVER:
-        # thanks to socketio we can have sockets (much better downloader) but when our second thread is downloading
-        # it is affecting the website because this now a coroutine
-        # TODO: Try to fix that
-        socketio.run(server, host="127.0.0.1", port=5000)
-    else:
-        print("starting server")
-        from waitress import serve
-
-        serve(server, listen="127.0.0.1:5000")
+    # thanks to socketio we can have sockets (much better downloader) but when our second thread is downloading
+    # it is affecting the website because this now a coroutine
+    # TODO: Try to fix that
+    socketio.run(server, host="127.0.0.1", port=5000)

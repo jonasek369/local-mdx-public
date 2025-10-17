@@ -1,10 +1,9 @@
 import asyncio
 import json
 import os
-import sys
 import threading
 import time
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from typing import Optional, Sequence, Tuple, Callable, Dict, Union, List, Any
 
 import aiohttp
@@ -12,7 +11,6 @@ import eventlet
 import requests
 from dateutil.relativedelta import relativedelta
 from flask_socketio import SocketIO
-from numba.core.event import broadcast
 
 from rewrite.backend.schemas import MangaList, from_json, Manga, MangaIdentifier, ChapterIdentifier, ChapterList, \
     Chapter, \

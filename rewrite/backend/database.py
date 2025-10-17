@@ -1,12 +1,11 @@
 import json
 import sqlite3
 from dataclasses import asdict
-from typing import List, Optional, Set, Tuple
+from typing import List, Optional, Tuple
 
 from rewrite.backend.connection import MangaDownloadJobInDatabase
 from rewrite.backend.utils import perf_test
-from rewrite.backend.schemas import MangaIdentifier, ChapterIdentifier, ChapterAttributes, Chapter, from_json, \
-    ChapterList, Manga, MangaAttributes, LatestChapter, COVER_ART_MAX_SIZE, COVER_ART_256_SIZE, COVER_ART_512_SIZE
+from rewrite.backend.schemas import MangaIdentifier, ChapterIdentifier, ChapterAttributes, Chapter, Manga, MangaAttributes, LatestChapter, COVER_ART_MAX_SIZE, COVER_ART_256_SIZE, COVER_ART_512_SIZE
 
 
 class Database:
@@ -202,8 +201,7 @@ class Database:
         return mdj
 
 
-    def get_cover_art(self, identifier: MangaIdentifier, size=COVER_ART_MAX_SIZE, size_any=False) -> Optional[
-        bytes]:
+    def get_cover_art(self, identifier: MangaIdentifier, size=COVER_ART_MAX_SIZE, size_any=False) -> Optional[bytes]:
         cursor = self.conn.cursor()
         if size_any:
             cursor.execute("SELECT data FROM cover_art WHERE muuid=:id", {"id": identifier})
@@ -219,8 +217,7 @@ class Database:
     @perf_test
     def set_cover_art(self, identifier: MangaIdentifier, size: int, content: bytes) -> None:
         cursor = self.conn.cursor()
-        # TODO: Remove after testing
-        assert size in [COVER_ART_MAX_SIZE, COVER_ART_256_SIZE, COVER_ART_512_SIZE], "Unsupported cover art size"
+        assert size in {COVER_ART_MAX_SIZE, COVER_ART_256_SIZE, COVER_ART_512_SIZE}, "Unsupported cover art size"
         cursor.execute("""INSERT INTO cover_art (muuid, size, data) VALUES (?, ?, ?) ON CONFLICT(muuid, size) DO UPDATE SET data = excluded.data""", (identifier, size, content))
         self.conn.commit()
         cursor.close()
@@ -289,6 +286,7 @@ class Database:
                 )
             """, {"identifier": identifier})
         chapters = [i[0] for i in cursor.fetchall()]
+        cursor.close()
         if not chapters:
             return None
 
