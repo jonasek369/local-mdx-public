@@ -65,6 +65,21 @@ def search():
     try:
         result = repository.connection.search_manga(search_term, limit=limit)
         data = [asdict(i) for i in result.data]
+        for manga in data:
+            try:
+                manga["attributes"]["title"] = get_correct_language(
+                    manga["attributes"]["title"],
+                    manga["attributes"]["altTitles"],
+                    repository.settings
+                )
+                for i, tag in enumerate(manga["attributes"]["tags"]):
+                    manga["attributes"]["tags"][i]["attributes"]["name"] = get_correct_language(
+                        manga["attributes"]["tags"][i]["attributes"]["name"],
+                        None,
+                        repository.settings
+                    )
+            except KeyError as e:
+                repository.settings.log(error, f"Caught exception while choosing search translation! {e}")
         return jsonify(data), 200
     except Exception as e:
         repository.settings.logger.log(error, f"Search failed: {e}")
@@ -106,8 +121,8 @@ def server_manga(mangauuid):
 
     return render_template("manga.html",
                            muuid=mangauuid,
-                           name=get_correct_language(manga.title, repository.settings),
-                           description=get_correct_language(manga.description, repository.settings),
+                           name=get_correct_language(manga.title, manga.altTitles, repository.settings),
+                           description=get_correct_language(manga.description, None, repository.settings),
                            back_redirect=back,
                            darktheme=repository.settings.darkTheme), 200
 
@@ -309,8 +324,8 @@ def library_data():
         pages = repository.database.get_downloaded_pages(manga[0])
         if pages:
             to_send[manga[0]] = [
-                get_correct_language(json.loads(manga[1]), repository.settings),
-                get_correct_language(json.loads(manga[2]), repository.settings)
+                get_correct_language(json.loads(manga[1]), None, repository.settings),
+                get_correct_language(json.loads(manga[2]), None, repository.settings)
             ]
 
     repository.sync_libraries(list(to_send.keys()))
@@ -331,8 +346,10 @@ def popular_new_titles():
             continue
         new_manga = asdict(manga)
         attrs = new_manga["attributes"]
-        attrs["title"] = get_correct_language(manga.attributes.title, repository.settings)
-        attrs["description"] = get_correct_language(manga.attributes.description, repository.settings)
+        attrs["title"] = get_correct_language(manga.attributes.title, manga.attributes.altTitles, repository.settings)
+        attrs["description"] = get_correct_language(manga.attributes.description, None, repository.settings)
+        for tag in attrs["tags"]:
+            tag["attributes"]["name"] = get_correct_language(tag["attributes"]["name"], None, repository.settings)
         new_popular.append(new_manga)
     return jsonify(new_popular), 200
 
@@ -417,4 +434,4 @@ if __name__ == "__main__":
     # thanks to socketio we can have sockets (much better downloader) but when our second thread is downloading
     # it is affecting the website because this now a coroutine
     # TODO: Try to fix that
-    socketio.run(server, host="127.0.0.1", port=5000)
+    socketio.run(server, host="127.0.0.1", port=5000, debug=True)

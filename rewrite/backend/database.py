@@ -1,11 +1,14 @@
 import json
 import sqlite3
 from dataclasses import asdict
+from pprint import pprint
 from typing import List, Optional, Tuple
 
 from rewrite.backend.connection import MangaDownloadJobInDatabase
 from rewrite.backend.utils import perf_test
-from rewrite.backend.schemas import MangaIdentifier, ChapterIdentifier, ChapterAttributes, Chapter, Manga, MangaAttributes, LatestChapter, COVER_ART_MAX_SIZE, COVER_ART_256_SIZE, COVER_ART_512_SIZE
+from rewrite.backend.schemas import MangaIdentifier, ChapterIdentifier, ChapterAttributes, Chapter, Manga, \
+    MangaAttributes, LatestChapter, COVER_ART_MAX_SIZE, COVER_ART_256_SIZE, COVER_ART_512_SIZE, from_json, \
+    from_database_row
 
 
 class Database:
@@ -139,7 +142,7 @@ class Database:
         fetch = cursor.fetchone()
         cursor.close()
         if fetch:
-            return MangaAttributes(*fetch[1:])
+            return from_database_row(MangaAttributes, fetch[1:])
         return None
 
     @perf_test
@@ -320,6 +323,3 @@ class Database:
         cursor.execute("REPLACE INTO latest_chapter VALUES (?, ?, ?, ?, ?, ?)", data)
         self.conn.commit()
         cursor.close()
-
-if __name__ == "__main__":
-    db = Database()

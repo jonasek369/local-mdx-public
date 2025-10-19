@@ -1,4 +1,5 @@
-from dataclasses import dataclass, is_dataclass
+import json
+from dataclasses import dataclass, is_dataclass, fields
 from pprint import pprint
 from typing import Optional, get_type_hints, Union, Dict, List
 
@@ -9,7 +10,7 @@ from typing import Optional, get_type_hints, Union, Dict, List
 #   < * >:	string
 #   pattern: ^[a-z]{2,8}$
 # }
-LocalizedString = dict
+LocalizedString = Dict[str, str]
 # {
 #   < * >:	string
 # }
@@ -69,10 +70,46 @@ def from_json(dataclass_type, json_data):
         else:
             # Raise an error for missing required fields
             pprint(json_data)
+            print(f"expected type {dataclass_type}")
             raise AttributeError(f"'{key}' is required but not in the input JSON.")
 
     return dataclass_type(**args)
 
+
+def _maybe_json(value):
+    """Try to parse a string as JSON if it looks like JSON."""
+    if isinstance(value, str):
+        v = value.strip()
+        if (v.startswith("{") and v.endswith("}")) or (v.startswith("[") and v.endswith("]")):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                pass
+    return value
+
+
+def from_database_row(dataclass_type, row):
+    """
+    Convert a database row (tuple/list of values) into a dataclass instance.
+    Handles JSON strings by parsing them before passing to from_json.
+    """
+    if not is_dataclass(dataclass_type):
+        raise TypeError(f"{dataclass_type} must be a dataclass type.")
+
+    field_names = [f.name for f in fields(dataclass_type)]
+
+    if len(field_names) != len(row):
+        raise ValueError(
+            f"Field count mismatch: dataclass has {len(field_names)} fields but row has {len(row)} values."
+        )
+
+    # Parse JSON strings automatically
+    parsed_values = [_maybe_json(v) for v in row]
+
+    json_data = dict(zip(field_names, parsed_values))
+
+    # Use your existing recursive converter
+    return from_json(dataclass_type, json_data)
 
 @dataclass
 class TagAttributes:

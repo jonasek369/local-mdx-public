@@ -4,10 +4,13 @@ import os
 import time
 import uuid
 from enum import Enum
-from typing import Dict
+from idlelib.pyparse import trans
+from typing import Dict, List, Union
 
 from PIL import Image
 import asyncio
+
+from matplotlib.style.core import available
 
 
 def perf_test(func):
@@ -26,21 +29,59 @@ def perf_test(func):
     return wrapper
 
 
+def normalize_language_input(data):
+    if isinstance(data, dict):
+        return [data]
+    elif isinstance(data, list):
+        return data
+    return []
 
-def get_correct_language(langs: Dict, settings) -> str | None:
-    """
-    settings is of type Settings
-    """
-    default_fallback = "jp"
-    for accepted_language in settings.translatedLanguage:
-        if accepted_language in langs:
-            return langs[accepted_language]
-    if default_fallback in langs:
-        return langs[default_fallback]
+TRANSLATION_FALLBACK = "jp"
+
+
+# TODO: Finish implementing in the whole project (where hardcoded ["en"] is used)
+def get_correct_language(
+    from_languages: Union[Dict, List[Dict]],
+    from_alt_titles: Union[Dict, List[Dict]] | None,
+    settings
+) -> str | None:
+    desired_langs: List[str] = settings.translatedLanguage
+    if from_alt_titles is None:
+        available_languages = normalize_language_input(from_languages)
     else:
-        if len(langs) == 0:
-            return None
-        return langs[list(langs.keys())[0]]
+        available_languages = normalize_language_input(from_languages) + normalize_language_input(from_alt_titles)
+    fallback_translation = None
+
+    for lang_dict in available_languages:
+        if not lang_dict:
+            continue
+        # Extract the single key-value pair
+        try:
+            lang_code, translation = next(iter(lang_dict.items()))
+        except StopIteration:
+            continue
+
+        if not translation:
+            continue  # skip empty or None
+
+        if lang_code in desired_langs:
+            return translation
+        if lang_code == TRANSLATION_FALLBACK and fallback_translation is None:
+            fallback_translation = translation
+
+    # Return fallback if no desired language found
+    if fallback_translation:
+        return fallback_translation
+
+    # Return first non-empty translation
+    for lang_dict in available_languages:
+        if not lang_dict:
+            continue
+        translation = next(iter(lang_dict.values()))
+        if translation:
+            return translation
+
+    return None
 
 
 def is_uuid4(value: str) -> bool:

@@ -745,7 +745,7 @@
                     const img = document.createElement('img');
                     img.className = 'search-result-image';
                     img.src = "/manga/cover/" + result["id"] + "?size=256";
-                    img.alt = result["attributes"]["title"]["en"] || "Manga Cover";
+                    img.alt = result["attributes"]["title"] || "Manga Cover";
                     img.onerror = function() {
                         this.style.display = 'none';
                     };
@@ -755,7 +755,7 @@
 
                     const titleDiv = document.createElement('div');
                     titleDiv.className = 'search-result-title';
-                    titleDiv.textContent = result["attributes"]["title"]["en"] || "Untitled";
+                    titleDiv.textContent = result["attributes"]["title"] || "Untitled";
 
                     const meta = document.createElement('div');
                     meta.className = 'search-result-meta';
@@ -887,7 +887,7 @@
             }
             let tagElement = document.createElement("span");
             tagElement.className = "tag";
-            tagElement.textContent = tag["attributes"]["name"]["en"];
+            tagElement.textContent = tag["attributes"]["name"];
             genreTags.appendChild(tagElement);
         })
     }

@@ -50,12 +50,11 @@ def downloader_state_to_string(state):
 @dataclass
 class MangaDownloadJobInDatabase:
     # Stores the pages in database and record (how many pages does the chapter have)
-    pages_in_db: Dict  # {"cuuid": [1,2, 3, 4, 5], ...}
+    pages_in_db: Dict  # {"cuuid": [1, 2, 3, 4, 5], ...}
     records: Dict  # {"cuuid": 12, ...}
 
 
 class MangaDownloadJob:
-    # pages_in_db = {"cuuid": [1,2, 3, 4, 5]}
     def __init__(self, identifier: MangaIdentifier, manga_attribute: MangaAttributes, chapter_list: ChapterList,
                  database_info: MangaDownloadJobInDatabase, settings: Settings):
         self.identifier = identifier
@@ -63,14 +62,14 @@ class MangaDownloadJob:
         self.chapter_info = chapter_list
         self.database_info = database_info
         if self.chapter_info.data is not None:
-            self.title = get_correct_language(manga_attribute.title, settings)
+            self.title = get_correct_language(manga_attribute.title, manga_attribute.altTitles, settings)
         else:
             self.title = None
         self.settings = settings
         self.settings.logger.log(info, "Created job sucesfully")
 
     def __del__(self):
-        self.settings.logger.log(warning, "Deleting job")
+        self.settings.logger.log(warning, f"Deleting job {self.identifier}")
 
     def __eq__(self, other):
         if isinstance(other, MangaDownloadJob):
