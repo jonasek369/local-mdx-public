@@ -740,12 +740,12 @@
                 // Populate dropdown with results
                 data.forEach(function (result) {
                     const resultItem = document.createElement('a');
-                    resultItem.href = "/manga/" + result["id"];
+                    resultItem.href = "/manga/" + result.id;
 
                     const img = document.createElement('img');
                     img.className = 'search-result-image';
-                    img.src = "/manga/cover/" + result["id"] + "?size=256";
-                    img.alt = result["attributes"]["title"] || "Manga Cover";
+                    img.src = "/manga/cover/" + result.id + "?size=256";
+                    img.alt = result.attributes.title || "Manga Cover";
                     img.onerror = function() {
                         this.style.display = 'none';
                     };
@@ -755,13 +755,13 @@
 
                     const titleDiv = document.createElement('div');
                     titleDiv.className = 'search-result-title';
-                    titleDiv.textContent = result["attributes"]["title"] || "Untitled";
+                    titleDiv.textContent = result.attributes.title || "Untitled";
 
                     const meta = document.createElement('div');
                     meta.className = 'search-result-meta';
 
                     // Add rating badge
-                    const rating = result["attributes"]["contentRating"];
+                    const rating = result.attributes.contentRating;
                     if (rating) {
                         const ratingBadge = document.createElement('span');
                         if(rating !== "safe" && rating !== "suggestive" && rating !== "erotica"){
@@ -775,9 +775,9 @@
                     }
 
                     // Add publication year if available
-                    if (result["attributes"]["year"]) {
+                    if (result.attributes.year) {
                         const year = document.createElement('span');
-                        year.textContent = `📅 ${result["attributes"]["year"]}`;
+                        year.textContent = `📅 ${result.attributes.year}`;
                         meta.appendChild(year);
                     }
 
@@ -849,7 +849,7 @@
     })
 
     function to_manga() {
-        window.location.replace("/manga/" + popular_manga[currentIndex - 1]["id"]);
+        window.location.replace("/manga/" + popular_manga[currentIndex - 1].id);
     }
 
     function updateManga() {
@@ -859,19 +859,28 @@
         while (genreTags.firstChild) {
             genreTags.removeChild(genreTags.firstChild);
         }
-		image.src = "/manga/cover/"+popular_manga[currentIndex - 1]["id"]+"?size=512"
-        title.innerText = popular_manga[currentIndex - 1]["attributes"]["title"];
-        description.innerText = popular_manga[currentIndex - 1]["attributes"]["description"]
+		image.src = "/manga/cover/"+popular_manga[currentIndex - 1].id+"?size=512";
+        title.innerText = popular_manga[currentIndex - 1].attributes.title;
+        description.innerText = popular_manga[currentIndex - 1].attributes.description;
 
-        authors.innerText = ""; // TODO: add
+        const relationships = popular_manga[currentIndex - 1].relationships;
+		const authorNames = relationships
+		  .filter(r => (["author", "artist"].includes(r.type) && r.attributes?.name))
+		  .sort((a, b) => {
+			  if (a.type === b.type) return 0;
+			  return a.type === "artist" ? -1 : 1;
+		  })
+		  .map(r => r.attributes.name);
+
+		authors.innerText = authorNames.join(", ");
 
         number.innerText = "NO. " + currentIndex.toString()
 
-        let rating = popular_manga[currentIndex - 1]["attributes"]["contentRating"];
+        let rating = popular_manga[currentIndex - 1].attributes.contentRating;
         if (rating !== "safe") {
             let tag = document.createElement("span");
             tag.className = "tag";
-            tag.textContent = popular_manga[currentIndex - 1]["attributes"]["contentRating"].toUpperCase();
+            tag.textContent = popular_manga[currentIndex - 1].attributes.contentRating.toUpperCase();
 
             if (rating === "suggestive") {
                 tag.classList.add("rating-suggestive");
@@ -881,13 +890,13 @@
             genreTags.appendChild(tag);
         }
 
-        popular_manga[currentIndex - 1]["attributes"]["tags"].forEach(tag => {
-            if (tag["attributes"]["group"] !== "genre" || genreTags.children.length === 5) {
+        popular_manga[currentIndex - 1].attributes.tags.forEach(tag => {
+            if (tag.attributes.group !== "genre" || genreTags.children.length === 5) {
                 return
             }
             let tagElement = document.createElement("span");
             tagElement.className = "tag";
-            tagElement.textContent = tag["attributes"]["name"];
+            tagElement.textContent = tag.attributes.name;
             genreTags.appendChild(tagElement);
         })
     }

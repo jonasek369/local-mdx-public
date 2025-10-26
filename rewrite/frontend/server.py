@@ -130,9 +130,13 @@ def server_manga(mangauuid):
 @server.route("/manga/<mangauuid>/info", methods=["GET"])
 def get_manga_info(mangauuid):
     downloaded_pages = repository.get_downloaded_pages(mangauuid)
+    user_and_groups = repository.database.get_user_and_groups([dp[0] for dp in downloaded_pages])
+
     chapters = {}
+
     for cuuid, title, volume, chapter in downloaded_pages:
-        chapters[cuuid] = {"title": title, "volume": volume, "chapter": chapter}
+        chapters[cuuid] = {"title": title, "volume": volume, "chapter": chapter, "user": user_and_groups[cuuid]["user"], "scanlation_group": user_and_groups[cuuid]["scanlation_group"]}
+
     return jsonify(chapters), 200
 
 
@@ -324,8 +328,8 @@ def library_data():
         pages = repository.database.get_downloaded_pages(manga[0])
         if pages:
             to_send[manga[0]] = [
-                get_correct_language(json.loads(manga[1]), None, repository.settings),
-                get_correct_language(json.loads(manga[2]), None, repository.settings)
+                get_correct_language(json.loads(manga[1]), json.loads(manga[2]), repository.settings),
+                get_correct_language(json.loads(manga[3]), None, repository.settings)
             ]
 
     repository.sync_libraries(list(to_send.keys()))
@@ -350,6 +354,7 @@ def popular_new_titles():
         attrs["description"] = get_correct_language(manga.attributes.description, None, repository.settings)
         for tag in attrs["tags"]:
             tag["attributes"]["name"] = get_correct_language(tag["attributes"]["name"], None, repository.settings)
+
         new_popular.append(new_manga)
     return jsonify(new_popular), 200
 
@@ -434,4 +439,4 @@ if __name__ == "__main__":
     # thanks to socketio we can have sockets (much better downloader) but when our second thread is downloading
     # it is affecting the website because this now a coroutine
     # TODO: Try to fix that
-    socketio.run(server, host="127.0.0.1", port=5000, debug=True)
+    socketio.run(server, host="127.0.0.1", port=5000)

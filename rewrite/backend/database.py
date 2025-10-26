@@ -15,7 +15,16 @@ class Database:
     def __init__(self):
         self.conn = sqlite3.connect("database.db", check_same_thread=False, timeout=10)
         cursor = self.conn.cursor()
-        cursor.execute("""CREATE TABLE IF NOT EXISTS chapter_attributes (
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS chapters (
+            cuuid CHAR(36) PRIMARY KEY,
+            type TEXT,
+            relationships TEXT
+        );
+        """)
+
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS chapter_attributes (
             cuuid CHAR(36) PRIMARY KEY,
             muuid CHAR(36),
             title TEXT,
@@ -29,8 +38,10 @@ class Database:
             createdAt TEXT NOT NULL,
             updatedAt TEXT NOT NULL,
             publishAt TEXT NOT NULL,
-            readableAt TEXT NOT NULL
-        );""")
+            readableAt TEXT NOT NULL,
+            FOREIGN KEY (cuuid) REFERENCES chapter(cuuid)
+        );
+        """)
         cursor.execute("""CREATE TABLE IF NOT EXISTS manga_attributes (
             muuid CHAR(36) NOT NULL PRIMARY KEY,
             title TEXT NOT NULL,
@@ -116,10 +127,52 @@ class Database:
     @perf_test
     def set_chapter_attributes(self, identifier: MangaIdentifier, chapters: List[Chapter]) -> None:
         cursor = self.conn.cursor()
+        cursor.executemany("REPLACE INTO chapters VALUES (?, ?, ?)", [
+            [chapter.id, chapter.type, json.dumps([asdict(relationship) for relationship in chapter.relationships])] for chapter in chapters
+        ])
         cursor.executemany("REPLACE INTO chapter_attributes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                            [[i.id, identifier] + list(asdict(i.attributes).values()) for i in chapters])
         self.conn.commit()
         cursor.close()
+
+
+    @perf_test
+    def get_user_and_groups(self, cuuids: List[str]) -> Optional[List[dict]]:
+        if not cuuids:
+            return None
+
+        cursor = self.conn.cursor()
+
+        placeholders = ",".join(["?"] * len(cuuids))
+        query = f"""
+            SELECT cuuid, relationships
+            FROM chapters
+            WHERE cuuid IN ({placeholders})
+        """
+
+        cursor.execute(query, cuuids)
+        rows = cursor.fetchall()
+
+        if not rows:
+            return None
+
+        result = {}
+
+        for row in rows:
+            user = None
+            group = None
+            relationships = json.loads(row[1])
+            for relationship in relationships:
+                if relationship["type"] == "scanlation_group" and relationship["attributes"] is not None:
+                    group = relationship["attributes"] | {"id": relationship["id"]}
+                if relationship["type"] == "user" and relationship["attributes"] is not None:
+                    user = relationship["attributes"] | {"id": relationship["id"]}
+
+            result[row[0]] = {"user": user, "scanlation_group": group}
+
+        return result
+
+
 
     @perf_test
     def set_manga_attributes(self, manga: Manga):
@@ -248,7 +301,7 @@ class Database:
     @perf_test
     def all_manga_in_db(self) -> Optional[List[str]]:
         cursor = self.conn.cursor()
-        cursor.execute("SELECT muuid, title, description FROM manga_attributes")
+        cursor.execute("SELECT muuid, title, altTitles, description FROM manga_attributes")
         fetch = cursor.fetchall()
         cursor.close()
         if fetch:

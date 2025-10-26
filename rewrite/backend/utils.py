@@ -4,13 +4,11 @@ import os
 import time
 import uuid
 from enum import Enum
-from idlelib.pyparse import trans
+from pprint import pprint
 from typing import Dict, List, Union
 
 from PIL import Image
 import asyncio
-
-from matplotlib.style.core import available
 
 
 def perf_test(func):
@@ -31,25 +29,32 @@ def perf_test(func):
 
 def normalize_language_input(data):
     if isinstance(data, dict):
-        return [data]
+        return [{k: v} for k, v in data.items()]
+
     elif isinstance(data, list):
-        return data
+        normalized = []
+        for item in data:
+            if isinstance(item, dict):
+                for k, v in item.items():
+                    normalized.append({k: v})
+        return normalized
+
     return []
 
-TRANSLATION_FALLBACK = "jp"
+TRANSLATION_FALLBACK = "ja-ro"
 
 
 # TODO: Finish implementing in the whole project (where hardcoded ["en"] is used)
 def get_correct_language(
     from_languages: Union[Dict, List[Dict]],
-    from_alt_titles: Union[Dict, List[Dict]] | None,
+    from_alt: Union[Dict, List[Dict]] | None,
     settings
 ) -> str | None:
     desired_langs: List[str] = settings.translatedLanguage
-    if from_alt_titles is None:
+    if from_alt is None:
         available_languages = normalize_language_input(from_languages)
     else:
-        available_languages = normalize_language_input(from_languages) + normalize_language_input(from_alt_titles)
+        available_languages = normalize_language_input(from_languages) + normalize_language_input(from_alt)
     fallback_translation = None
 
     for lang_dict in available_languages:

@@ -12,9 +12,8 @@
         }
 
         :root {
-        {
-        % if darktheme %
-        } --md-bg: #1a1a1a;
+        {% if darktheme %}
+			--md-bg: #1a1a1a;
             --md-surface: #242424;
             --md-surface-hover: #2a2a2a;
             --md-border: #3a3a3a;
@@ -25,9 +24,8 @@
             --md-success: #4caf50;
             --md-danger: #f44336;
             --md-shadow: rgba(0, 0, 0, 0.5);
-        {
-        % else %
-        } --md-bg: #f5f5f5;
+        {% else %}
+			--md-bg: #f5f5f5;
             --md-surface: #ffffff;
             --md-surface-hover: #f9f9f9;
             --md-border: #e0e0e0;
@@ -38,10 +36,8 @@
             --md-success: #4caf50;
             --md-danger: #f44336;
             --md-shadow: rgba(0, 0, 0, 0.15);
-        {
-        % endif %
-        }
-        }
+        {% endif %}
+		}
 
         body {
             margin: 0;
@@ -224,15 +220,13 @@
 
         .chapter-item {
             display: flex;
-            align-items: center;
+            flex-direction: column;
+            gap: 8px;
             padding: 16px 20px;
             background-color: var(--md-surface);
             border: 1px solid var(--md-border);
             border-radius: 6px;
-            text-decoration: none;
-            color: var(--md-text);
-            font-size: 15px;
-            font-weight: 500;
+            cursor: pointer;
             transition: all 0.2s ease;
         }
 
@@ -249,6 +243,45 @@
 
         .chapter-item.read:hover {
             opacity: 0.7;
+        }
+
+        .chapter-main {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .chapter-title {
+            flex: 1;
+            color: var(--md-text);
+            font-size: 15px;
+            font-weight: 500;
+        }
+
+        .chapter-meta {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            font-size: 13px;
+            color: var(--md-text-secondary);
+            flex-shrink: 0;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .meta-icon {
+            opacity: 0.7;
+        }
+
+        .meta-divider {
+            width: 1px;
+            height: 14px;
+            background-color: var(--md-border);
         }
 
         .warning-modal {
@@ -329,6 +362,15 @@
             .manga-description {
                 text-align: center;
             }
+
+            .chapter-main {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .chapter-meta {
+                width: 100%;
+            }
         }
 
         @media (max-width: 768px) {
@@ -371,7 +413,21 @@
                 justify-content: center;
                 min-width: 140px;
             }
+
+            .chapter-meta {
+                flex-wrap: wrap;
+            }
         }
+
+		.meta-link {
+		    color: inherit;
+		    text-decoration: none;
+		    cursor: pointer;
+		}
+
+		.meta-link:hover {
+		    text-decoration: underline;
+		}
 	</style>
 </head>
 <body>
@@ -453,6 +509,10 @@
         hideDeleteWarning();
     }
 
+    function navigateToChapter(chapterId) {
+        window.location.href = "/read/" + chapterId;
+    }
+
     fetch("/manga/{{muuid}}/info").then(response => response.json()).then(data => sortVolumesDescending(data)).then(data => {
         var contdiv = document.getElementById("content");
 
@@ -473,22 +533,44 @@
         }
 
         for (const key in data) {
-            var a = document.createElement("a");
-            a.className = "chapter-item";
+            var chapterDiv = document.createElement("div");
+            chapterDiv.className = "chapter-item";
+            chapterDiv.onclick = function() { navigateToChapter(key); };
 
             chapter = data[key];
 
-            // Customize the text content
-            a.textContent = "Volume " + chapter.volume + " Chapter " + chapter.chapter;
+            // Build chapter title text
+            var titleText = "Volume " + chapter.volume + " Chapter " + chapter.chapter;
             if (chapter.title) {
-                a.textContent += " - " + chapter.title;
+                titleText += " - " + chapter.title;
             }
 
-            // Set the link's href attribute
-            a.setAttribute('href', "/read/" + key);
+            // Get user and scanlation group (with fallback to placeholders)
+            var user = chapter.user?.username || "Unknown User";
+            var user_id = chapter.user?.id
+            var scanlationGroup = chapter.scanlation_group?.name|| "Unknown Group";
+            var group_id = chapter.scanlation_group?.id
 
-            // Append the link to the container div
-            contdiv.appendChild(a);
+            // Create the HTML structure
+			chapterDiv.innerHTML = `
+			    <div class="chapter-main">
+			        <div class="chapter-title">${titleText}</div>
+			        <div class="chapter-meta">
+			            <div class="meta-item">
+			                <span class="meta-icon">👤</span>
+			                <a href="https://mangadex.org/user/${user_id}" class="meta-link">${user}</a>
+			            </div>
+			            <div class="meta-divider"></div>
+			            <div class="meta-item">
+			                <span class="meta-icon">👥</span>
+			                <a href="https://mangadex.org/group/${group_id}" class="meta-link">${scanlationGroup}</a>
+			            </div>
+			        </div>
+			    </div>
+			`;
+
+            // Append to container
+            contdiv.appendChild(chapterDiv);
         }
 
         check_queue()
@@ -533,7 +615,9 @@
             sorted_dictionary[element.id] = {
                 "chapter": element.chapter,
                 "volume": element.volume,
-                "title": element.title
+                "title": element.title,
+                "user": element.user,
+                "scanlation_group": element.scanlation_group
             }
         })
 

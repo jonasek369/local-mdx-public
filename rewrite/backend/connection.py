@@ -667,6 +667,7 @@ class MangadexConnection:
             "offset": 0,
             "translatedLanguage[]": lang,
             "excludedGroups[]": self.exclude_groups,
+            "includes[]": ["scanlation_group", "user"],
             "includeEmptyPages": 0,
             "includeExternalUrl": 0
         }
@@ -722,7 +723,7 @@ class MangadexConnection:
         month_back = now - relativedelta(months=1)
         set_time = month_back.replace(hour=23, minute=0, second=0, microsecond=0)
         data = self.safe_request("GET", url=f"{self.API}/manga", params={
-            "includes[]": ["artists", "cover_art", "author"],
+            "includes[]": ["artist", "cover_art", "author"],
             "order[followedCount]": "desc",
             "hasAvailableChapters": "true",
             "createdAtSince": set_time.isoformat()
