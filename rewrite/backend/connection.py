@@ -21,7 +21,8 @@ from rewrite.backend.settings import Settings, MangadexCredentials
 import concurrent.futures
 from datetime import datetime
 
-from rewrite.backend.utils import Logger, error, info, warning, perf_test, get_correct_language, run_async
+from rewrite.backend.utils import Logger, error, info, warning, perf_test, get_correct_language, run_async, \
+    run_async_in_thread
 
 
 class DownloaderState(Enum):
@@ -46,6 +47,7 @@ def downloader_state_to_string(state):
             return "CANCELLING"
         case _:
             return "UNKNOWN_STATE"
+
 
 @dataclass
 class MangaDownloadJobInDatabase:
@@ -236,7 +238,6 @@ async def async_get_chapter_page(
             logger.log(error, f"KeyError {e}: {metadata_json}")
         manga_download = MangaDownload(int(pages), [])
 
-
         sem = asyncio.Semaphore(min(max(pages, 4), os.cpu_count() or 4))
         downloaded_pages = []
 
@@ -377,13 +378,13 @@ class MangaDownloader:
 
                 pages_in_db = job.database_info.pages_in_db.get(chapter.id, [])
                 downloaded_data = run_async(async_get_chapter_page,
-                    chapter.id,
-                    pages_in_db,
-                    self.logger,
-                    None,
-                    self.can_continue_downloading,
-                    self.page_download_callback
-                )
+                                            chapter.id,
+                                            pages_in_db,
+                                            self.logger,
+                                            None,
+                                            self.can_continue_downloading,
+                                            self.page_download_callback
+                                            )
 
                 if job.identifier not in self.finished:
                     self.finished[job.identifier] = {}
@@ -577,9 +578,10 @@ class MangadexConnection:
             self.logger.log(error, f"An error occurred: {e}")
             return None
 
-    def cache_cover_art_from_relationships(self, identifier: str, relationships: [Relationship]):
+    def cache_cover_art_from_relationships(self, identifier: MangaIdentifier, relationships: [Relationship]):
         for relationship in relationships:
             if relationship.type == "cover_art" and relationship.attributes is not None:
+                self.logger.log(info, f"Caching cover art filename for {identifier}")
                 self.cover_file_name_cache[identifier] = relationship.attributes["fileName"]
 
     # most queries that revolve around manga has cover_art filename saving us 1 mangadex api request
@@ -637,7 +639,7 @@ class MangadexConnection:
         elif size == COVER_ART_512_SIZE:
             size_suffix = ".512.jpg"
 
-        cache_hit: str | None = self.cover_file_name_cache.get(identifier, None)
+        cache_hit: Optional[str] = self.cover_file_name_cache.get(identifier, None)
         if cache_hit is not None:
             cover_url = f"https://uploads.mangadex.org/covers/{identifier}/" + cache_hit + size_suffix
             cover_art = self.safe_request("GET", cover_url)
@@ -656,7 +658,8 @@ class MangadexConnection:
 
         for relationship in from_json(DirectSearchManga, query).data.relationships:
             if relationship.type == "cover_art":
-                coverurl = f"https://uploads.mangadex.org/covers/{identifier}/" + relationship.attributes["fileName"] + size_suffix
+                coverurl = f"https://uploads.mangadex.org/covers/{identifier}/" + relationship.attributes[
+                    "fileName"] + size_suffix
                 self.cover_file_name_cache[identifier] = relationship.attributes["fileName"]
                 return self.safe_request("GET", coverurl).content
 
@@ -728,7 +731,6 @@ class MangadexConnection:
             "hasAvailableChapters": "true",
             "createdAtSince": set_time.isoformat()
         }, default_parameter_exclude=["translatedLanguage[]"])
-        # TODO: parse out data that is usefull like a cover art
         try:
             manga_list: MangaList = from_json(MangaList, data.json())
             self.cache_cover_art_filename(manga_list)
@@ -820,8 +822,8 @@ class MangadexConnection:
             self.logger.log(info, "Conflict! If you have opened the MDlist in your browser please close it")
         return response.status_code == 200
 
-    def get_followed_manga(self) -> MangaList | None:
-        params = {"limit": 100, "offset": 0, "inclues[]": ["cover_art"]}
+    def get_followed_manga(self) -> Optional[MangaList]:
+        params = {"limit": 100, "offset": 0, "includes[]": ["cover_art"]}
         req = self.safe_request("GET",
                                 url=f"{self.API}/user/follows/manga",
                                 headers=self.credentials_manager.get_header_token(),
@@ -864,6 +866,24 @@ class MangadexConnection:
             manga_list.data.extend(new_manga_list.data)
         self.cache_cover_art_filename(manga_list)
         return manga_list
+
+    def get_latest_updated_chapters(self) -> ChapterList | None:
+        params = {"limit": 100, "includes[]": ["scanlation_group", "manga"], "order[readableAt]": "desc"}
+        req = self.safe_request("GET",
+                                url=f"{self.API}/chapter",
+                                default_parameters=True,
+                                params=params
+                                )
+        if req and req.status_code != 200:
+            self.logger.log(error, f"API returned code {req.status_code} when getting latest updates")
+            return None
+
+        query = req.json()
+
+        if query["result"] != "ok":
+            return None
+
+        return from_json(ChapterList, req.json())
 
 
 # simple download to FS

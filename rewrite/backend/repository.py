@@ -8,7 +8,7 @@ from flask_socketio import SocketIO
 from rewrite.backend.connection import MangadexConnection, MangaDownloader, CredentialManager
 from rewrite.backend.database import Database
 from rewrite.backend.schemas import MangaIdentifier, ChapterIdentifier, ChapterList, MangaAttributes, \
-    ChapterAttributes, LatestChapter, MangaList, COVER_ART_MAX_SIZE
+    ChapterAttributes, LatestChapter, MangaList, COVER_ART_MAX_SIZE, COVER_ART_512_SIZE
 from rewrite.backend.settings import load_settings, load_credentials
 from rewrite.backend.utils import perf_test, info, error
 
@@ -124,11 +124,11 @@ class MangaRepository:
     #         return popular
     #     return asdict(popular)["data"]
 
-    async def _fetch_and_store_cover(self, session, identifier: MangaIdentifier, coverurl: str) -> MangaList | None:
+    async def _fetch_and_store_cover(self, session, identifier: MangaIdentifier, coverurl: str) -> None:
         async with session.get(coverurl) as resp:
             resp.raise_for_status()
             content = await resp.read()
-            self.database.set_cover_art(identifier, COVER_ART_MAX_SIZE, content)
+            self.database.set_cover_art(identifier, COVER_ART_512_SIZE, content)
 
     async def popular_new_titles(self):
         popular = self.connection.get_popular_new_titles()
@@ -213,3 +213,7 @@ class MangaRepository:
             self.settings.logger.log(info, "Credentials are not set")
             return None
         return feed
+
+    def get_latest_updated_chapters(self) -> ChapterList | None:
+        updates = self.connection.get_latest_updated_chapters()
+        return updates

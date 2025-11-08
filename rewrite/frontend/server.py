@@ -5,6 +5,7 @@ import os
 from dataclasses import asdict
 
 from flask_socketio import SocketIO
+from sympy.assumptions import relation
 
 from rewrite.backend.connection import MangaDownloadJob, save_credentials
 from rewrite.backend.repository import MangaRepository
@@ -22,6 +23,8 @@ except ImportError:
 
 
     webview = wv()
+
+
 from flask import Flask, jsonify, render_template, request, make_response
 
 gui_dir = os.path.join(os.getcwd(), 'gui')
@@ -135,7 +138,13 @@ def get_manga_info(mangauuid):
     chapters = {}
 
     for cuuid, title, volume, chapter in downloaded_pages:
-        chapters[cuuid] = {"title": title, "volume": volume, "chapter": chapter, "user": user_and_groups[cuuid]["user"], "scanlation_group": user_and_groups[cuuid]["scanlation_group"]}
+        chapters[cuuid] = {
+            "title": title,
+            "volume": volume,
+            "chapter": chapter,
+            "user": user_and_groups[cuuid]["user"],
+            "scanlation_group": user_and_groups[cuuid]["scanlation_group"]
+        }
 
     return jsonify(chapters), 200
 
@@ -429,6 +438,26 @@ def local_port():
     return {"status": "ok"}, 200
 
 
+@server.route("/latest-updated-chapters")
+def latest_updated_chapters():
+    chapters_datatype = repository.get_latest_updated_chapters()
+    chapters = []
+    for chapter in chapters_datatype.data:
+        new_chapter = asdict(chapter)
+        attrs = new_chapter["attributes"]
+        attrs["title"] = get_correct_language(chapter.attributes.title, None, repository.settings)
+        for index, relationship in enumerate(chapter.relationships):
+            if relationship.type != "manga":
+                continue
+            new_chapter["relationships"][index]["attributes"]["title"] = get_correct_language(
+                new_chapter["relationships"][index]["attributes"]["title"],
+                new_chapter["relationships"][index]["attributes"]["altTitles"],
+                repository.settings
+            )
+        chapters.append(new_chapter)
+    return chapters
+
+
 @socketio.on('connect')
 def handle_connect():
     # Send initial state to the client when they connect
@@ -439,4 +468,4 @@ if __name__ == "__main__":
     # thanks to socketio we can have sockets (much better downloader) but when our second thread is downloading
     # it is affecting the website because this now a coroutine
     # TODO: Try to fix that
-    socketio.run(server, host="127.0.0.1", port=5000)
+    socketio.run(server, host="127.0.0.1", port=5000, debug=True)

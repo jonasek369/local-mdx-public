@@ -1,7 +1,6 @@
 import json
 import sqlite3
 from dataclasses import asdict
-from pprint import pprint
 from typing import List, Optional, Tuple
 
 from rewrite.backend.connection import MangaDownloadJobInDatabase

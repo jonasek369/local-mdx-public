@@ -13,8 +13,8 @@
         }
 
         :root {
-            {% if darktheme %}
-            --md-bg: #1a1a1a;
+        {% if darktheme %}
+			--md-bg: #1a1a1a;
             --md-surface: #242424;
             --md-surface-hover: #2a2a2a;
             --md-border: #3a3a3a;
@@ -25,8 +25,8 @@
             --md-success: #4caf50;
             --md-danger: #f44336;
             --md-shadow: rgba(0, 0, 0, 0.3);
-            {% else %}
-            --md-bg: #f5f5f5;
+        {% else %}
+			--md-bg: #f5f5f5;
             --md-surface: #ffffff;
             --md-surface-hover: #f9f9f9;
             --md-border: #e0e0e0;
@@ -37,7 +37,7 @@
             --md-success: #4caf50;
             --md-danger: #f44336;
             --md-shadow: rgba(0, 0, 0, 0.1);
-            {% endif %}
+        {% endif %}
         }
 
         body {
@@ -285,7 +285,7 @@
             color: white;
         }
 
-		.rating-erotica {
+        .rating-erotica {
             background-color: var(--md-danger);
             color: white;
         }
@@ -321,7 +321,9 @@
         }
 
         @keyframes spin {
-            to { transform: rotate(360deg); }
+            to {
+                transform: rotate(360deg);
+            }
         }
 
         .login-button {
@@ -570,6 +572,119 @@
         .search-results-dropdown::-webkit-scrollbar-thumb:hover {
             background: var(--md-text-secondary);
         }
+
+        .section-title {
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+		.latest-updates-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            align-items: start;
+        }
+
+        /* Each column (list of updates) */
+        .latest-updates {
+            background-color: var(--md-surface);
+            border: 1px solid var(--md-border);
+            border-radius: 8px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        /* Individual update row */
+        .latest-updates-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 8px;
+            border-radius: 6px;
+            transition: background-color 0.2s;
+        }
+
+        .latest-updates-item:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+			cursor: pointer;
+        }
+
+        /* Cover image */
+        .latest-updates-item img {
+            width: 48px;
+            height: 68px;
+            border-radius: 4px;
+            object-fit: cover;
+            flex-shrink: 0;
+        }
+
+        /* Text content */
+        .latest-updates-content {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            line-height: 1.2;
+        }
+
+        .latest-updates-content h1 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin: 0;
+            color: #fff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .latest-updates-content .chapter {
+            font-size: 0.85rem;
+            color: #ccc;
+            margin: 2px 0 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .latest-updates-content .group .group-clickable {
+            font-size: 0.8rem;
+            color: #aaa;
+            margin: 2px 0 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+		}
+
+		.group-clickable:hover {
+			background-color: rgba(255, 255, 255, 0.05);
+			cursor: pointer;
+		}
+
+        .latest-updates-content .time {
+            font-size: 0.75rem;
+            color: #777;
+            margin-top: 2px;
+        }
+
+		@media (max-width: 1600px) {
+		    .latest-updates-grid .latest-updates:nth-child(4) {
+		        display: none;
+		    }
+		}
+
+		@media (max-width: 1200px) {
+		    .latest-updates-grid .latest-updates:nth-child(3) {
+		        display: none;
+		    }
+		}
+
+		@media (max-width: 800px) {
+		    .latest-updates-grid .latest-updates:nth-child(2) {
+		        display: none;
+		    }
+		}
 	</style>
 </head>
 
@@ -585,19 +700,19 @@
 
 	<div class="search-container">
 		<div class="search-wrapper">
-            <div class="search-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="11" cy="11" r="8"></circle>
-                    <path d="m21 21-4.35-4.35"></path>
-                </svg>
-            </div>
+			<div class="search-icon">
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<circle cx="11" cy="11" r="8"></circle>
+					<path d="m21 21-4.35-4.35"></path>
+				</svg>
+			</div>
 			<input type="text" id="searchInput" placeholder="Search manga titles...">
-            <button class="clear-search" id="clearSearch">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-            </button>
+			<button class="clear-search" id="clearSearch">
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<line x1="18" y1="6" x2="6" y2="18"></line>
+					<line x1="6" y1="6" x2="18" y2="18"></line>
+				</svg>
+			</button>
 			<button type="submit" onclick="searchManga()">Search</button>
 		</div>
 		<div class="search-results-dropdown" id="searchResultsDropdown"></div>
@@ -641,6 +756,15 @@
 		<span id="number">NO. 1</span>
 		<button id="manga-add">Next →</button>
 	</div>
+
+	<!-- Latest Updates -->
+	<h2 class="section-title">Latest Updates</h2>
+	<div class="latest-updates-grid">
+		<div class="latest-updates"></div>
+		<div class="latest-updates"></div>
+		<div class="latest-updates"></div>
+		<div class="latest-updates"></div>
+	</div>
 </div>
 
 <script>
@@ -663,13 +787,13 @@
     const image = document.getElementById("cover-art");
     const number = document.getElementById("number");
     const genreTags = document.getElementById("genre-tags");
-	const searchResultsDropdown = document.getElementById("searchResultsDropdown");
+    const searchResultsDropdown = document.getElementById("searchResultsDropdown");
     const searchInput = document.getElementById('searchInput');
     const clearSearch = document.getElementById('clearSearch');
     let searchTimeout;
 
     // Show/hide clear button
-    searchInput.addEventListener('input', function() {
+    searchInput.addEventListener('input', function () {
         if (this.value.length > 0) {
             clearSearch.classList.add('visible');
         } else {
@@ -685,7 +809,7 @@
     });
 
     // Clear search
-    clearSearch.addEventListener('click', function() {
+    clearSearch.addEventListener('click', function () {
         searchInput.value = '';
         clearSearch.classList.remove('visible');
         searchResultsDropdown.classList.remove('show');
@@ -693,7 +817,7 @@
     });
 
     // Search on Enter key
-    searchInput.addEventListener('keypress', function(e) {
+    searchInput.addEventListener('keypress', function (e) {
         if (e.key === 'Enter') {
             searchManga();
         }
@@ -719,93 +843,93 @@
             },
             body: JSON.stringify({searchTerm: searchTerm})
         })
-        .then(response => response.json())
-        .then(data => {
-            searchResultsDropdown.innerHTML = '';
+            .then(response => response.json())
+            .then(data => {
+                searchResultsDropdown.innerHTML = '';
 
-            if (data.length === 0) {
-                searchResultsDropdown.innerHTML = `
+                if (data.length === 0) {
+                    searchResultsDropdown.innerHTML = `
                     <div class="no-results">
                         <div class="no-results-icon">📚</div>
                         <p>No manga found matching "${searchTerm}"</p>
                     </div>
                 `;
-            } else {
-                // Add header
-                const header = document.createElement('div');
-                header.className = 'search-results-header';
-                header.textContent = `Found ${data.length} result${data.length !== 1 ? 's' : ''}`;
-                searchResultsDropdown.appendChild(header);
+                } else {
+                    // Add header
+                    const header = document.createElement('div');
+                    header.className = 'search-results-header';
+                    header.textContent = `Found ${data.length} result${data.length !== 1 ? 's' : ''}`;
+                    searchResultsDropdown.appendChild(header);
 
-                // Populate dropdown with results
-                data.forEach(function (result) {
-                    const resultItem = document.createElement('a');
-                    resultItem.href = "/manga/" + result.id;
+                    // Populate dropdown with results
+                    data.forEach(function (result) {
+                        const resultItem = document.createElement('a');
+                        resultItem.href = "/manga/" + result.id;
 
-                    const img = document.createElement('img');
-                    img.className = 'search-result-image';
-                    img.src = "/manga/cover/" + result.id + "?size=256";
-                    img.alt = result.attributes.title || "Manga Cover";
-                    img.onerror = function() {
-                        this.style.display = 'none';
-                    };
+                        const img = document.createElement('img');
+                        img.className = 'search-result-image';
+                        img.src = "/manga/cover/" + result.id + "?size=256";
+                        img.alt = result.attributes.title || "Manga Cover";
+                        img.onerror = function () {
+                            this.style.display = 'none';
+                        };
 
-                    const info = document.createElement('div');
-                    info.className = 'search-result-info';
+                        const info = document.createElement('div');
+                        info.className = 'search-result-info';
 
-                    const titleDiv = document.createElement('div');
-                    titleDiv.className = 'search-result-title';
-                    titleDiv.textContent = result.attributes.title || "Untitled";
+                        const titleDiv = document.createElement('div');
+                        titleDiv.className = 'search-result-title';
+                        titleDiv.textContent = result.attributes.title || "Untitled";
 
-                    const meta = document.createElement('div');
-                    meta.className = 'search-result-meta';
+                        const meta = document.createElement('div');
+                        meta.className = 'search-result-meta';
 
-                    // Add rating badge
-                    const rating = result.attributes.contentRating;
-                    if (rating) {
-                        const ratingBadge = document.createElement('span');
-                        if(rating !== "safe" && rating !== "suggestive" && rating !== "erotica"){
-							ratingBadge.className = `rating-badge rating-nsfw`;
-                        	ratingBadge.textContent = "mature";
-						} else {
-                            ratingBadge.className = `rating-badge rating-${rating}`;
-                        	ratingBadge.textContent = rating;
-						}
-                        meta.appendChild(ratingBadge);
-                    }
+                        // Add rating badge
+                        const rating = result.attributes.contentRating;
+                        if (rating) {
+                            const ratingBadge = document.createElement('span');
+                            if (rating !== "safe" && rating !== "suggestive" && rating !== "erotica") {
+                                ratingBadge.className = `rating-badge rating-nsfw`;
+                                ratingBadge.textContent = "mature";
+                            } else {
+                                ratingBadge.className = `rating-badge rating-${rating}`;
+                                ratingBadge.textContent = rating;
+                            }
+                            meta.appendChild(ratingBadge);
+                        }
 
-                    // Add publication year if available
-                    if (result.attributes.year) {
-                        const year = document.createElement('span');
-                        year.textContent = `📅 ${result.attributes.year}`;
-                        meta.appendChild(year);
-                    }
+                        // Add publication year if available
+                        if (result.attributes.year) {
+                            const year = document.createElement('span');
+                            year.textContent = `📅 ${result.attributes.year}`;
+                            meta.appendChild(year);
+                        }
 
-                    info.appendChild(titleDiv);
-                    info.appendChild(meta);
+                        info.appendChild(titleDiv);
+                        info.appendChild(meta);
 
-                    resultItem.appendChild(img);
-                    resultItem.appendChild(info);
-                    searchResultsDropdown.appendChild(resultItem);
-                });
-            }
+                        resultItem.appendChild(img);
+                        resultItem.appendChild(info);
+                        searchResultsDropdown.appendChild(resultItem);
+                    });
+                }
 
-            searchResultsDropdown.classList.add('show');
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            searchResultsDropdown.innerHTML = `
+                searchResultsDropdown.classList.add('show');
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                searchResultsDropdown.innerHTML = `
                 <div class="no-results">
                     <div class="no-results-icon">⚠️</div>
                     <p>Error loading search results</p>
                 </div>
             `;
-            searchResultsDropdown.classList.add('show');
-        });
+                searchResultsDropdown.classList.add('show');
+            });
     }
 
     // Close dropdown when clicking outside
-    document.addEventListener('click', function(event) {
+    document.addEventListener('click', function (event) {
         const searchContainer = document.querySelector('.search-container');
         const dropdown = document.getElementById('searchResultsDropdown');
         if (!searchContainer.contains(event.target)) {
@@ -816,7 +940,7 @@
     let popular_manga = null;
     fetch("popular-new-titles").then(response => response.json()).then(data => {
         popular_manga = data
-		updateManga()
+        updateManga()
     })
 
     fetch("/auth/check").then(response => response.json()).then(data => {
@@ -827,6 +951,76 @@
             login_button.innerText = "Missing credentials"
         }
     })
+
+	function get_relationship_type(relationships, type){
+        for (let i = 0; i < relationships.length; i++) {
+			if(relationships[i].type === type){
+                return relationships[i];
+			}
+        }
+	}
+
+	fetch("/latest-updated-chapters").then(response => response.json()).then(data => {
+		const latest_updated_chapter = document.getElementsByClassName("latest-updates")
+		let chapter_index = 0;
+        for(let element_id = 0; element_id < latest_updated_chapter.length; element_id++) {
+            for(let chapters_per_element = 0;  chapters_per_element < 6; chapters_per_element++){
+                let manga_rl = get_relationship_type(data[chapter_index].relationships, "manga");
+                let group_rl = get_relationship_type(data[chapter_index].relationships, "scanlation_group");
+				// TODO: Finish adding group and time since creation
+                console.log(group_rl)
+
+                let to_element = latest_updated_chapter[element_id];
+                const chapter = document.createElement('div');
+                chapter.classList.add('latest-updates-item');
+                chapter.onclick = function () {
+                    window.location.replace("/manga/" + manga_rl.id);
+				}
+
+                const chapter_content = document.createElement('div');
+                chapter_content.classList.add('latest-updates-content');
+
+                const image = document.createElement('img');
+                image.src = "/manga/cover/" + manga_rl.id + "?size=256";
+                chapter.appendChild(image);
+
+                const title = document.createElement('h1');
+                title.textContent = manga_rl.attributes.title || "Untitled";
+                chapter_content.appendChild(title)
+
+                const volume_chapter = document.createElement('p');
+                let vol_chap = "";
+                volume_chapter.classList.add('chapter');
+                if(data[chapter_index].attributes.volume){
+                    vol_chap += `Vol. ${data[chapter_index].attributes.volume} `
+				}
+                if(data[chapter_index].attributes.chapter){
+                    vol_chap += `Ch. ${data[chapter_index].attributes.chapter}`
+				}
+                volume_chapter.textContent = vol_chap;
+                chapter_content.appendChild(volume_chapter);
+
+                const group = document.createElement('p');
+
+                if(group_rl === undefined || group_rl === null){
+                    group.textContent = "No group";
+                    group.classList.add('group');
+				}else{
+                    group.textContent = group_rl.attributes.name;
+                    group.onclick = function (event) {
+                        event.stopPropagation();
+                        window.location.replace("https://mangadex.org/group/" + group_rl.id);
+					}
+                    group.classList.add('group-clickable');
+				}
+                chapter_content.appendChild(group);
+
+                chapter.appendChild(chapter_content);
+                to_element.appendChild(chapter);
+                chapter_index++;
+			}
+		}
+	})
 
     document.getElementById('manga-sub').addEventListener('click', (event) => {
         event.stopPropagation();
@@ -859,20 +1053,20 @@
         while (genreTags.firstChild) {
             genreTags.removeChild(genreTags.firstChild);
         }
-		image.src = "/manga/cover/"+popular_manga[currentIndex - 1].id+"?size=512";
+        image.src = "/manga/cover/" + popular_manga[currentIndex - 1].id + "?size=512";
         title.innerText = popular_manga[currentIndex - 1].attributes.title;
         description.innerText = popular_manga[currentIndex - 1].attributes.description;
 
         const relationships = popular_manga[currentIndex - 1].relationships;
-		const authorNames = relationships
-		  .filter(r => (["author", "artist"].includes(r.type) && r.attributes?.name))
-		  .sort((a, b) => {
-			  if (a.type === b.type) return 0;
-			  return a.type === "artist" ? -1 : 1;
-		  })
-		  .map(r => r.attributes.name);
+        const authorNames = relationships
+            .filter(r => (["author", "artist"].includes(r.type) && r.attributes?.name))
+            .sort((a, b) => {
+                if (a.type === b.type) return 0;
+                return a.type === "artist" ? -1 : 1;
+            })
+            .map(r => r.attributes.name);
 
-		authors.innerText = authorNames.join(", ");
+        authors.innerText = authorNames.join(", ");
 
         number.innerText = "NO. " + currentIndex.toString()
 

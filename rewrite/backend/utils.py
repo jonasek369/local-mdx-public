@@ -4,12 +4,11 @@ import os
 import time
 import uuid
 from enum import Enum
-from pprint import pprint
 from typing import Dict, List, Union
 
 from PIL import Image
 import asyncio
-
+from concurrent.futures import ThreadPoolExecutor
 
 def perf_test(func):
     """
@@ -97,6 +96,18 @@ def is_uuid4(value: str) -> bool:
     return str(val) == value.lower()
 
 
+_executor = ThreadPoolExecutor(max_workers= os.cpu_count() if os.cpu_count() is not None else 4)
+
+def run_async_in_thread(async_func, *args, **kwargs):
+    import asyncio
+
+    def runner():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        return loop.run_until_complete(async_func(*args, **kwargs))
+
+    return _executor.submit(runner).result()
+
 def run_async(func, *args, **kwargs):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -140,11 +151,11 @@ class LogType(Enum):
     TRACEBACK = 6
 
 
-info = LogType.INFO
-success = LogType.SUCCESSS
-warning = LogType.WARNING
-error = LogType.ERROR
-critical = LogType.CRITICAL
+info      = LogType.INFO
+success   = LogType.SUCCESSS
+warning   = LogType.WARNING
+error     = LogType.ERROR
+critical  = LogType.CRITICAL
 traceback = LogType.TRACEBACK
 
 
