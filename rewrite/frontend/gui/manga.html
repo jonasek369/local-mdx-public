@@ -504,9 +504,9 @@
     }
 
     function confirmDelete() {
-        // Add your delete logic here
-        console.log('Manga deleted');
-        hideDeleteWarning();
+        fetch("/manga/delete/{{muuid}}").then(resp => {
+            window.location.reload();
+		})
     }
 
     function navigateToChapter(chapterId) {

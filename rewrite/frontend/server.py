@@ -24,7 +24,6 @@ except ImportError:
 
     webview = wv()
 
-
 from flask import Flask, jsonify, render_template, request, make_response
 
 gui_dir = os.path.join(os.getcwd(), 'gui')
@@ -108,8 +107,8 @@ def get_cover_art(identifier):
         return jsonify({"error": "No image found"}), 404
 
     response = make_response(image_binary)
-    response.headers.set("Content-Type", "image/jpeg")
-    response.headers.set("Content-Disposition", f"inline; filename={identifier}.jpg")
+    response.headers.set("Content-Type", "image/webp")
+    response.headers.set("Content-Disposition", f"inline; filename={identifier}.webp")
     response.headers["Cache-Control"] = "public, max-age=86400"
     return response, 200
 
@@ -157,6 +156,13 @@ def manga_attributes(mangauuid):
     return jsonify(asdict(attributes)), 200
 
 
+@server.route("/manga/delete/<mangauuid>")
+def delete_manga(mangauuid):
+    if not repository.database.delete_manga(mangauuid):
+        return {"status": "error", "response": "Could not delete manga"}
+    return {"status": "ok"}, 200
+
+
 @server.route("/page-image/<identifier>/<page>")
 def get_chapter_image(identifier, page):
     if not page.isdigit():
@@ -164,8 +170,8 @@ def get_chapter_image(identifier, page):
     image_binary = repository.database.get_page(identifier, int(page))
     if image_binary is not None:
         response = make_response(image_binary)
-        response.headers.set('Content-Type', 'image/jpeg')
-        response.headers.set('Content-Disposition', 'inline', filename=f'{identifier}-{page}.png')
+        response.headers.set('Content-Type', 'image/webp')
+        response.headers.set('Content-Disposition', 'inline', filename=f'{identifier}-{page}.webp')
         return response, 200
     return {"status": "error", "response": "no image found"}, 404
 
@@ -240,6 +246,7 @@ def push_job():
         )
     )
     return {"status": "success"}
+
 
 @server.route("/manga/download/contains", methods=["POST"])
 def downloader_contains():
@@ -468,4 +475,4 @@ if __name__ == "__main__":
     # thanks to socketio we can have sockets (much better downloader) but when our second thread is downloading
     # it is affecting the website because this now a coroutine
     # TODO: Try to fix that
-    socketio.run(server, host="127.0.0.1", port=5000, debug=True)
+    socketio.run(server, host="127.0.0.1", port=5000)

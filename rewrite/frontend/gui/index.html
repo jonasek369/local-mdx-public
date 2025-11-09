@@ -344,7 +344,7 @@
         }
 
         .main-content {
-            max-width: 1400px;
+            max-width: 1600px;
             margin: 0 auto;
             padding: 32px 24px;
         }
@@ -648,13 +648,15 @@
             text-overflow: ellipsis;
         }
 
-        .latest-updates-content .group .group-clickable {
-            font-size: 0.8rem;
-            color: #aaa;
-            margin: 2px 0 0;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+		.latest-updates-content,
+		.group,
+		.group-clickable {
+		  font-size: 0.8rem;
+		  color: #aaa;
+		  margin: 2px 0 0;
+		  white-space: nowrap;
+		  overflow: hidden;
+		  text-overflow: ellipsis;
 		}
 
 		.group-clickable:hover {
@@ -734,7 +736,7 @@
 	<!-- Manga Card -->
 	<div class="manga-card" onclick="to_manga()">
 		<div class="manga-card-image">
-			<img src="" alt="Book Cover" id="cover-art">
+			<img src="" alt="Book Cover" id="cover-art" fetchpriority="high">
 		</div>
 		<div class="manga-card-content">
 			<h3 id="manga-title">Loading...</h3>
@@ -937,13 +939,7 @@
         }
     });
 
-    let popular_manga = null;
-    fetch("popular-new-titles").then(response => response.json()).then(data => {
-        popular_manga = data
-        updateManga()
-    })
-
-    fetch("/auth/check").then(response => response.json()).then(data => {
+	fetch("/auth/check").then(response => response.json()).then(data => {
         const login_button = document.getElementsByClassName("login-button")[0]
         if (data.status === "ok") {
             login_button.innerText = "Logged in"
@@ -951,6 +947,14 @@
             login_button.innerText = "Missing credentials"
         }
     })
+
+
+    let popular_manga = null;
+    fetch("popular-new-titles").then(response => response.json()).then(data => {
+        popular_manga = data
+        updatePopularManga()
+    })
+
 
 	function get_relationship_type(relationships, type){
         for (let i = 0; i < relationships.length; i++) {
@@ -960,67 +964,70 @@
         }
 	}
 
-	fetch("/latest-updated-chapters").then(response => response.json()).then(data => {
-		const latest_updated_chapter = document.getElementsByClassName("latest-updates")
-		let chapter_index = 0;
-        for(let element_id = 0; element_id < latest_updated_chapter.length; element_id++) {
-            for(let chapters_per_element = 0;  chapters_per_element < 6; chapters_per_element++){
-                let manga_rl = get_relationship_type(data[chapter_index].relationships, "manga");
-                let group_rl = get_relationship_type(data[chapter_index].relationships, "scanlation_group");
-				// TODO: Finish adding group and time since creation
-                console.log(group_rl)
+    function timeAgo(isoString) {
+		const date = new Date(isoString);
+		const now = new Date();
+		const diffMs = now - date;
+		const diffSec = Math.floor(diffMs / 1000);
+		const diffMin = Math.floor(diffSec / 60);
+		const diffHr = Math.floor(diffMin / 60);
+		const diffDay = Math.floor(diffHr / 24);
 
-                let to_element = latest_updated_chapter[element_id];
-                const chapter = document.createElement('div');
-                chapter.classList.add('latest-updates-item');
-                chapter.onclick = function () {
-                    window.location.replace("/manga/" + manga_rl.id);
-				}
+		if (diffSec < 60) return "just now";
+		if (diffMin < 60) return `${diffMin} minute${diffMin !== 1 ? "s" : ""} ago`;
+		if (diffHr < 24) return `${diffHr} hour${diffHr !== 1 ? "s" : ""} ago`;
+		if (diffDay < 7) return `${diffDay} day${diffDay !== 1 ? "s" : ""} ago`;
 
-                const chapter_content = document.createElement('div');
-                chapter_content.classList.add('latest-updates-content');
+		return date.toLocaleDateString();
+	}
 
-                const image = document.createElement('img');
-                image.src = "/manga/cover/" + manga_rl.id + "?size=256";
-                chapter.appendChild(image);
+	fetch("/latest-updated-chapters")
+	    .then(response => response.json())
+	    .then(data => {
+        const latestUpdatedContainers = document.getElementsByClassName("latest-updates");
+        let chapterIndex = 0;
 
-                const title = document.createElement('h1');
-                title.textContent = manga_rl.attributes.title || "Untitled";
-                chapter_content.appendChild(title)
+        for (let containerIdx = 0; containerIdx < latestUpdatedContainers.length; containerIdx++) {
+            let container = latestUpdatedContainers[containerIdx];
+            let htmlContent = "";
 
-                const volume_chapter = document.createElement('p');
-                let vol_chap = "";
-                volume_chapter.classList.add('chapter');
-                if(data[chapter_index].attributes.volume){
-                    vol_chap += `Vol. ${data[chapter_index].attributes.volume} `
-				}
-                if(data[chapter_index].attributes.chapter){
-                    vol_chap += `Ch. ${data[chapter_index].attributes.chapter}`
-				}
-                volume_chapter.textContent = vol_chap;
-                chapter_content.appendChild(volume_chapter);
+            for (let chaptersPerElement = 0; chaptersPerElement < 6; chaptersPerElement++) {
+                if (chapterIndex >= data.length) break;
 
-                const group = document.createElement('p');
+                let mangaRl = get_relationship_type(data[chapterIndex].relationships, "manga");
+                let groupRl = get_relationship_type(data[chapterIndex].relationships, "scanlation_group");
 
-                if(group_rl === undefined || group_rl === null){
-                    group.textContent = "No group";
-                    group.classList.add('group');
-				}else{
-                    group.textContent = group_rl.attributes.name;
-                    group.onclick = function (event) {
-                        event.stopPropagation();
-                        window.location.replace("https://mangadex.org/group/" + group_rl.id);
-					}
-                    group.classList.add('group-clickable');
-				}
-                chapter_content.appendChild(group);
+                let volChap = "";
+                if (data[chapterIndex].attributes.volume) volChap += `Vol. ${data[chapterIndex].attributes.volume} `;
+                if (data[chapterIndex].attributes.chapter) volChap += `Ch. ${data[chapterIndex].attributes.chapter}`;
 
-                chapter.appendChild(chapter_content);
-                to_element.appendChild(chapter);
-                chapter_index++;
-			}
-		}
-	})
+                let groupHTML = "No group";
+                let groupClass = "group";
+                let groupOnClick = "";
+                if (groupRl) {
+                    groupHTML = groupRl.attributes.name;
+                    groupClass = "group-clickable";
+                    groupOnClick = `onclick="event.stopPropagation(); window.location.replace('https://mangadex.org/group/${groupRl.id}');"`;
+                }
+
+                htmlContent += `
+                    <div class="latest-updates-item" onclick="window.location.replace('/manga/${mangaRl.id}')">
+                        <img src="/manga/cover/${mangaRl.id}?size=256" alt="${mangaRl.attributes.title || 'Untitled'}">
+                        <div class="latest-updates-content">
+                            <h1>${mangaRl.attributes.title || "Untitled"}</h1>
+                            <p class="chapter">${volChap}</p>
+                            <p class="${groupClass}" ${groupOnClick}>${groupHTML}</p>
+                            <span class="time">${timeAgo(data[chapterIndex].attributes.readableAt)}</span>
+                        </div>
+                    </div>
+                `;
+
+                chapterIndex++;
+            }
+
+            container.innerHTML = htmlContent;
+        }
+    });
 
     document.getElementById('manga-sub').addEventListener('click', (event) => {
         event.stopPropagation();
@@ -1029,7 +1036,7 @@
         if (currentIndex <= 0) {
             currentIndex = 10;
         }
-        updateManga()
+        updatePopularManga()
     })
 
     document.getElementById('manga-add').addEventListener('click', (event) => {
@@ -1039,14 +1046,14 @@
         if (currentIndex > 10) {
             currentIndex = 1;
         }
-        updateManga()
+        updatePopularManga()
     })
 
     function to_manga() {
         window.location.replace("/manga/" + popular_manga[currentIndex - 1].id);
     }
 
-    function updateManga() {
+    function updatePopularManga() {
         if (popular_manga === null) {
             return null
         }
@@ -1100,7 +1107,7 @@
         if (currentIndex > 10) {
             currentIndex = 1;
         }
-        updateManga()
+        updatePopularManga()
     }, 10000)
 </script>
 </body>

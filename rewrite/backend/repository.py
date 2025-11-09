@@ -140,8 +140,8 @@ class MangaRepository:
             for manga in popular.data:
                 for relationship in manga.relationships:
                     if relationship.type == "cover_art":
-                        coverurl = f"https://mangadex.org/covers/{manga.id}/{relationship.attributes['fileName']}"
-                        if not self.database.get_cover_art(manga.id):
+                        coverurl = f"https://mangadex.org/covers/{manga.id}/{relationship.attributes['fileName']}.512.jpg"
+                        if not self.database.get_cover_art(manga.id, COVER_ART_512_SIZE):
                             # Create async download task
                             tasks.append(self._fetch_and_store_cover(session, manga.id, coverurl))
 

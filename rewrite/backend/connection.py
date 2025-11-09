@@ -581,8 +581,9 @@ class MangadexConnection:
     def cache_cover_art_from_relationships(self, identifier: MangaIdentifier, relationships: [Relationship]):
         for relationship in relationships:
             if relationship.type == "cover_art" and relationship.attributes is not None:
-                self.logger.log(info, f"Caching cover art filename for {identifier}")
-                self.cover_file_name_cache[identifier] = relationship.attributes["fileName"]
+                if identifier not in self.cover_file_name_cache:
+                    self.logger.log(info, f"Caching cover art filename for {identifier}")
+                    self.cover_file_name_cache[identifier] = relationship.attributes["fileName"]
 
     # most queries that revolve around manga has cover_art filename saving us 1 mangadex api request
     def cache_cover_art_filename(self, manga_object: Any):

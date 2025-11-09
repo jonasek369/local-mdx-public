@@ -1,10 +1,12 @@
 import json
 import sqlite3
+import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 from typing import List, Optional, Tuple
 
 from rewrite.backend.connection import MangaDownloadJobInDatabase
-from rewrite.backend.utils import perf_test
+from rewrite.backend.utils import perf_test, convert_to_webp
 from rewrite.backend.schemas import MangaIdentifier, ChapterIdentifier, ChapterAttributes, Chapter, Manga, \
     MangaAttributes, LatestChapter, COVER_ART_MAX_SIZE, COVER_ART_256_SIZE, COVER_ART_512_SIZE, from_json, \
     from_database_row
@@ -14,6 +16,7 @@ class Database:
     def __init__(self):
         self.conn = sqlite3.connect("database.db", check_same_thread=False, timeout=10)
         cursor = self.conn.cursor()
+        self.conn.execute("PRAGMA foreign_keys = ON")
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS chapters (
             cuuid CHAR(36) PRIMARY KEY,
@@ -25,7 +28,7 @@ class Database:
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS chapter_attributes (
             cuuid CHAR(36) PRIMARY KEY,
-            muuid CHAR(36),
+            muuid CHAR(36) NOT NULL,
             title TEXT,
             volume TEXT,
             chapter TEXT,
@@ -38,7 +41,7 @@ class Database:
             updatedAt TEXT NOT NULL,
             publishAt TEXT NOT NULL,
             readableAt TEXT NOT NULL,
-            FOREIGN KEY (cuuid) REFERENCES chapter(cuuid)
+            FOREIGN KEY (cuuid) REFERENCES chapters(cuuid) ON DELETE CASCADE
         );
         """)
         cursor.execute("""CREATE TABLE IF NOT EXISTS manga_attributes (
@@ -76,7 +79,6 @@ class Database:
             data BLOB NOT NULL,
             PRIMARY KEY(muuid, size)
         )""")
-
 
         cursor.execute("""CREATE TABLE IF NOT EXISTS latest_chapter (
             muuid CHAR(36) NOT NULL primary key,
@@ -127,13 +129,13 @@ class Database:
     def set_chapter_attributes(self, identifier: MangaIdentifier, chapters: List[Chapter]) -> None:
         cursor = self.conn.cursor()
         cursor.executemany("REPLACE INTO chapters VALUES (?, ?, ?)", [
-            [chapter.id, chapter.type, json.dumps([asdict(relationship) for relationship in chapter.relationships])] for chapter in chapters
+            [chapter.id, chapter.type, json.dumps([asdict(relationship) for relationship in chapter.relationships])] for
+            chapter in chapters
         ])
         cursor.executemany("REPLACE INTO chapter_attributes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                            [[i.id, identifier] + list(asdict(i.attributes).values()) for i in chapters])
         self.conn.commit()
         cursor.close()
-
 
     @perf_test
     def get_user_and_groups(self, cuuids: List[str]) -> Optional[List[dict]]:
@@ -170,8 +172,6 @@ class Database:
             result[row[0]] = {"user": user, "scanlation_group": group}
 
         return result
-
-
 
     @perf_test
     def set_manga_attributes(self, manga: Manga):
@@ -218,7 +218,16 @@ class Database:
     @perf_test
     def set_chapter_pages(self, batch: List[Tuple[int, bytes, str]]):
         cursor = self.conn.cursor()
-        cursor.executemany("INSERT INTO chapter_page VALUES (?, ?, ?)", batch)
+        png_images_batch = [i[1] for i in batch]
+
+        with ThreadPoolExecutor() as executor:
+            results = list(executor.map(convert_to_webp, png_images_batch))
+
+        webp_batch = []
+        for idx, i in enumerate(batch):
+            webp_batch.append((i[0], results[idx], i[2]))
+
+        cursor.executemany("INSERT INTO chapter_page VALUES (?, ?, ?)", webp_batch)
         self.conn.commit()
         cursor.close()
 
@@ -255,7 +264,6 @@ class Database:
         cursor.close()
         return mdj
 
-
     def get_cover_art(self, identifier: MangaIdentifier, size=COVER_ART_MAX_SIZE, size_any=False) -> Optional[bytes]:
         cursor = self.conn.cursor()
         if size_any:
@@ -273,7 +281,10 @@ class Database:
     def set_cover_art(self, identifier: MangaIdentifier, size: int, content: bytes) -> None:
         cursor = self.conn.cursor()
         assert size in {COVER_ART_MAX_SIZE, COVER_ART_256_SIZE, COVER_ART_512_SIZE}, "Unsupported cover art size"
-        cursor.execute("""INSERT INTO cover_art (muuid, size, data) VALUES (?, ?, ?) ON CONFLICT(muuid, size) DO UPDATE SET data = excluded.data""", (identifier, size, content))
+        webp_image = convert_to_webp(content)
+        cursor.execute(
+            """INSERT INTO cover_art (muuid, size, data) VALUES (?, ?, ?) ON CONFLICT(muuid, size) DO UPDATE SET data = excluded.data""",
+            (identifier, size, webp_image))
         self.conn.commit()
         cursor.close()
 
@@ -375,3 +386,22 @@ class Database:
         cursor.execute("REPLACE INTO latest_chapter VALUES (?, ?, ?, ?, ?, ?)", data)
         self.conn.commit()
         cursor.close()
+
+    def delete_manga(self, muuid: MangaIdentifier) -> bool:
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("SELECT cuuid FROM chapter_attributes WHERE muuid=:muuid", {"muuid": muuid})
+            cuuids = [i[0] for i in cursor.fetchall()]
+
+            if cuuids:
+                placeholders = ",".join("?" for _ in cuuids)
+                sql = f"DELETE FROM chapters WHERE cuuid IN ({placeholders})"
+                cursor.execute(sql, cuuids)
+
+            self.conn.commit()
+            cursor.close()
+            return True
+        except Exception as e:
+            print(f"error: {e}")
+            cursor.close()
+            return False

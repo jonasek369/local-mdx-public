@@ -13,5 +13,5 @@ Local mangadex is open source local website using mangadex API. With the ability
 - [ ] Remake the code folder structure
 
 ## Known issues
-- [ ] Redundant API Calls for Cover arts
+- [x] Redundant API Calls for Cover arts
 - [ ] Downloader rate limit timeout sends extra request

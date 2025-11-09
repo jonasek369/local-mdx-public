@@ -10,6 +10,9 @@ from PIL import Image
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
+from numba.cpython.randomimpl import seed_impl
+
+
 def perf_test(func):
     """
     A decorator to measure the execution time of a function.
@@ -113,28 +116,21 @@ def run_async(func, *args, **kwargs):
     asyncio.set_event_loop(loop)
     return loop.run_until_complete(func(*args, **kwargs))
 
-def resize_image(image_data, resize_factor=4):
-    try:
-        image = Image.open(io.BytesIO(image_data))
 
-        # Calculate new size based on the resize factor
-        new_width = max(1, image.width // resize_factor)
-        new_height = max(1, image.height // resize_factor)
+# TODO: Make compression, lossless user changeable
+@perf_test
+def convert_to_webp(image: bytes, compression=100, lossless=False) -> bytes:
+    input_buffer = io.BytesIO(image)
+    image = Image.open(input_buffer)
 
-        # Resize the image
-        image = image.resize((new_width, new_height))
+    output_buffer = io.BytesIO()
+    if lossless:
+        image.save(output_buffer, format="WEBP", lossless = True)
+    else:
+        image.save(output_buffer, format="WEBP", quality = compression)
 
-        # Save the resized image to a BytesIO buffer
-        output_buffer = io.BytesIO()
-        image.save(output_buffer, format="WEBP")
+    return output_buffer.getvalue()
 
-        # Get the byte data from the buffer
-        resized_image_data = output_buffer.getvalue()
-
-        return resized_image_data
-    except Exception as e:
-        print(f"An error occurred while resizing the image: {e}")
-        return None
 
 
 def colored(rgb, text):

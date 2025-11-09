@@ -408,7 +408,7 @@
                     for (const key in data) {
                         const img = document.createElement("img");
                         img.id = "page-panel";
-                        img.src = `data:image/png;base64,${data[key]}`;
+                        img.src = `data:image/webp;base64,${data[key]}`;
                         img.classList.add("hidden");
                         img.addEventListener("mousedown", handle_click);
                         content.appendChild(img);
