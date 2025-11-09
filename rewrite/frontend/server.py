@@ -218,6 +218,7 @@ def read_manga(chapteruuid, page):
                            cuuid=chapteruuid,
                            pages=attributes.pages,
                            muuid=ids["muuid"],
+                           chapter_no=attributes.chapter,
                            page=page,
                            page_render="NORMAL"  # TODO: Add logic for long strips when reader supports it
                            ), 200
@@ -273,7 +274,8 @@ def downloader_contains():
 
 @server.route("/manga/download/manager", methods=["GET"])
 def download_manager():
-    return render_template("download-manager.html", darktheme=repository.settings.darkTheme), 200
+    back = request.args.get('from', "/")
+    return render_template("download-manager.html", darktheme=repository.settings.darkTheme, back=back), 200
 
 
 @server.route("/manga/download/start", methods=["GET"])

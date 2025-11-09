@@ -575,7 +575,7 @@
 
         check_queue()
     })
-
+	check_queue()
     function check_queue() {
         fetch("/manga/download/contains", {
             method: "POST",
@@ -587,7 +587,9 @@
             if (data.data.contains) {
                 const btn = document.getElementsByClassName("button-success")[0];
                 btn.innerHTML = "⬇ Manga already in queue";
-                btn.onclick = {};
+                btn.onclick = function() {
+                    window.location.href = "/manga/download/manager?from=/manga/{{muuid}}";
+				}
             }
         })
     }

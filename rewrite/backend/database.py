@@ -41,7 +41,7 @@ class Database:
             updatedAt TEXT NOT NULL,
             publishAt TEXT NOT NULL,
             readableAt TEXT NOT NULL,
-            FOREIGN KEY (cuuid) REFERENCES chapters(cuuid) ON DELETE CASCADE
+            FOREIGN KEY (cuuid) REFERENCES chapters(cuuid)
         );
         """)
         cursor.execute("""CREATE TABLE IF NOT EXISTS manga_attributes (
@@ -71,7 +71,7 @@ class Database:
             page_number INT NOT NULL,
             page_content BLOB NOT NULL,
             cuuid CHAR(36) NOT NULL,
-            FOREIGN KEY (cuuid) REFERENCES chapter_attributes(cuuid) ON DELETE CASCADE
+            FOREIGN KEY (cuuid) REFERENCES chapter_attributes(cuuid)
         );""")
         cursor.execute("""CREATE TABLE IF NOT EXISTS cover_art(
             muuid CHAR(36) NOT NULL,
@@ -253,7 +253,6 @@ class Database:
             FROM chapter_page
             WHERE cuuid IN ({placeholders});
             """
-
             cursor.execute(sql_query, chapter_ids)
             pages_in_db = cursor.fetchall()
 
@@ -324,14 +323,22 @@ class Database:
         try:
             cursor.execute(
                 """
-                SELECT ca.cuuid, ca.title, ca.volume, ca.chapter
-                FROM chapter_attributes ca
-                WHERE ca.muuid = ?
-                AND ca.pages = (
-                    SELECT COUNT(*)
-                    FROM chapter_page cp
-                    WHERE cp.cuuid = ca.cuuid
-                )
+                SELECT 
+                        ca.cuuid, 
+                        ca.title, 
+                        ca.volume, 
+                        ca.chapter
+                    FROM chapter_attributes ca
+                    WHERE ca.muuid = ?
+                      AND ca.pages = (
+                          SELECT COUNT(cuuid)
+                          FROM chapter_page cp
+                          WHERE cp.cuuid = ca.cuuid
+                      )
+                    ORDER BY 
+                        (ca.volume IS NULL),
+                        ca.volume ASC,
+                        ca.chapter ASC;
                 """,
                 (identifier,)
             )
@@ -340,19 +347,15 @@ class Database:
             cursor.close()
 
     @perf_test
-    def get_next_prev(self, identifier: MangaIdentifier) -> Optional[tuple]:
+    def get_next_prev(self, identifier: ChapterIdentifier) -> Optional[tuple]:
         cursor = self.conn.cursor()
-        cursor.execute("""
-                SELECT cuuid 
-                FROM chapter_attributes 
-                WHERE muuid = (
-                    SELECT muuid 
-                    FROM chapter_attributes 
-                    WHERE cuuid = :identifier
-                )
-            """, {"identifier": identifier})
-        chapters = [i[0] for i in cursor.fetchall()]
+        cursor.execute("""SELECT muuid FROM chapter_attributes WHERE cuuid=:identifier""", {"identifier": identifier})
+        muuid = cursor.fetchone()
         cursor.close()
+        if not muuid:
+            return None, None
+        muuid = muuid[0]
+        chapters = [i[0] for i in self.get_downloaded_pages(muuid)]
         if not chapters:
             return None
 
@@ -395,7 +398,7 @@ class Database:
 
             if cuuids:
                 placeholders = ",".join("?" for _ in cuuids)
-                sql = f"DELETE FROM chapters WHERE cuuid IN ({placeholders})"
+                sql = f"DELETE FROM chapter_page WHERE cuuid IN ({placeholders})"
                 cursor.execute(sql, cuuids)
 
             self.conn.commit()

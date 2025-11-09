@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Reading - Page {{ page }}</title>
+    <title>{{ page }} | Chapter {{ chapter_no }}</title>
     <style>
         * {
             margin: 0;
@@ -431,6 +431,7 @@
             current_page.classList.add("hidden");
             _set_page.classList.remove("hidden");
             page_header.innerHTML = to_page + "/" + pageCount;
+            document.title = `${to_page} | Chapter {{ chapter_no }}`
 
             // Scroll to top when changing pages
             window.scrollTo({ top: 0, behavior: 'smooth' });
