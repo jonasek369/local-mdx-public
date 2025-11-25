@@ -1,16 +1,20 @@
 import json
 import sqlite3
-import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict
-from typing import List, Optional, Tuple
+from dataclasses import asdict, dataclass
+from typing import List, Optional, Tuple, Dict
 
-from rewrite.backend.connection import MangaDownloadJobInDatabase
 from rewrite.backend.utils import perf_test, convert_to_webp
 from rewrite.backend.schemas import MangaIdentifier, ChapterIdentifier, ChapterAttributes, Chapter, Manga, \
     MangaAttributes, LatestChapter, COVER_ART_MAX_SIZE, COVER_ART_256_SIZE, COVER_ART_512_SIZE, from_json, \
-    from_database_row
+    from_database_row, ChapterList
 
+
+@dataclass
+class MangaDownloadJobInDatabase:
+    # Stores the pages in database and record (how many pages does the chapter have)
+    pages_in_db: Dict  # {"cuuid": [1, 2, 3, 4, 5], ...}
+    records: Dict  # {"cuuid": 12, ...}
 
 class Database:
     def __init__(self):
@@ -68,11 +72,12 @@ class Database:
             updatedAt TEXT NOT NULL -- ISO 8601 Date-Time as TEXT
         );""")
         cursor.execute("""CREATE TABLE IF NOT EXISTS chapter_page (
-            page_number INT NOT NULL,
-            page_content BLOB NOT NULL,
-            cuuid CHAR(36) NOT NULL,
-            FOREIGN KEY (cuuid) REFERENCES chapter_attributes(cuuid)
-        );""")
+    page_number INT NOT NULL,
+    page_content BLOB NOT NULL,
+    cuuid CHAR(36) NOT NULL,
+    FOREIGN KEY (cuuid) REFERENCES chapter_attributes(cuuid),
+    UNIQUE (cuuid, page_number)
+);""")
         cursor.execute("""CREATE TABLE IF NOT EXISTS cover_art(
             muuid CHAR(36) NOT NULL,
             size INTEGER NOT NULL,
@@ -87,6 +92,11 @@ class Database:
             updatedAt TEXT NOT NULL, -- ISO 8601 Date-Time as TEXT
             volume TEXT,
             chapter TEXT
+        )""")
+
+        cursor.execute("""CREATE TABLE IF NOT EXISTS manga_feed (
+            muuid CHAR(36) NOT NULL primary key,
+            feed BLOB NOT NULL
         )""")
 
         cursor.execute("""
@@ -216,18 +226,21 @@ class Database:
         cursor.close()
 
     @perf_test
-    def set_chapter_pages(self, batch: List[Tuple[int, bytes, str]]):
+    def set_chapter_pages(self, batch: List[Tuple[int, bytes, str]], is_webp=False):
         cursor = self.conn.cursor()
-        png_images_batch = [i[1] for i in batch]
+        if not is_webp:
+            png_images_batch = [i[1] for i in batch]
 
-        with ThreadPoolExecutor() as executor:
-            results = list(executor.map(convert_to_webp, png_images_batch))
+            with ThreadPoolExecutor() as executor:
+                results = list(executor.map(convert_to_webp, png_images_batch))
 
-        webp_batch = []
-        for idx, i in enumerate(batch):
-            webp_batch.append((i[0], results[idx], i[2]))
+            webp_batch = []
+            for idx, i in enumerate(batch):
+                webp_batch.append((i[0], results[idx], i[2]))
 
-        cursor.executemany("INSERT INTO chapter_page VALUES (?, ?, ?)", webp_batch)
+            cursor.executemany("INSERT OR REPLACE INTO chapter_page VALUES (?, ?, ?)", webp_batch)
+        else:
+            cursor.executemany("INSERT OR REPLACE INTO chapter_page VALUES (?, ?, ?)", batch)
         self.conn.commit()
         cursor.close()
 
@@ -335,10 +348,6 @@ class Database:
                           FROM chapter_page cp
                           WHERE cp.cuuid = ca.cuuid
                       )
-                    ORDER BY 
-                        (ca.volume IS NULL),
-                        ca.volume ASC,
-                        ca.chapter ASC;
                 """,
                 (identifier,)
             )
@@ -346,24 +355,33 @@ class Database:
         finally:
             cursor.close()
 
-    @perf_test
-    def get_next_prev(self, identifier: ChapterIdentifier) -> Optional[tuple]:
+    def chapter_to_manga_identifier(self, identifier: ChapterIdentifier) -> Optional[MangaIdentifier]:
         cursor = self.conn.cursor()
         cursor.execute("""SELECT muuid FROM chapter_attributes WHERE cuuid=:identifier""", {"identifier": identifier})
         muuid = cursor.fetchone()
         cursor.close()
         if not muuid:
-            return None, None
-        muuid = muuid[0]
-        chapters = [i[0] for i in self.get_downloaded_pages(muuid)]
-        if not chapters:
             return None
+        return muuid[0]
 
-        index = chapters.index(identifier)
-        prev = chapters[index - 1] if index > 0 else None
-        _next = chapters[index + 1] if index < len(chapters) - 1 else None
+    @perf_test
+    def get_next_prev(self, muuid: MangaIdentifier, target_cuuid: ChapterIdentifier, feed: ChapterList) -> Optional[tuple]:
+        downloaded_chapters = [i[0] for i in self.get_downloaded_pages(muuid)]
+        if not downloaded_chapters:
+            return None, None
 
-        return _next, prev
+        in_order_all_chapters = [chapter.id for chapter in feed.data]
+
+        in_order_downloaded = []
+        for cuuid in in_order_all_chapters:
+            if cuuid in downloaded_chapters:
+                in_order_downloaded.append(cuuid)
+
+        index = in_order_downloaded.index(target_cuuid)
+        prev = in_order_downloaded[index - 1] if index > 0 else None
+        _next = in_order_downloaded[index + 1] if index < len(in_order_downloaded) - 1 else None
+
+        return prev, _next
 
     def get_latest_chapters(self) -> Optional[List[LatestChapter]]:
         cursor = self.conn.cursor()
@@ -408,3 +426,27 @@ class Database:
             print(f"error: {e}")
             cursor.close()
             return False
+
+    def set_manga_feed(self, identifier: MangaIdentifier, feed: ChapterList) -> None:
+        try:
+            feed_blob = json.dumps([asdict(chapter) for chapter in feed.data])
+        except Exception as e:
+            print(f"error: Could not serialize feed into string {e}")
+            return
+
+        cursor = self.conn.cursor()
+        cursor.execute("INSERT OR REPLACE INTO manga_feed VALUES (?, ?)", (identifier, feed_blob))
+        self.conn.commit()
+        cursor.close()
+
+    def get_manga_feed(self, identifier) -> Optional[ChapterList]:
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT feed FROM manga_feed WHERE muuid=:identifier", {"identifier": identifier})
+        feed = cursor.fetchone()
+        if feed:
+            feed = feed[0]
+        else:
+            return None
+        cursor.close()
+        return from_database_row(ChapterList, ("", "", feed, 0, 0, 0))
+

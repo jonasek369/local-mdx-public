@@ -88,6 +88,10 @@
             background: var(--md-text-secondary);
         }
 
+		.status-dot.rate-limited {
+			background: var(--md-accent);
+		}
+
         .container {
             max-width: 1400px;
             margin: 0 auto;
@@ -422,11 +426,9 @@
     </div>
 </div>
 
-<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 <script>
     window.token = '{{ token }}';
 
-    const socket = io();
 
     function updateRadioStyles() {
         document.querySelectorAll('.radio-option').forEach(option => {
@@ -493,23 +495,23 @@
             queue.appendChild(emptyDiv);
         } else {
             Object.keys(data.queue).forEach((key, index) => {
-                const title = data.queue[key]
+                const member = data.queue[key]
 
                 const EntryDiv = document.createElement("div");
                 EntryDiv.className = "row";
 
                 const EntryText = document.createElement("div");
                 EntryText.className = "cell cell-title";
-                EntryText.innerHTML = title
+                EntryText.innerHTML = member["title"]
 
                 const ActionsCell = document.createElement("div");
                 ActionsCell.className = "cell cell-actions";
 
                 const PushToTopButton = document.createElement("button");
                 PushToTopButton.className = "button button-small button-success";
-                PushToTopButton.innerHTML = "↑ Priority";
+                PushToTopButton.innerHTML = "↓ Push to bottom";
                 PushToTopButton.addEventListener("click", function () {
-                    fetch("/manga/download/push-to-top", {method: "POST", body: JSON.stringify({"index": index})});
+                    fetch("/manga/download/push-to-bot", {method: "POST", body: JSON.stringify({"index": index})});
                 });
 
                 const RemoveButton = document.createElement("button");
@@ -570,13 +572,7 @@
             divUpdates.removeChild(divUpdates.firstChild);
 		}
 
-		if(data.currently_working_on == null){
-            const emptyDiv = document.createElement("div");
-            emptyDiv.className = "empty-state";
-            emptyDiv.textContent = "No active downloads";
-            divUpdates.appendChild(emptyDiv);
-            return;
-		}
+
 
 		const divRow = document.createElement("div");
         divRow.className = "row";
@@ -584,19 +580,34 @@
         const stateText = document.getElementById("downloader-state");
         const statusDot = document.getElementById("status-dot");
 
-		if (data.state === "DOWNLOADING") {
-            stateText.innerHTML = data.speed.replace('_', ' ').toLowerCase();
-            statusDot.classList.remove('paused');
-        } else {
-            stateText.innerHTML = "Paused";
-            statusDot.classList.add('paused');
-        }
+		statusDot.classList.remove('paused', 'rate-limited');
+
+
+		if (data.downloading === true) {
+		    stateText.innerHTML = "Downloading";
+		} else if (data.paused === true) {
+		    stateText.innerHTML = "Paused";
+		    statusDot.classList.add('paused');
+		} else if (data.ratelimited === true) {
+		    stateText.innerHTML = "Ratelimited";
+		    statusDot.classList.add('rate-limited');
+		} else {
+		    stateText.innerHTML = "Ready";
+		}
+
+        if(data.cwo == null){
+            const emptyDiv = document.createElement("div");
+            emptyDiv.className = "empty-state";
+            emptyDiv.textContent = "No active downloads";
+            divUpdates.appendChild(emptyDiv);
+            return;
+		}
 		const a = document.createElement("div");
         a.className = "cell download-info"
 		a.id = "cwo"
-        let chapter_perc = Math.round((100 * data.currently_working_on.chapter_status[0]) / data.currently_working_on.chapter_status[1]);
+        let chapter_perc = Math.round((100 * data.cwo_chapters_downloaded) / data.cwo_chapters);
         a.innerHTML = `
-            <div class="download-title">${data.currently_working_on.title}</div>
+            <div class="download-title">${data.cwoTitle}</div>
             <div class="progress-container">
                 <div class="progress-bar">
                     <div class="progress-fill" style="width: ${chapter_perc}%"></div>
@@ -608,9 +619,17 @@
         divUpdates.append(divRow);
 	}
 
-	socket.on("update", data => {
+	/*socket.on("update", data => {
 		update_state(data);
-	})
+	})*/
+
+	setInterval(() => {
+		fetch("/manga/download/get-state").then(response => {
+            response.json().then(data => {
+                update_state(data);
+			})
+		})
+	}, 1000);
 
     // Initialize radio styles
     updateRadioStyles();

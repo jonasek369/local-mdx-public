@@ -513,7 +513,7 @@
         window.location.href = "/read/" + chapterId;
     }
 
-    fetch("/manga/{{muuid}}/info").then(response => response.json()).then(data => sortVolumesDescending(data)).then(data => {
+    fetch("/manga/{{muuid}}/info").then(response => response.json())/*.then(data => sortVolumesDescending(data))*/.then(data => {
         var contdiv = document.getElementById("content");
 
         // Clear loading state
@@ -521,7 +521,7 @@
             contdiv.removeChild(contdiv.firstChild);
         }
 
-        if (Object.keys(data).length === 0) {
+        if (data.length === 0) {
             const emptyState = document.createElement("div");
             emptyState.className = "empty-state";
             emptyState.innerHTML = `
@@ -532,12 +532,11 @@
             return;
         }
 
-        for (const key in data) {
+        data.forEach(chapter => {
             var chapterDiv = document.createElement("div");
             chapterDiv.className = "chapter-item";
-            chapterDiv.onclick = function() { navigateToChapter(key); };
+            chapterDiv.onclick = function() { navigateToChapter(chapter.identifier); };
 
-            chapter = data[key];
 
             // Build chapter title text
             var titleText = "Volume " + chapter.volume + " Chapter " + chapter.chapter;
@@ -571,7 +570,7 @@
 
             // Append to container
             contdiv.appendChild(chapterDiv);
-        }
+        })
 
         check_queue()
     })

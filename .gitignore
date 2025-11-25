@@ -20,3 +20,9 @@ __pycache__/
 /rewrite/frontend/mangadex_account.json
 *.token
 .token
+
+# Downloader process
+curl-ca-bundle.crt
+*.dll
+*.exe
+/rewrite/frontend/downloads/

@@ -10,8 +10,6 @@ from PIL import Image
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
-from numba.cpython.randomimpl import seed_impl
-
 
 def perf_test(func):
     """
@@ -46,7 +44,6 @@ def normalize_language_input(data):
 TRANSLATION_FALLBACK = "ja-ro"
 
 
-# TODO: Finish implementing in the whole project (where hardcoded ["en"] is used)
 def get_correct_language(
     from_languages: Union[Dict, List[Dict]],
     from_alt: Union[Dict, List[Dict]] | None,

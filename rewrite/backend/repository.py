@@ -1,11 +1,11 @@
 import asyncio
 import time
+from dataclasses import asdict
 from typing import Optional, List
 
 import aiohttp
-from flask_socketio import SocketIO
 
-from rewrite.backend.connection import MangadexConnection, MangaDownloader, CredentialManager
+from rewrite.backend.connection import MangadexConnection, CredentialManager, DownloaderProcessHandler
 from rewrite.backend.database import Database
 from rewrite.backend.schemas import MangaIdentifier, ChapterIdentifier, ChapterList, MangaAttributes, \
     ChapterAttributes, LatestChapter, MangaList, COVER_ART_MAX_SIZE, COVER_ART_512_SIZE
@@ -18,28 +18,15 @@ from rewrite.backend.utils import perf_test, info, error
 
 
 class MangaRepository:
-    def __init__(self, socketio):
+    def __init__(self):
         self.settings = load_settings()
-        self.settings.onMangaDownloadFinishHandler = self.store_downloaded_pages
 
         self.database = Database()
         self.credential_manager = CredentialManager(self.settings, load_credentials())
         self.connection = MangadexConnection(self.settings, self.credential_manager)
-        self.downloader = MangaDownloader(self.settings, socketio)
-        self.socketio: SocketIO | None = socketio
-        self.cache = {}
+        self.downloader_handler = DownloaderProcessHandler(self.settings, self.database)
 
-    def store_downloaded_pages(self, muuid: MangaIdentifier, cuuid: ChapterIdentifier, downloader: MangaDownloader):
-        chapter = self.database.get_chapter_attribute(cuuid)
-        if not chapter:
-            chapter_list = self.connection.get_chapter_list(muuid)
-            self.database.set_chapter_attributes(muuid, chapter_list.data)
-        batch = []
-        for page, content in enumerate(downloader.finished[muuid][cuuid]):
-            batch.append((page + 1, content, cuuid))
-        self.database.set_chapter_pages(batch)
-        self.settings.logger.log(info, f"Saved {len(batch)} pages")
-        del downloader.finished[muuid][cuuid]
+        self.cache = {}
 
     def get_manga_attributes(self, identifier: MangaIdentifier) -> Optional[MangaAttributes]:
         cache_identifier = f"MA:{identifier}"
@@ -49,8 +36,6 @@ class MangaRepository:
                 del self.cache[cache_identifier]
             else:
                 return cache_hit[0].attributes
-
-
         manga = self.connection.get_manga(identifier)
         if manga is not None:
             self.database.set_manga_attributes(manga)
@@ -108,8 +93,21 @@ class MangaRepository:
         return pages
 
     def get_next_prev(self, identifier: ChapterIdentifier):
-        next_prev = self.database.get_next_prev(identifier)
+        muuid = self.database.chapter_to_manga_identifier(identifier)
+        feed = self.get_manga_feed(muuid, force_latest=False)
+        next_prev = self.database.get_next_prev(muuid, identifier, feed)
         return next_prev
+
+    def get_manga_feed(self, identifier: MangaIdentifier, force_latest = False) -> ChapterList:
+        if not force_latest:
+            feed = self.database.get_manga_feed(identifier)
+            if feed is not None:
+                return feed
+        feed = self.connection.get_manga_feed(identifier, self.settings.translatedLanguage)
+        if feed is not None:
+            self.database.set_manga_feed(identifier, feed)
+        return feed
+
 
     # @perf_test
     # def popular_new_titles(self):
