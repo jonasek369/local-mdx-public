@@ -1,3 +1,5 @@
+import json
+from dataclasses import fields
 from datetime import datetime
 import io
 import os
@@ -191,3 +193,20 @@ class Logger:
         with self.file as file:
             for log_event in self.file_log:
                 file.write(f"{log_event[0]}:{log_event[1]}: {log_event[2]}\n")
+
+def input_as_bool(inp: str) -> bool:
+    stripped = inp.strip().lower()
+    if stripped == "true" or stripped == "1" or stripped == "t" or stripped == "y" or stripped == "yes":
+        return True
+    return False
+
+EXCLUDED_SETTINGS_FIELDS = {"logger", "onMangaDownloadFinishHandler"}
+
+def dataclass_to_jsonable_dict(obj):
+    result = {}
+    for f in fields(obj):
+        value = getattr(obj, f.name)
+        if not f.name in EXCLUDED_SETTINGS_FIELDS:
+            result[f.name] = value
+    return result
+

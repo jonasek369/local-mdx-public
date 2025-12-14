@@ -5,13 +5,11 @@ import os
 import time
 from dataclasses import asdict
 
-from flask_socketio import SocketIO
-
-from rewrite.backend.connection import save_credentials
+from rewrite.backend.connection import ADD_JOB_TYPE, POP_JOB_TYPE, STATUS_TYPE
 from rewrite.backend.repository import MangaRepository
 from rewrite.backend.schemas import COVER_ART_MAX_SIZE, COVER_ART_256_SIZE, COVER_ART_512_SIZE
-from rewrite.backend.settings import credentials_from_json
-from rewrite.backend.utils import info, error, get_correct_language, is_uuid4
+from rewrite.backend.settings import credentials_from_json, save_credentials
+from rewrite.backend.utils import info, error, get_correct_language, is_uuid4, critical
 
 try:
     import webview
@@ -24,7 +22,7 @@ except ImportError:
 
     webview = wv()
 
-from flask import Flask, jsonify, render_template, request, make_response
+from flask import Flask, jsonify, render_template, request, make_response, stream_with_context, Response
 
 gui_dir = os.path.join(os.getcwd(), 'gui')
 
@@ -253,7 +251,8 @@ def push_job():
         }
     })
 
-    return repository.downloader_handler.wait_for_response()
+
+    return repository.downloader_handler.wait_for_response(_type=ADD_JOB_TYPE)
 
 
 @server.route("/manga/download/contains", methods=["POST"])
@@ -271,7 +270,7 @@ def downloader_contains():
     muuid = data.get("id")
 
     repository.downloader_handler.send_message({"command": "status"})
-    state = repository.downloader_handler.wait_for_response()
+    state = repository.downloader_handler.wait_for_response(_type=STATUS_TYPE)
 
     if state["cwo"] != "null":
         contains = muuid in state["queue"] or state["cwo"] == muuid
@@ -299,14 +298,12 @@ def stop_download():
     return {"status": "success", "response": "stopped downloader"}, 200
 
 
-@server.route("/manga/download/get-state", methods=["GET"])
-def get_state():
-    start = time.perf_counter()
+def get_downloader_state_json():
     repository.downloader_handler.send_message({"command": "status"})
+    status = repository.downloader_handler.wait_for_response(_type=STATUS_TYPE)
 
-    status = repository.downloader_handler.wait_for_response()
-    end = time.perf_counter()
     queue_new = []
+
     for i in status["queue"]:
         attrs = repository.get_manga_attributes(i)
         queue_new.append(
@@ -317,10 +314,28 @@ def get_state():
     else:
         cwo_attrs = repository.get_manga_attributes(status["cwo"])
         status["cwoTitle"] = get_correct_language(cwo_attrs.title, cwo_attrs.altTitles, repository.settings)
-    status["speed"] = "NO_LIMIT"
 
+    return status
+
+@server.route("/manga/download/get-state", methods=["GET"])
+def get_state():
+    status = get_downloader_state_json()
     return status, 200
 
+
+@server.route('/manga/download/stream')
+def stream():
+    def event_stream():
+        while True:
+            data = get_downloader_state_json()
+            yield f"data: {json.dumps(data)}\n\n"
+            time.sleep(0.25)
+
+    return Response(
+        stream_with_context(event_stream()),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache"}
+    )
 
 @server.route("/manga/download/push-to-bot", methods=["POST"])
 def push_to_bot():
@@ -338,7 +353,7 @@ def push_to_bot():
         return {"status": "error", "response": "Index is not a number"}, 400
 
     repository.downloader_handler.send_message({"command": "status"})
-    state = repository.downloader_handler.wait_for_response(timeout=5)
+    state = repository.downloader_handler.wait_for_response(_type=STATUS_TYPE, timeout=5)
 
     if index < 0 or index >= len(state["queue"]):
         return {"status": "error", "response": "Index is out of bounds"}, 400
@@ -349,7 +364,7 @@ def push_to_bot():
         "command": "pop-job",
         "data": {"identifier": state["queue"][index]}
     })
-    resp = repository.downloader_handler.wait_for_response(timeout=5)
+    resp = repository.downloader_handler.wait_for_response(_type=POP_JOB_TYPE, timeout=5)
 
     repository.get_manga_attributes(member_muuid)
 
@@ -362,7 +377,7 @@ def push_to_bot():
         }
     })
 
-    return repository.downloader_handler.wait_for_response()
+    return repository.downloader_handler.wait_for_response(_type=ADD_JOB_TYPE)
 
 
 @server.route("/manga/download/pop-job", methods=["POST"])
@@ -381,7 +396,7 @@ def pop_job():
         return {"status": "error", "response": "Index is not a number"}, 400
 
     repository.downloader_handler.send_message({"command": "status"})
-    state = repository.downloader_handler.wait_for_response(timeout=5)
+    state = repository.downloader_handler.wait_for_response(_type=STATUS_TYPE, timeout=5)
 
     if index < 0 or index >= len(state["queue"]):
         return {"status": "error", "response": "Index is out of bounds"}, 400
@@ -390,7 +405,7 @@ def pop_job():
         "command": "pop-job",
         "data": {"identifier": state["queue"][index]}
     })
-    resp = repository.downloader_handler.wait_for_response(timeout=5)
+    resp = repository.downloader_handler.wait_for_response(_type=POP_JOB_TYPE, timeout=5)
     return {"status": "success" if resp["status"] == "ok" else "error"}, 200
 
 
@@ -507,14 +522,21 @@ def local_port():
         return {"status": "error", "response": "Invalid credentials"}, 403
     port = repository.connection.get_followed_manga()
     for manga in port.data:
+
+        repository.get_manga_attributes(manga.id)
+
         repository.downloader_handler.send_message({
             "command": "add-job",
             "data": {
                 "identifier": manga.id,
-                "chapter_info": [asdict(i) for i in self.get_chapter_list(manga.id).data],
-                "database_info": asdict(self.database.get_manga_job(manga.id))
+                "chapter_info": [asdict(i) for i in repository.get_chapter_list(manga.id).data],
+                "database_info": asdict(repository.database.get_manga_job(manga.id))
             }
         })
+        block_for_response = repository.downloader_handler.wait_for_response(_type=ADD_JOB_TYPE)
+        if block_for_response and block_for_response["status"] != "ok":
+            repository.settings.logger.log(critical, f"couldn't add job {block_for_response}")
+
     return {"status": "ok"}, 200
 
 
@@ -539,4 +561,10 @@ def latest_updated_chapters():
 
 
 if __name__ == "__main__":
-    server.run(threaded=False)
+    use_actual_server = False
+    if not use_actual_server:
+        server.run(threaded=True)
+    else:
+        from waitress import serve
+        serve(server, host="0.0.0.0", port=5000, threads=os.cpu_count())
+

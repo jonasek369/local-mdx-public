@@ -1,6 +1,15 @@
 {
-    "content_rating": ["safe", "suggestive", "erotica"],
-    "translated_language": ["en"],
-    "cache_token_to_disk": true,
-    "dark_theme": true
+    "contentRating": [
+        "safe",
+        "suggestive",
+        "erotica"
+    ],
+    "translatedLanguage": [
+        "en"
+    ],
+    "cacheTokenToDisk": true,
+    "logLevel": 1,
+    "fileLogger": false,
+    "darkTheme": true,
+    "downloaderFileName": "main.exe"
 }

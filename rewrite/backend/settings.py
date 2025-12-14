@@ -1,8 +1,9 @@
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict, fields
 from typing import Optional, Callable, List
-from rewrite.backend.utils import Logger, warning
+
+from rewrite.backend.utils import Logger, warning, error, dataclass_to_jsonable_dict, info
 
 
 @dataclass
@@ -11,8 +12,11 @@ class Settings:
     contentRating: List[str]
     translatedLanguage: List[str]
     cacheTokenToDisk: bool
+    logLevel: int
+    fileLogger: bool
     logger: Logger
     darkTheme: bool
+    downloaderFileName: Optional[str]
 
 
 @dataclass
@@ -31,16 +35,32 @@ def load_settings() -> Settings:
             json_settings = json.load(f)
         return Settings(
             None,
-            json_settings.get('content_rating', ["safe", "suggestive"]),
-            json_settings.get('translated_language', []), # [] means all languages will be fetched
-            json_settings.get('cache_token_to_disk', True),
-            Logger(json_settings.get('log_level', 1), json_settings.get('file_logger', False)),
-            json_settings.get('dark_theme', False),
+            json_settings.get('contentRating', ["safe", "suggestive", "erotica"]),
+            json_settings.get('translatedLanguage', ["en"]), # [] means all languages will be fetched
+            json_settings.get('cacheTokenToDisk', True),
+            json_settings.get('logLevel', 1),
+            json_settings.get('fileLogger', False),
+            Logger(json_settings.get('logLevel', 1), json_settings.get('fileLogger', False)),
+            json_settings.get('darkTheme', True),
+            json_settings.get('downloaderFileName', None),
         )
-    except FileNotFoundError:
+    except (FileNotFoundError, json.decoder.JSONDecodeError):
         Logger().log(warning, f"Could not find settings.json in {os.getcwd()} using default")
         # return default if we cant find the settings
-        return Settings(None, ["safe", "suggestive"], [], True, Logger(1, False), False)
+        default = Settings(None, ["safe", "suggestive", "erotica"], ["en"], True, 1, False, Logger(1, False), True, None)
+        save_settings(default)
+        default.logger.log(warning, "Create settings.json with default values")
+        return default
+
+def save_settings(settings: Settings) -> bool:
+    try:
+        json_dict = dataclass_to_jsonable_dict(settings)
+        with open('settings.json', 'w') as f:
+            json.dump(json_dict, f, indent=4)
+        return True
+    except Exception as e:
+        Logger().log(error, f"Could not save settings.json: {e}")
+        return False
 
 def load_credentials() -> MangadexCredentials:
     try:
@@ -63,3 +83,13 @@ def credentials_from_json(_json):
         _json.get("client_id", None),
         _json.get("client_secret", None),
     )
+
+
+def save_credentials(credentials: MangadexCredentials):
+    with open("mangadex_account.json", "w") as file:
+        json.dump({
+            "username": credentials.username,
+            "password": credentials.password,
+            "client_id": credentials.clientId,
+            "client_secret": credentials.clientSecret
+        }, file)

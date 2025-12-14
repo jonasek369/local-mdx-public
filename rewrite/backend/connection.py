@@ -16,17 +16,22 @@ from rewrite.backend.schemas import MangaList, from_json, Manga, MangaIdentifier
     Chapter, \
     DirectSearchManga, DirectSearchChapter, CustomList, CustomListResponse, COVER_ART_256_SIZE, \
     COVER_ART_512_SIZE, COVER_ART_MAX_SIZE, Relationship
-from rewrite.backend.settings import Settings, MangadexCredentials
+from rewrite.backend.settings import Settings, MangadexCredentials, save_settings, save_credentials
 from datetime import datetime
 
-from rewrite.backend.utils import error, info, warning, perf_test, critical
+from rewrite.backend.utils import error, info, warning, perf_test, critical, input_as_bool
 
 import subprocess
 
+# Types for proc response.type
+ADD_JOB_TYPE = "add-job-response"
+POP_JOB_TYPE = "pop-job-response"
+STATUS_TYPE = "status-response"
 
 class DownloaderHandler(FileSystemEventHandler):
-    def __init__(self, database: Database):
+    def __init__(self, database: Database, logger):
         self.database = database
+        self.logger = logger
 
     def save_chapter(self, finished_src):
         finished_full_path = os.path.join(os.getcwd(), finished_src)
@@ -51,26 +56,42 @@ class DownloaderHandler(FileSystemEventHandler):
         pages.sort(key=lambda x: x[0])
 
         try:
+            self.logger.log(info, f"Proc finished downloading {chapterid}")
             self.database.set_chapter_pages(pages, is_webp=True)
             shutil.rmtree(directory_path)
         except Exception as e:
             print(f"Could not save {chapterid} to database: {e}")
 
     def on_any_event(self, event: FileSystemEvent) -> None:
-        if event.event_type == "created" or event.event_type == "modified":
-            if event.src_path.endswith("FINISHED"):
-                self.save_chapter(event.src_path)
-
+        if event.event_type == "moved":
+            if event.dest_path.endswith("FINISHED"):
+                self.save_chapter(event.dest_path)
 
 class DownloaderProcessHandler:
     def __init__(self, settings: Settings, database: Database):
         self.logger = settings.logger
-        if not os.path.exists("main.exe"):
+
+        if settings.downloaderFileName is None or not settings.downloaderFileName:
+            files = os.listdir(os.getcwd())
+            for file in files:
+                if file.endswith(".exe"):
+                    settings.logger.log(info, f"Is {file} the compiled downloader? (Will be saved and executed!): ")
+                    if input_as_bool(input("> ")):
+                        settings.downloaderFileName = file
+                        save_settings(settings)
+                        break
+
+        if settings.downloaderFileName is None or not settings.downloaderFileName:
             self.logger.log(critical,
                             f"Could not find downloader program. Compile it and put it in {os.getcwd()}. https://github.com/jonasek369/C-manga-downloader")
+            raise FileNotFoundError("No .exe file found in the frontend directory!")
+
+        if settings.downloaderFileName and not os.path.exists(settings.downloaderFileName):
+            settings.logger.log(critical, f"Downloader process name is saved as {settings.downloaderFileName} but it dose not exist!")
+            raise FileNotFoundError(f"{settings.downloaderFileName} does not exist in frontend directory!")
 
         self.downloader_proc = subprocess.Popen(
-            ["main.exe"],
+            [settings.downloaderFileName],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             text=False
@@ -92,12 +113,14 @@ class DownloaderProcessHandler:
         self.logger.log(info, f"started downloader proc! {self.downloader_proc}")
         self.exit_event = threading.Event()
 
-        event_handler = DownloaderHandler(database)
+        event_handler = DownloaderHandler(database, self.logger)
         self.observer = Observer()
         self.observer.schedule(event_handler, "downloads", recursive=True)
         self.observer.start()
 
         threading.Thread(target=self.read_messages, args=(self.downloader_proc,)).start()
+
+        self.lock = threading.Lock()
 
     def exit(self):
         self.exit_event.set()
@@ -113,13 +136,20 @@ class DownloaderProcessHandler:
     def clear_responses(self):
         self.response_buffer.clear()
 
-    def wait_for_response(self, timeout=5.0) -> dict | None:
+    def wait_for_response(self, _type="any", timeout=5.0) -> dict | None:
         end_time = time.time() + timeout
-
-        while time.time() < end_time:
-            if self.response_buffer:
-                return self.response_buffer.pop(0)
-        return None
+        with self.lock:
+            while time.time() < end_time:
+                if self.response_buffer:
+                    if _type == "any":
+                        return self.response_buffer.pop(0)
+                    else:
+                        first = self.response_buffer.pop(0)
+                        if first["type"] != _type:
+                            self.response_buffer.append(first)
+                        else:
+                            return first
+            return None
 
     def read_exact(self, stream, n):
         buf = b''
@@ -149,29 +179,40 @@ class DownloaderProcessHandler:
                 print("Raw data:", data)
                 break
 
+    def send_large_message(self, proc, message_bytes, chunk_size=32768):
+        length = len(message_bytes)
+
+        length_bytes = struct.pack("<I", length)
+        proc.stdin.write(length_bytes)
+        proc.stdin.flush()
+
+        for i in range(0, len(message_bytes), chunk_size):
+            chunk = message_bytes[i:i + chunk_size]
+            proc.stdin.write(chunk)
+            proc.stdin.flush()
+
     def send_message(self, message: Dict) -> bool:
+        """
+        Every message that returns response should catch it with wait_for_response if it dose not other wait_for_response will
+        get the wrong response
+
+        send_message then wait_for_response if the downloader returns response
+        """
         if "command" not in message:
             self.logger.log(error, f"Message to proc must have command field!")
             return False
         json_str = json.dumps(message)
         json_bytes = json_str.encode('utf-8')
         length = len(json_bytes)
-
-        self.downloader_proc.stdin.write(struct.pack('<I', length))
-
-        self.downloader_proc.stdin.write(json_bytes)
-        self.downloader_proc.stdin.flush()
-
-
-def save_credentials(credentials: MangadexCredentials):
-    with open("mangadex_account.json", "w") as file:
-        json.dump({
-            "username": credentials.username,
-            "password": credentials.password,
-            "client_id": credentials.clientId,
-            "client_secret": credentials.clientSecret
-        }, file)
-
+        if length > 32768:
+            self.send_large_message(self.downloader_proc, json_bytes)
+        else:
+            try:
+                self.downloader_proc.stdin.write(struct.pack("<I", length))
+                self.downloader_proc.stdin.write(json_bytes)
+                self.downloader_proc.stdin.flush()
+            except OSError as e:
+                self.logger.log(error, f"{e}: Could not send message with length {length}")
 
 class CredentialManager:
     def __init__(self, settings: Settings, credentials: MangadexCredentials):

@@ -237,46 +237,6 @@
             font-size: 14px;
         }
 
-        .speed-selector {
-            background: var(--md-surface);
-            border: 1px solid var(--md-border);
-            border-radius: 6px;
-            padding: 20px;
-        }
-
-        .speed-title {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--md-text);
-            margin-bottom: 16px;
-        }
-
-        .speed-options {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-            gap: 12px;
-        }
-
-        .radio-option {
-            display: flex;
-            align-items: center;
-            padding: 10px 14px;
-            background: var(--md-bg);
-            border: 1px solid var(--md-border);
-            border-radius: 4px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .radio-option:hover {
-            border-color: var(--md-accent);
-        }
-
-        .radio-option.selected {
-            background: rgba(255, 103, 64, 0.1);
-            border-color: var(--md-accent);
-        }
-
         input[type="radio"] {
             width: 16px;
             height: 16px;
@@ -357,9 +317,6 @@
                 justify-content: flex-start;
             }
 
-            .speed-options {
-                grid-template-columns: 1fr;
-            }
         }
 	</style>
 </head>
@@ -392,30 +349,6 @@
         </div>
     </div>
 
-    <!-- Speed Selection -->
-    <div class="section">
-        <div class="speed-selector">
-            <div class="speed-title">Download Speed</div>
-            <div class="speed-options">
-                <div class="radio-option" onclick="document.getElementById('speed-no-limit').click()">
-                    <input type="radio" name="speed-change" onchange="change_speed()" id="speed-no-limit"/>
-                    <label for="speed-no-limit">No Limit</label>
-                </div>
-                <div class="radio-option" onclick="document.getElementById('speed-fast').click()">
-                    <input type="radio" name="speed-change" onchange="change_speed()" id="speed-fast"/>
-                    <label for="speed-fast">Fast</label>
-                </div>
-                <div class="radio-option" onclick="document.getElementById('speed-normal').click()">
-                    <input type="radio" name="speed-change" onchange="change_speed()" id="speed-normal"/>
-                    <label for="speed-normal">Normal</label>
-                </div>
-                <div class="radio-option" onclick="document.getElementById('speed-slow').click()">
-                    <input type="radio" name="speed-change" onchange="change_speed()" id="speed-slow"/>
-                    <label for="speed-slow">Slow</label>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <!-- Currently Downloading Section -->
     <div class="section">
@@ -428,40 +361,6 @@
 
 <script>
     window.token = '{{ token }}';
-
-
-    function updateRadioStyles() {
-        document.querySelectorAll('.radio-option').forEach(option => {
-            const radio = option.querySelector('input[type="radio"]');
-            if (radio && radio.checked) {
-                option.classList.add('selected');
-            } else {
-                option.classList.remove('selected');
-            }
-        });
-    }
-
-    function change_speed() {
-        const no_limit = document.getElementById("speed-no-limit");
-        const fast = document.getElementById("speed-fast");
-        const normal = document.getElementById("speed-normal");
-        const slow = document.getElementById("speed-slow");
-        let reply = "NORMAL"; // default
-        if (no_limit.checked) {
-            reply = "NO_LIMIT";
-        } else if (fast.checked) {
-            reply = "FAST";
-        } else if (normal.checked) {
-            reply = "NORMAL";
-        } else if (slow.checked) {
-            reply = "SLOW"
-        }
-        updateRadioStyles();
-        fetch("/manga/download/speed", {
-            method: "POST",
-			body: JSON.stringify({"speed": reply})
-        })
-	}
 
     function start_download() {
         fetch("/manga/download/start")
@@ -530,43 +429,6 @@
             });
         }
 
-		const nolimit = document.getElementById("speed-no-limit");
-        const fast = document.getElementById("speed-fast");
-        const normal = document.getElementById("speed-normal");
-        const slow = document.getElementById("speed-slow");
-
-        switch (data.speed) {
-			case "NO_LIMIT":
-                nolimit.checked = true;
-                fast.checked = false;
-                normal.checked = false;
-                slow.checked = false;
-                break;
-            case "FAST":
-                nolimit.checked = false;
-                fast.checked = true;
-                normal.checked = false;
-                slow.checked = false;
-                break;
-            case "NORMAL":
-                nolimit.checked = false;
-                fast.checked = false;
-                normal.checked = true;
-                slow.checked = false;
-                break;
-            case "SLOW":
-                nolimit.checked = false;
-                fast.checked = false;
-                normal.checked = false;
-                slow.checked = true;
-                break;
-            default:
-                console.log("Unexpected data from server: " + data.speed)
-                break;
-        }
-
-        updateRadioStyles();
-
         const divUpdates = document.getElementById("currently-working-on");
 		while (divUpdates.firstChild) {
             divUpdates.removeChild(divUpdates.firstChild);
@@ -619,20 +481,14 @@
         divUpdates.append(divRow);
 	}
 
-	/*socket.on("update", data => {
-		update_state(data);
-	})*/
 
-	setInterval(() => {
-		fetch("/manga/download/get-state").then(response => {
-            response.json().then(data => {
-                update_state(data);
-			})
-		})
-	}, 1000);
+	const source = new EventSource("/manga/download/stream");
 
-    // Initialize radio styles
-    updateRadioStyles();
+    source.onmessage = (event) => {
+	    const data = JSON.parse(event.data);
+	    update_state(data);
+	}
+
 </script>
 </body>
 </html>

@@ -491,8 +491,11 @@
             body: JSON.stringify({
                 id: "{{muuid}}"
             })
-        })
-        check_queue();
+        }).then((res) => {
+            setTimeout(() => {
+                check_queue()
+			}, 200)
+		})
     }
 
     function showDeleteWarning() {
