@@ -16,8 +16,6 @@ class Settings:
     fileLogger: bool
     logger: Logger
     darkTheme: bool
-    downloaderFileName: Optional[str]
-
 
 @dataclass
 class MangadexCredentials:
@@ -29,6 +27,7 @@ class MangadexCredentials:
     def is_valid(self) -> bool:
         return all([self.username, self.password, self.clientId, self.clientSecret])
 
+
 def load_settings() -> Settings:
     try:
         with open('settings.json', 'r') as f:
@@ -36,21 +35,21 @@ def load_settings() -> Settings:
         return Settings(
             None,
             json_settings.get('contentRating', ["safe", "suggestive", "erotica"]),
-            json_settings.get('translatedLanguage', ["en"]), # [] means all languages will be fetched
+            json_settings.get('translatedLanguage', ["en"]),  # [] means all languages will be fetched
             json_settings.get('cacheTokenToDisk', True),
             json_settings.get('logLevel', 1),
             json_settings.get('fileLogger', False),
             Logger(json_settings.get('logLevel', 1), json_settings.get('fileLogger', False)),
-            json_settings.get('darkTheme', True),
-            json_settings.get('downloaderFileName', None),
+            json_settings.get('darkTheme', True)
         )
     except (FileNotFoundError, json.decoder.JSONDecodeError):
         Logger().log(warning, f"Could not find settings.json in {os.getcwd()} using default")
         # return default if we cant find the settings
-        default = Settings(None, ["safe", "suggestive", "erotica"], ["en"], True, 1, False, Logger(1, False), True, None)
+        default = Settings(None, ["safe", "suggestive", "erotica"], ["en"], True, 1, False, Logger(1, False), True)
         save_settings(default)
         default.logger.log(warning, "Create settings.json with default values")
         return default
+
 
 def save_settings(settings: Settings) -> bool:
     try:
@@ -61,6 +60,7 @@ def save_settings(settings: Settings) -> bool:
     except Exception as e:
         Logger().log(error, f"Could not save settings.json: {e}")
         return False
+
 
 def load_credentials() -> MangadexCredentials:
     try:
@@ -75,6 +75,7 @@ def load_credentials() -> MangadexCredentials:
     except FileNotFoundError:
         Logger().log(warning, f"Could not find mangadex_account.json in {os.getcwd()} using empty credentials")
         return MangadexCredentials(None, None, None, None)
+
 
 def credentials_from_json(_json):
     return MangadexCredentials(

@@ -1,218 +1,327 @@
+import asyncio
 import json
 import os
-import shutil
-import struct
+import queue
 import threading
 import time
-from typing import Optional, Tuple, Dict, Union, List, Any
+from collections import deque
+from dataclasses import dataclass
+from enum import Enum, auto
+from typing import Optional, Tuple, Dict, Union, List, Any, Sequence, Callable, Deque
 
 import requests
 from dateutil.relativedelta import relativedelta
-from watchdog.events import FileSystemEventHandler, FileSystemEvent
-from watchdog.observers import Observer
-
-from rewrite.backend.database import Database
 from rewrite.backend.schemas import MangaList, from_json, Manga, MangaIdentifier, ChapterIdentifier, ChapterList, \
     Chapter, \
     DirectSearchManga, DirectSearchChapter, CustomList, CustomListResponse, COVER_ART_256_SIZE, \
-    COVER_ART_512_SIZE, COVER_ART_MAX_SIZE, Relationship
-from rewrite.backend.settings import Settings, MangadexCredentials, save_settings, save_credentials
+    COVER_ART_512_SIZE, COVER_ART_MAX_SIZE, Relationship, MangaAttributes
+from rewrite.backend.settings import Settings, MangadexCredentials
 from datetime import datetime
 
-from rewrite.backend.utils import error, info, warning, perf_test, critical, input_as_bool
+from rewrite.backend.utils import error, info, warning, perf_test, get_correct_language, \
+    Logger, run_async
+import aiohttp
 
-import subprocess
 
-# Types for proc response.type
-ADD_JOB_TYPE = "add-job-response"
-POP_JOB_TYPE = "pop-job-response"
-STATUS_TYPE = "status-response"
+class DownloaderState(Enum):
+    Off = auto()
+    Starting = auto()
+    Awaiting = auto()
+    Downloading = auto()
+    Ratelimited = auto()
 
-class DownloaderHandler(FileSystemEventHandler):
-    def __init__(self, database: Database, logger):
-        self.database = database
-        self.logger = logger
 
-    def save_chapter(self, finished_src):
-        finished_full_path = os.path.join(os.getcwd(), finished_src)
-        directory_path = os.path.dirname(finished_full_path)
-        chapterid = os.path.basename(directory_path)
-        assert chapterid != "downloads", "FINISHED was created in main directory"
-        pages = []
+def downloader_state_to_string(state):
+    match state:
+        case DownloaderState.Off:
+            return "OFF"
+        case DownloaderState.Starting:
+            return "STARTING"
+        case DownloaderState.Awaiting:
+            return "AWAITING"
+        case DownloaderState.Downloading:
+            return "DOWNLOADING"
+        case DownloaderState.Ratelimited:
+            return "RATELIMITED"
+        case _:
+            return "UNKNOWN_STATE"
 
-        for file in os.listdir(directory_path):
-            if file == "FINISHED":
-                continue
-            try:
-                n_str = "".join([c for c in file.split("-")[0] if c.isdigit()])
-                if not n_str:
-                    raise ValueError("No digits in filename")
-                n = int(n_str)
-                with open(os.path.join(directory_path, file), "rb") as f:
-                    pages.append((n, f.read(), chapterid))
-            except Exception as e:
-                print(f"Could not process {file} in {directory_path}: {e}")
 
-        pages.sort(key=lambda x: x[0])
+@dataclass
+class MangaDownloadJobInDatabase:
+    # Stores the pages in database and record (how many pages does the chapter have)
+    pages_in_db: Dict  # {"cuuid": [1, 2, 3, 4, 5], ...}
+    records: Dict  # {"cuuid": 12, ...}
 
-        try:
-            self.logger.log(info, f"Proc finished downloading {chapterid}")
-            self.database.set_chapter_pages(pages, is_webp=True)
-            shutil.rmtree(directory_path)
-        except Exception as e:
-            print(f"Could not save {chapterid} to database: {e}")
 
-    def on_any_event(self, event: FileSystemEvent) -> None:
-        if event.event_type == "moved":
-            if event.dest_path.endswith("FINISHED"):
-                self.save_chapter(event.dest_path)
-
-class DownloaderProcessHandler:
-    def __init__(self, settings: Settings, database: Database):
-        self.logger = settings.logger
-
-        if settings.downloaderFileName is None or not settings.downloaderFileName:
-            files = os.listdir(os.getcwd())
-            for file in files:
-                if file.endswith(".exe"):
-                    settings.logger.log(info, f"Is {file} the compiled downloader? (Will be saved and executed!): ")
-                    if input_as_bool(input("> ")):
-                        settings.downloaderFileName = file
-                        save_settings(settings)
-                        break
-
-        if settings.downloaderFileName is None or not settings.downloaderFileName:
-            self.logger.log(critical,
-                            f"Could not find downloader program. Compile it and put it in {os.getcwd()}. https://github.com/jonasek369/C-manga-downloader")
-            raise FileNotFoundError("No .exe file found in the frontend directory!")
-
-        if settings.downloaderFileName and not os.path.exists(settings.downloaderFileName):
-            settings.logger.log(critical, f"Downloader process name is saved as {settings.downloaderFileName} but it dose not exist!")
-            raise FileNotFoundError(f"{settings.downloaderFileName} does not exist in frontend directory!")
-
-        self.downloader_proc = subprocess.Popen(
-            [settings.downloaderFileName],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            text=False
-        )
-
-        timeout = 4
-        start = time.time()
-
-        while time.time() - start < timeout:
-            if os.path.exists("downloads"):
-                self.logger.log(info, "Folder 'downloads' detected")
-                break
-            time.sleep(0.1)
+class MangaDownloadJob:
+    def __init__(self, identifier: MangaIdentifier, manga_attribute: MangaAttributes, chapter_list: ChapterList,
+                 database_info: MangaDownloadJobInDatabase, settings: Settings):
+        self.identifier = identifier
+        self.downloaded = False
+        self.chapter_info = chapter_list
+        self.database_info = database_info
+        if self.chapter_info.data is not None:
+            self.title = get_correct_language(manga_attribute.title, manga_attribute.altTitles, settings)
         else:
-            self.logger.log(critical, "Timed out! Folder 'downloads' was not created.")
+            self.title = None
+        self.settings = settings
+        self.settings.logger.log(info, "Created job sucesfully")
 
-        self.response_buffer = []
+    def __del__(self):
+        self.settings.logger.log(warning, f"Deleting job {self.identifier}")
 
-        self.logger.log(info, f"started downloader proc! {self.downloader_proc}")
+    def __eq__(self, other):
+        if isinstance(other, MangaDownloadJob):
+            return self.identifier == other.identifier
+        return False
+
+    # to currently working on (json struct with info about state of download)
+    def to_cwo(self):
+        return {
+            "id": self.identifier,
+            "title": self.title,
+            "chapter_status": [0, int(len(self.chapter_info.data))]
+        }
+
+
+@dataclass
+class MangaDownload:
+    pages: int
+    data: [bytes]
+
+
+async def async_get_chapter_page(
+        identifier,
+        db_pages: Sequence,
+        logger: Logger,
+        rate_limit_callback: Optional[Callable[[float], bool]] = None,
+        can_continue_download: Optional[Callable[[], bool]] = None,
+        page_download_cb: Optional[Callable] = None
+) -> Optional[MangaDownload]:
+    """
+    Async version of threaded_get_chapter_page.
+    If rate_limit_callback returns False, retries after waiting.
+    """
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(f"https://api.mangadex.org/at-home/server/{identifier}") as metadata:
+            remaining = metadata.headers.get("X-RateLimit-Remaining", "1")
+            retry_after = metadata.headers.get("X-RateLimit-Retry-After", "1")
+            logger.log(info, f"RateLimit Rem. {remaining}. RateLimit after {retry_after}")
+
+            if int(remaining) <= 0:
+                wait_time = float(retry_after) - time.time()
+                if rate_limit_callback and rate_limit_callback(wait_time):
+                    return None
+                else:
+                    logger.log(warning, f"Rate limited, retrying after {wait_time}s...")
+                    await asyncio.sleep(wait_time)
+                    return await async_get_chapter_page(identifier, db_pages, logger,
+                                                        rate_limit_callback, can_continue_download, page_download_cb)
+
+            metadata_json = await metadata.json()
+        try:
+            _hash = metadata_json["chapter"]["hash"]
+            base_url = metadata_json['baseUrl']
+            pages = len(metadata_json["chapter"]["data"])
+        except KeyError as e:
+            logger.log(error, f"KeyError {e}: {metadata_json}")
+        manga_download = MangaDownload(int(pages), [])
+
+        sem = asyncio.Semaphore(min(max(pages, 4), os.cpu_count() or 4))
+
+        downloaded_pages = []
+
+        async def download_page(page_count: int, page_digest: str):
+            if can_continue_download and not can_continue_download():
+                return None
+
+            async with sem:
+                url = f"{base_url}/data/{_hash}/{page_digest}"
+                try:
+                    async with session.get(url) as resp:
+                        resp.raise_for_status()
+                        content = await resp.read()
+                        logger.log(info, f"Downloaded {page_digest}")
+
+                        if page_download_cb:
+                            page_download_cb(identifier, page_count + 1, pages)
+
+                        return page_count + 1, content
+                except Exception as e:
+                    logger.log(error, f"Error downloading {page_digest}: {e}")
+                    return None
+
+        tasks = [
+            download_page(page_count, page_digest)
+            for page_count, page_digest in enumerate(metadata_json["chapter"]["data"])
+            if page_count + 1 not in db_pages
+        ]
+
+        results = await asyncio.gather(*tasks)
+
+        for result in filter(None, results):
+            downloaded_pages.append(result)
+
+        for i in sorted(downloaded_pages, key=lambda x: x[0]):
+            manga_download.data.append(i[1])
+
+        return manga_download
+
+
+class Empty(Exception):
+    pass
+
+
+class JobsQueue:
+    def __init__(self):
+        self.queue: Deque[MangaDownloadJob] = deque()
+        self.condition = threading.Condition()
+
+    def snapshot(self) -> List[MangaDownloadJob]:
+        with self.condition:
+            return list(self.queue)
+
+    def put(self, job: MangaDownloadJob):
+        for job_in_queue in self.queue:
+            if job_in_queue.identifier == job.identifier:
+                return
+        with self.condition:
+            self.queue.append(job)
+            self.condition.notify()
+
+    def pop(self) -> MangaDownloadJob:
+        with self.condition:
+            while not self.queue:
+                self.condition.wait()
+            return self.queue.popleft()
+
+    def remove_job(self, identifier: str):
+        with self.condition:
+            for i, job in enumerate(self.queue):
+                if job.identifier == identifier:
+                    del self.queue[i]
+                    break
+
+    def push_to_front(self, identifier):
+        with self.condition:
+            for i, job in enumerate(self.queue):
+                if job.identifier == identifier:
+                    del self.queue[i]
+                    self.queue.appendleft(job)
+                    break
+
+
+class MangaDownloader:
+    def __init__(self, settings: Settings):
+        self.state: DownloaderState = DownloaderState.Off
+
+        self.stop_event = threading.Event()
+        # Should be only called on the end
         self.exit_event = threading.Event()
+        self.queue = JobsQueue()
+        self.finished = {}
+        self.currently_working_on: Optional[dict] = None
+        self.speed = "NORMAL"
 
-        event_handler = DownloaderHandler(database, self.logger)
-        self.observer = Observer()
-        self.observer.schedule(event_handler, "downloads", recursive=True)
-        self.observer.start()
+        assert settings.onMangaDownloadFinishHandler is not None, "onMangaDownloadFinishHandler cannot be None"
 
-        threading.Thread(target=self.read_messages, args=(self.downloader_proc,)).start()
+        self.on_finish_callback = settings.onMangaDownloadFinishHandler
+        self.logger = settings.logger
+        self.worker_thread = threading.Thread(target=self.__loop)
+        self.worker_thread.start()
+        self.start()
 
-        self.lock = threading.Lock()
+    def start(self):
+        if self.state == DownloaderState.Off:
+            self.state = DownloaderState.Starting
+
+    def stop(self):
+        self.stop_event.set()
 
     def exit(self):
         self.exit_event.set()
-        self.send_message({"command": "exit"})
-        self.logger.log(info, "waiting for process to stop")
-        self.downloader_proc.wait()
-        time.sleep(1)  # sleeping because after process finishes it will most probably finish one more chapter so
-        # so we make sure to save it
-        self.logger.log(info, "process stopped")
-        self.observer.stop()
-        self.observer.join()
 
-    def clear_responses(self):
-        self.response_buffer.clear()
+    def add_chapter(self):
+        self.currently_working_on["chapter_status"][0] += 1
 
-    def wait_for_response(self, _type="any", timeout=5.0) -> dict | None:
-        end_time = time.time() + timeout
-        with self.lock:
-            while time.time() < end_time:
-                if self.response_buffer:
-                    if _type == "any":
-                        return self.response_buffer.pop(0)
-                    else:
-                        first = self.response_buffer.pop(0)
-                        if first["type"] != _type:
-                            self.response_buffer.append(first)
-                        else:
-                            return first
-            return None
+    def rate_limit_callback(self, retry_after) -> bool:
+        self.logger.log(warning, f"Halting execution of downloader. Sleeping for {retry_after + 30}s")
+        # pause execution until we can try again
+        time.sleep((retry_after + 5))
+        return False
 
-    def read_exact(self, stream, n):
-        buf = b''
-        while len(buf) < n:
-            chunk = stream.read(n - len(buf))
-            buf += chunk
-        return buf
+    def can_continue_downloading(self):
+        return self.state != DownloaderState.Off
 
-    def read_messages(self, proc):
-        while not self.exit_event.is_set():
-            raw_len = self.read_exact(proc.stdout, 4)
-            if not raw_len:
-                print("Process ended or pipe closed.")
-                break
+    def __loop(self):
+        while not self.exit_event.is_set():  # Outer loop checks exit_event
+            if self.state == DownloaderState.Off:
+                time.sleep(0.1)
+                continue
 
-            msg_len = struct.unpack("<I", raw_len)[0]
-            data = self.read_exact(proc.stdout, msg_len)
-            if not data:
-                print("Incomplete JSON payload. Process may have terminated.")
-                break
+            if self.stop_event.is_set():
+                self.state = DownloaderState.Off
+                self.stop_event.clear()
+                continue
 
-            try:
-                msg = json.loads(data.decode("utf-8"))
-                self.response_buffer.append(msg)
-            except Exception as e:
-                print("JSON decode error:", e)
-                print("Raw data:", data)
-                break
+            self.state = DownloaderState.Awaiting
+            job = self.queue.pop()
+            self.state = DownloaderState.Downloading
+            self.currently_working_on = job.to_cwo()
 
-    def send_large_message(self, proc, message_bytes, chunk_size=32768):
-        length = len(message_bytes)
+            if not job.chapter_info.data:
+                self.logger.log(warning, f"{job.identifier} data is empty!")
 
-        length_bytes = struct.pack("<I", length)
-        proc.stdin.write(length_bytes)
-        proc.stdin.flush()
+            for chapter in job.chapter_info.data:
+                if self.stop_event.is_set() or self.exit_event.is_set():  # Check both events
+                    self.queue.put(job)
+                    self.currently_working_on = None
+                    break  # Break out of the chapter processing loop
 
-        for i in range(0, len(message_bytes), chunk_size):
-            chunk = message_bytes[i:i + chunk_size]
-            proc.stdin.write(chunk)
-            proc.stdin.flush()
+                try:
+                    if len(job.database_info.pages_in_db[chapter.id]) == job.database_info.records[chapter.id]:
+                        self.add_chapter()
+                        self.logger.log(info,
+                                        f"already in database {chapter.attributes.volume} Volume {chapter.attributes.chapter} Chapter")
+                        continue
+                except KeyError:
+                    pass
 
-    def send_message(self, message: Dict) -> bool:
-        """
-        Every message that returns response should catch it with wait_for_response if it dose not other wait_for_response will
-        get the wrong response
+                pages_in_db = job.database_info.pages_in_db.get(chapter.id, [])
+                downloaded_data = run_async(async_get_chapter_page,
+                                            chapter.id,
+                                            pages_in_db,
+                                            self.logger,
+                                            None,
+                                            self.can_continue_downloading,
+                                            None
+                                            )
 
-        send_message then wait_for_response if the downloader returns response
-        """
-        if "command" not in message:
-            self.logger.log(error, f"Message to proc must have command field!")
-            return False
-        json_str = json.dumps(message)
-        json_bytes = json_str.encode('utf-8')
-        length = len(json_bytes)
-        if length > 32768:
-            self.send_large_message(self.downloader_proc, json_bytes)
-        else:
-            try:
-                self.downloader_proc.stdin.write(struct.pack("<I", length))
-                self.downloader_proc.stdin.write(json_bytes)
-                self.downloader_proc.stdin.flush()
-            except OSError as e:
-                self.logger.log(error, f"{e}: Could not send message with length {length}")
+                if job.identifier not in self.finished:
+                    self.finished[job.identifier] = {}
+
+                self.finished[job.identifier][chapter.id] = downloaded_data.data
+                self.on_finish_callback(job.identifier, chapter.id, self)
+                job.database_info.pages_in_db[chapter.id] = list(range(1, downloaded_data.pages + 1))
+                self.logger.log(info,
+                                f"Downloaded {chapter.attributes.volume} Volume {chapter.attributes.chapter} Chapter")
+                self.add_chapter()
+
+                # eventlet.sleep(timeouts[self.speed + "_CHAPTER_FINISH"])
+            self.logger.log(info, f"Finished downloading {job}!")
+            self.currently_working_on = None
+
+    def get_downloader_state(self) -> dict:
+        queued_jobs = self.queue.snapshot()
+
+        return {
+            "state": downloader_state_to_string(self.state),
+            "currently_working_on": self.currently_working_on,
+            "queue": {job.identifier: job.title for job in queued_jobs},
+        }
+
 
 class CredentialManager:
     def __init__(self, settings: Settings, credentials: MangadexCredentials):

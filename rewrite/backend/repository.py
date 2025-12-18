@@ -5,7 +5,7 @@ from typing import Optional, List
 
 import aiohttp
 
-from rewrite.backend.connection import MangadexConnection, CredentialManager, DownloaderProcessHandler
+from rewrite.backend.connection import MangadexConnection, CredentialManager, MangaDownloader
 from rewrite.backend.database import Database
 from rewrite.backend.schemas import MangaIdentifier, ChapterIdentifier, ChapterList, MangaAttributes, \
     ChapterAttributes, LatestChapter, MangaList, COVER_ART_MAX_SIZE, COVER_ART_512_SIZE
@@ -20,13 +20,26 @@ from rewrite.backend.utils import perf_test, info, error
 class MangaRepository:
     def __init__(self):
         self.settings = load_settings()
+        self.settings.onMangaDownloadFinishHandler = self.store_downloaded_pages
 
         self.database = Database()
         self.credential_manager = CredentialManager(self.settings, load_credentials())
         self.connection = MangadexConnection(self.settings, self.credential_manager)
-        self.downloader_handler = DownloaderProcessHandler(self.settings, self.database)
+        self.downloader = MangaDownloader(self.settings)
 
         self.cache = {}
+
+    def store_downloaded_pages(self, muuid: MangaIdentifier, cuuid: ChapterIdentifier, downloader: MangaDownloader):
+        chapter = self.database.get_chapter_attribute(cuuid)
+        if not chapter:
+            chapter_list = self.connection.get_chapter_list(muuid)
+            self.database.set_chapter_attributes(muuid, chapter_list.data)
+        batch = []
+        for page, content in enumerate(downloader.finished[muuid][cuuid]):
+            batch.append((page + 1, content, cuuid))
+        self.database.set_chapter_pages(batch, is_webp=True)  # Dont use webp for now
+        self.settings.logger.log(info, f"Saved {len(batch)} pages")
+        del downloader.finished[muuid][cuuid]
 
     def get_manga_attributes(self, identifier: MangaIdentifier) -> Optional[MangaAttributes]:
         cache_identifier = f"MA:{identifier}"

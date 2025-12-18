@@ -480,7 +480,9 @@
 </div>
 
 <script>
-    window.token = '{{ token }}';
+	const svg_eye = `<svg data-v-9ba4cb7e="" data-v-49be02db="" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="feather feather-eye icon small text-icon-contrast text-undefined flex-shrink-0 cursor-pointer readMarker" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8"></path><circle cx="12" cy="12" r="3"></circle></svg>`
+	const svg_crossed_eye = `<svg data-v-9ba4cb7e="" data-v-49be02db="" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" class="icon small text-icon-contrast text-undefined flex-shrink-0 cursor-pointer readMarker opacity-40"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.9 4.24A9 9 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3.001 3.001 0 0 1-5.194-2.098A3 3 0 0 1 9.88 9.88m8.06 8.06A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94zM1 1l22 22"></path></svg>`
+
 
     function push_job() {
         fetch("/manga/download/push-job", {
@@ -540,7 +542,6 @@
             chapterDiv.className = "chapter-item";
             chapterDiv.onclick = function() { navigateToChapter(chapter.identifier); };
 
-
             // Build chapter title text
             var titleText = "Volume " + chapter.volume + " Chapter " + chapter.chapter;
             if (chapter.title) {
@@ -553,9 +554,11 @@
             var scanlationGroup = chapter.scanlation_group?.name|| "Unknown Group";
             var group_id = chapter.scanlation_group?.id
 
-            // Create the HTML structure
+			let read_status = chapter.read_status
+
 			chapterDiv.innerHTML = `
 			    <div class="chapter-main">
+			    	<div class="chapter-viewed-status">${read_status ? svg_crossed_eye : svg_eye}</div>
 			        <div class="chapter-title">${titleText}</div>
 			        <div class="chapter-meta">
 			            <div class="meta-item">
@@ -570,6 +573,32 @@
 			        </div>
 			    </div>
 			`;
+
+
+			const statusIcon = chapterDiv.querySelector('.chapter-viewed-status');
+
+			statusIcon.dataset.read = read_status ? "true" : "false";
+
+			statusIcon.addEventListener('click', (event) => {
+			    const isRead = statusIcon.dataset.read === "true";
+
+			    // flip state
+			    statusIcon.dataset.read = (!isRead).toString();
+
+			    // update icon according to new state
+			    statusIcon.innerHTML = !isRead ? svg_crossed_eye : svg_eye;
+
+			    // send fetch
+			    fetch("/manga/read-status", {
+			        method: "POST",
+			        body: JSON.stringify({
+			            "cuuid": chapter.identifier,
+			            "read_state": !isRead
+			        })
+			    });
+
+			    event.stopPropagation(); // prevent parent click
+			});
 
             // Append to container
             contdiv.appendChild(chapterDiv);

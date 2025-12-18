@@ -10,6 +10,5 @@
     "cacheTokenToDisk": true,
     "logLevel": 1,
     "fileLogger": false,
-    "darkTheme": true,
-    "downloaderFileName": "main.exe"
+    "darkTheme": true
 }

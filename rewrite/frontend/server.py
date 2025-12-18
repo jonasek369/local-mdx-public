@@ -5,23 +5,11 @@ import os
 import time
 from dataclasses import asdict
 
-from rewrite.backend.connection import ADD_JOB_TYPE, POP_JOB_TYPE, STATUS_TYPE
+from rewrite.backend.connection import MangaDownloadJob
 from rewrite.backend.repository import MangaRepository
 from rewrite.backend.schemas import COVER_ART_MAX_SIZE, COVER_ART_256_SIZE, COVER_ART_512_SIZE
 from rewrite.backend.settings import credentials_from_json, save_credentials
 from rewrite.backend.utils import info, error, get_correct_language, is_uuid4, critical
-
-try:
-    import webview
-except ImportError:
-    class wv:
-        def __init__(self):
-            self.windows = []
-            self.token = -1
-
-
-    webview = wv()
-
 from flask import Flask, jsonify, render_template, request, make_response, stream_with_context, Response
 
 gui_dir = os.path.join(os.getcwd(), 'gui')
@@ -114,7 +102,7 @@ def server_manga(mangauuid):
 
     manga = repository.get_manga_attributes(mangauuid)
     if not manga:
-        return jsonify({"error": "No manga found"}), 404
+        return jsonify({"status": "error", "response": "Manga could not be found"}), 404
 
     return render_template("manga.html",
                            muuid=mangauuid,
@@ -126,6 +114,8 @@ def server_manga(mangauuid):
 
 @server.route("/manga/<mangauuid>/info", methods=["GET"])
 def get_manga_info(mangauuid):
+    if not is_uuid4(mangauuid):
+        return {"status": "error", "response": "manga uuid is not valid uuid4"}, 400
     downloaded_pages = repository.get_downloaded_pages(mangauuid)
     downloaded_lookup = {i[0]: i[1:] for i in downloaded_pages}
 
@@ -134,6 +124,10 @@ def get_manga_info(mangauuid):
     feed = repository.get_manga_feed(mangauuid, force_latest=True)
 
     chapters = []
+
+    read_chapters = repository.database.get_manga_read_chapters(mangauuid)
+    if not read_chapters:
+        read_chapters = []
 
     for chapter in feed.data:
         lookup = downloaded_lookup.get(chapter.id, None)
@@ -145,9 +139,38 @@ def get_manga_info(mangauuid):
             "volume": lookup[1],
             "chapter": lookup[2],
             "user": user_and_groups[chapter.id]["user"],
-            "scanlation_group": user_and_groups[chapter.id]["scanlation_group"]
+            "scanlation_group": user_and_groups[chapter.id]["scanlation_group"],
+            "read_status": True if chapter.id in read_chapters else False
         })
     return jsonify(chapters), 200
+
+
+@server.route("/manga/read-status", methods=["POST"])
+def read_status():
+    try:
+        data = request.get_json(force=True)
+    except Exception:
+        return {"status": "error", "response": "Endpoint requires json"}, 400
+    if "cuuid" not in data or "read_state" not in data:
+        return {"status": "error", "response": "Endpoint requires 'cuuid' and 'read_state'"}, 400
+    if not is_uuid4(data["cuuid"]):
+        return {"status": "error", "response": "'cuuid' must be valid uuid4"}, 400
+    try:
+        read_state = bool(data["read_state"])
+    except ValueError:
+        return {"status": "error", "response": "'read_state' should be bool or 0/1"}, 400
+
+    cuuid, muuid, *_ = repository.database.get_chapter_attribute_raw(data["cuuid"])
+    if muuid is None:
+        return {"status": "error", "response": "Database chapter attributes do not contain muuid"}, 400
+
+    contains_status = repository.database.get_chapter_read_status(cuuid)
+    if contains_status is None and read_state is True:
+        repository.database.add_read_record(muuid, cuuid)
+    elif contains_status and read_state is False:
+        repository.database.remove_read_record(muuid, cuuid)
+
+    return {"status": "ok", "response": "Changed read state"}, 200
 
 
 @server.route("/manga/<mangauuid>/attributes")
@@ -239,20 +262,16 @@ def push_job():
     if not is_uuid4(data.get("id")):
         return {"status": "error", "response": "invalid id"}, 400
 
-    # we need to populate populate the database if it dosent have it yet so we dont have foreign key contains error
-    repository.get_manga_attributes(data.get("id"))
-
-    repository.downloader_handler.send_message({
-        "command": "add-job",
-        "data": {
-            "identifier": data.get("id"),
-            "chapter_info": [asdict(i) for i in repository.get_chapter_list(data.get("id")).data],
-            "database_info": asdict(repository.database.get_manga_job(data.get("id")))
-        }
-    })
-
-
-    return repository.downloader_handler.wait_for_response(_type=ADD_JOB_TYPE)
+    repository.downloader.queue.put(
+        MangaDownloadJob(
+            data.get("id"),
+            repository.get_manga_attributes(data.get("id")),
+            repository.get_chapter_list(data.get("id")),
+            repository.database.get_manga_job(data.get("id")),
+            repository.settings
+        )
+    )
+    return {"status": "success"}
 
 
 @server.route("/manga/download/contains", methods=["POST"])
@@ -269,13 +288,12 @@ def downloader_contains():
 
     muuid = data.get("id")
 
-    repository.downloader_handler.send_message({"command": "status"})
-    state = repository.downloader_handler.wait_for_response(_type=STATUS_TYPE)
+    dl_state = repository.downloader.get_downloader_state()
 
-    if state["cwo"] != "null":
-        contains = muuid in state["queue"] or state["cwo"] == muuid
+    if dl_state["currently_working_on"] is not None:
+        contains = muuid in dl_state["queue"] or dl_state["currently_working_on"]["id"] == dl_state
     else:
-        contains = muuid in state["queue"]
+        contains = muuid in dl_state["queue"]
 
     return {"status": "success", "data": {"contains": contains}}, 200
 
@@ -288,47 +306,32 @@ def download_manager():
 
 @server.route("/manga/download/start", methods=["GET"])
 def start_download():
-    repository.downloader_handler.send_message({"command": "resume"})
+    repository.downloader.start()
     return {"status": "success", "response": "started downloader"}, 200
 
 
 @server.route("/manga/download/stop", methods=["GET"])
 def stop_download():
-    repository.downloader_handler.send_message({"command": "pause"})
+    repository.downloader.stop()
     return {"status": "success", "response": "stopped downloader"}, 200
 
 
-def get_downloader_state_json():
-    repository.downloader_handler.send_message({"command": "status"})
-    status = repository.downloader_handler.wait_for_response(_type=STATUS_TYPE)
-
-    queue_new = []
-
-    for i in status["queue"]:
-        attrs = repository.get_manga_attributes(i)
-        queue_new.append(
-            {"identifier": i, "title": get_correct_language(attrs.title, attrs.altTitles, repository.settings)})
-    status["queue"] = queue_new
-    if status["cwo"] == "null":
-        status["cwo"] = None
-    else:
-        cwo_attrs = repository.get_manga_attributes(status["cwo"])
-        status["cwoTitle"] = get_correct_language(cwo_attrs.title, cwo_attrs.altTitles, repository.settings)
-
-    return status
-
 @server.route("/manga/download/get-state", methods=["GET"])
 def get_state():
-    status = get_downloader_state_json()
+    status = repository.downloader.get_downloader_state()
     return status, 200
 
 
 @server.route('/manga/download/stream')
 def stream():
     def event_stream():
+        last_stream = None
         while True:
-            data = get_downloader_state_json()
-            yield f"data: {json.dumps(data)}\n\n"
+            data = repository.downloader.get_downloader_state()
+            stream_to_send = f"data: {json.dumps(data)}\n\n"
+            if stream_to_send != last_stream:
+                yield stream_to_send
+                last_stream = stream_to_send
             time.sleep(0.25)
 
     return Response(
@@ -337,47 +340,21 @@ def stream():
         headers={"Cache-Control": "no-cache"}
     )
 
-@server.route("/manga/download/push-to-bot", methods=["POST"])
-def push_to_bot():
+
+@server.route("/manga/download/push-to-top", methods=["POST"])
+def push_to_top():
     try:
         data = request.get_json(force=True)
     except Exception:
         return {"status": "error", "response": "no JSON provided"}, 400
-
-    if "index" not in data:
+    if "identifier" not in data:
         return {"status": "error", "response": "Index not in JSON"}, 400
+    if not is_uuid4(data["identifier"]):
+        return {"status": "error", "response": "'identifier' is not valid uuid4"}
 
-    try:
-        index = int(data["index"])
-    except ValueError:
-        return {"status": "error", "response": "Index is not a number"}, 400
+    repository.downloader.queue.push_to_front(data["identifier"])
 
-    repository.downloader_handler.send_message({"command": "status"})
-    state = repository.downloader_handler.wait_for_response(_type=STATUS_TYPE, timeout=5)
-
-    if index < 0 or index >= len(state["queue"]):
-        return {"status": "error", "response": "Index is out of bounds"}, 400
-
-    member_muuid = state["queue"][index]
-
-    repository.downloader_handler.send_message({
-        "command": "pop-job",
-        "data": {"identifier": state["queue"][index]}
-    })
-    resp = repository.downloader_handler.wait_for_response(_type=POP_JOB_TYPE, timeout=5)
-
-    repository.get_manga_attributes(member_muuid)
-
-    repository.downloader_handler.send_message({
-        "command": "add-job",
-        "data": {
-            "identifier": member_muuid,
-            "chapter_info": [asdict(i) for i in repository.get_chapter_list(member_muuid).data],
-            "database_info": asdict(repository.database.get_manga_job(member_muuid))
-        }
-    })
-
-    return repository.downloader_handler.wait_for_response(_type=ADD_JOB_TYPE)
+    return {"status": "success", "response": "pushed job to top"}, 200
 
 
 @server.route("/manga/download/pop-job", methods=["POST"])
@@ -386,41 +363,14 @@ def pop_job():
         data = request.get_json(force=True)
     except Exception:
         return {"status": "error", "response": "no JSON provided"}, 400
-
-    if "index" not in data:
+    if "identifier" not in data:
         return {"status": "error", "response": "Index not in JSON"}, 400
+    if not is_uuid4(data["identifier"]):
+        return {"status": "error", "response": "'identifier' is not valid uuid4"}
 
-    try:
-        index = int(data["index"])
-    except ValueError:
-        return {"status": "error", "response": "Index is not a number"}, 400
+    repository.downloader.queue.remove_job(data["identifier"])
 
-    repository.downloader_handler.send_message({"command": "status"})
-    state = repository.downloader_handler.wait_for_response(_type=STATUS_TYPE, timeout=5)
-
-    if index < 0 or index >= len(state["queue"]):
-        return {"status": "error", "response": "Index is out of bounds"}, 400
-
-    repository.downloader_handler.send_message({
-        "command": "pop-job",
-        "data": {"identifier": state["queue"][index]}
-    })
-    resp = repository.downloader_handler.wait_for_response(_type=POP_JOB_TYPE, timeout=5)
-    return {"status": "success" if resp["status"] == "ok" else "error"}, 200
-
-
-@server.route("/manga/download/speed", methods=["POST"])
-def set_speed():
-    try:
-        data = request.get_json(force=True)
-    except Exception:
-        return {"status": "error", "response": "error no json provided"}, 400
-    if "speed" not in data:
-        return {"status": "error", "response": "Index not in json"}, 400
-    if data["speed"] not in {"SLOW", "NORMAL", "FAST", "NO_LIMIT"}:
-        return {"status": "error", "response": "Incorrect speed"}, 400
-    raise DeprecationWarning("Speed is not implemented")
-    return {"status": "success", "response": "ok"}, 200
+    return {"status": "success", "response": "popped job"}, 200
 
 
 @server.route("/manga/library/data", methods=["GET"])
@@ -515,31 +465,6 @@ def updates_data():
     return jsonify(asdict(_updates)), 200
 
 
-@server.route("/local-port")
-def local_port():
-    token = repository.credential_manager.token
-    if not repository.credential_manager.validate_token(token):
-        return {"status": "error", "response": "Invalid credentials"}, 403
-    port = repository.connection.get_followed_manga()
-    for manga in port.data:
-
-        repository.get_manga_attributes(manga.id)
-
-        repository.downloader_handler.send_message({
-            "command": "add-job",
-            "data": {
-                "identifier": manga.id,
-                "chapter_info": [asdict(i) for i in repository.get_chapter_list(manga.id).data],
-                "database_info": asdict(repository.database.get_manga_job(manga.id))
-            }
-        })
-        block_for_response = repository.downloader_handler.wait_for_response(_type=ADD_JOB_TYPE)
-        if block_for_response and block_for_response["status"] != "ok":
-            repository.settings.logger.log(critical, f"couldn't add job {block_for_response}")
-
-    return {"status": "ok"}, 200
-
-
 @server.route("/latest-updated-chapters")
 def latest_updated_chapters():
     chapters_datatype = repository.get_latest_updated_chapters()
@@ -566,5 +491,5 @@ if __name__ == "__main__":
         server.run(threaded=True)
     else:
         from waitress import serve
-        serve(server, host="0.0.0.0", port=5000, threads=os.cpu_count())
 
+        serve(server, host="0.0.0.0", port=5000, threads=os.cpu_count())

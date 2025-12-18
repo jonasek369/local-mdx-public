@@ -402,6 +402,13 @@
 
         // Fetches all the pages at once
         function full_load() {
+            fetch("/manga/read-status", {
+			        method: "POST",
+			        body: JSON.stringify({
+			            "cuuid": "{{ cuuid }}",
+			            "read_state": 1
+			        })
+			    });
             fetch("/page-images/{{cuuid}}")
                 .then(response => response.json())
                 .then(data => {

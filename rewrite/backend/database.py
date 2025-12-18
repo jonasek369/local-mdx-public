@@ -100,6 +100,12 @@ class Database:
             feed BLOB NOT NULL
         )""")
 
+        cursor.execute("""CREATE TABLE IF NOT EXISTS chapters_read (
+            muuid CHAR(36) NOT NULL,
+            cuuid CHAR(36) NOT NULL,
+            PRIMARY KEY(muuid, cuuid)
+        )""")
+
         cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_chapter_attributes_cuuid ON chapter_attributes(cuuid);
         """)
@@ -116,6 +122,39 @@ class Database:
         cursor.close()
         # Sqlite3 dose not like access from multiple threads so we use lock to make sure to only access one at time
         self.lock = threading.Lock()
+
+    def add_read_record(self, muuid, cuuid):
+        with self.lock:
+            cursor = self.conn.cursor()
+            cursor.execute("INSERT INTO chapters_read VALUES (:muuid, :cuuid)", {"muuid": muuid, "cuuid": cuuid})
+            self.conn.commit()
+
+    def remove_read_record(self, muuid, cuuid):
+        with self.lock:
+            cursor = self.conn.cursor()
+            cursor.execute("DELETE FROM chapters_read WHERE muuid=:muuid AND cuuid=:cuuid", {"muuid": muuid, "cuuid": cuuid})
+            self.conn.commit()
+            cursor.close()
+
+    def get_manga_read_chapters(self, muuid):
+        with self.lock:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT cuuid FROM chapters_read WHERE muuid=:muuid", {"muuid": muuid})
+            read = cursor.fetchall()
+            cursor.close()
+            if read:
+                return [i[0] for i in read]
+            return None
+
+    def get_chapter_read_status(self, cuuid):
+        with self.lock:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT cuuid FROM chapters_read WHERE cuuid=:cuuid", {"cuuid": cuuid})
+            read = cursor.fetchone()
+            cursor.close()
+            if read:
+                return read
+            return None
 
     @perf_test
     def get_chapter_attribute(self, identifier: ChapterIdentifier) -> Optional[ChapterAttributes]:

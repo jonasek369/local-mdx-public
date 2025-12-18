@@ -394,30 +394,28 @@
             queue.appendChild(emptyDiv);
         } else {
             Object.keys(data.queue).forEach((key, index) => {
-                const member = data.queue[key]
-
                 const EntryDiv = document.createElement("div");
                 EntryDiv.className = "row";
 
                 const EntryText = document.createElement("div");
                 EntryText.className = "cell cell-title";
-                EntryText.innerHTML = member["title"]
+                EntryText.innerHTML = data.queue[key]
 
                 const ActionsCell = document.createElement("div");
                 ActionsCell.className = "cell cell-actions";
 
                 const PushToTopButton = document.createElement("button");
                 PushToTopButton.className = "button button-small button-success";
-                PushToTopButton.innerHTML = "↓ Push to bottom";
+                PushToTopButton.innerHTML = "↑ Push to top";
                 PushToTopButton.addEventListener("click", function () {
-                    fetch("/manga/download/push-to-bot", {method: "POST", body: JSON.stringify({"index": index})});
+                    fetch("/manga/download/push-to-top", {method: "POST", body: JSON.stringify({"identifier": key})});
                 });
 
                 const RemoveButton = document.createElement("button");
                 RemoveButton.className = "button button-small button-danger";
                 RemoveButton.innerHTML = "Remove";
                 RemoveButton.addEventListener("click", function () {
-                    fetch("/manga/download/pop-job", {method: "POST", body: JSON.stringify({"index": index})});
+                    fetch("/manga/download/pop-job", {method: "POST", body: JSON.stringify({"identifier": key})});
                 });
 
                 ActionsCell.appendChild(PushToTopButton);
@@ -435,7 +433,6 @@
 		}
 
 
-
 		const divRow = document.createElement("div");
         divRow.className = "row";
 
@@ -445,19 +442,19 @@
 		statusDot.classList.remove('paused', 'rate-limited');
 
 
-		if (data.downloading === true) {
+		if (data.state === "DOWNLOADING") {
 		    stateText.innerHTML = "Downloading";
-		} else if (data.paused === true) {
-		    stateText.innerHTML = "Paused";
+		} else if (data.state === "Awaiting") {
+		    stateText.innerHTML = "Waiting";
 		    statusDot.classList.add('paused');
-		} else if (data.ratelimited === true) {
+		} else if (data.state === "RATELIMITED") {
 		    stateText.innerHTML = "Ratelimited";
 		    statusDot.classList.add('rate-limited');
 		} else {
 		    stateText.innerHTML = "Ready";
 		}
 
-        if(data.cwo == null){
+        if(data.currently_working_on == null){
             const emptyDiv = document.createElement("div");
             emptyDiv.className = "empty-state";
             emptyDiv.textContent = "No active downloads";
@@ -467,9 +464,9 @@
 		const a = document.createElement("div");
         a.className = "cell download-info"
 		a.id = "cwo"
-        let chapter_perc = Math.round((100 * data.cwo_chapters_downloaded) / data.cwo_chapters);
+        let chapter_perc = Math.round((100 * data.currently_working_on.chapter_status[0]) / data.currently_working_on.chapter_status[1]);
         a.innerHTML = `
-            <div class="download-title">${data.cwoTitle}</div>
+            <div class="download-title">${data.currently_working_on.title}</div>
             <div class="progress-container">
                 <div class="progress-bar">
                     <div class="progress-fill" style="width: ${chapter_perc}%"></div>
@@ -480,6 +477,7 @@
         divRow.appendChild(a);
         divUpdates.append(divRow);
 	}
+
 
 
 	const source = new EventSource("/manga/download/stream");
