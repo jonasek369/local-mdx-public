@@ -1,4 +1,5 @@
 import asyncio
+import json
 import time
 from dataclasses import asdict
 from typing import Optional, List
@@ -8,9 +9,9 @@ import aiohttp
 from rewrite.backend.connection import MangadexConnection, CredentialManager, MangaDownloader
 from rewrite.backend.database import Database
 from rewrite.backend.schemas import MangaIdentifier, ChapterIdentifier, ChapterList, MangaAttributes, \
-    ChapterAttributes, LatestChapter, MangaList, COVER_ART_MAX_SIZE, COVER_ART_512_SIZE
+    ChapterAttributes, LatestChapter, MangaList, COVER_ART_MAX_SIZE, COVER_ART_512_SIZE, from_json, Chapter
 from rewrite.backend.settings import load_settings, load_credentials
-from rewrite.backend.utils import perf_test, info, error
+from rewrite.backend.utils import perf_test, info, error, get_relationships
 
 
 # Taking inspiration from how android works utilizing repositories which take connection nad database
@@ -41,7 +42,7 @@ class MangaRepository:
         self.settings.logger.log(info, f"Saved {len(batch)} pages")
         del downloader.finished[muuid][cuuid]
 
-    def get_manga_attributes(self, identifier: MangaIdentifier) -> Optional[MangaAttributes]:
+    def get_manga_attributes(self, identifier: MangaIdentifier, local_only: bool=False) -> Optional[MangaAttributes]:
         cache_identifier = f"MA:{identifier}"
         cache_hit: tuple | None = self.cache.get(cache_identifier, None)
         if cache_hit:
@@ -49,11 +50,14 @@ class MangaRepository:
                 del self.cache[cache_identifier]
             else:
                 return cache_hit[0].attributes
-        manga = self.connection.get_manga(identifier)
-        if manga is not None:
-            self.database.set_manga_attributes(manga)
-            self.cache[cache_identifier] = (manga, time.time())
-            return manga.attributes
+        if not local_only:
+            manga = self.connection.get_manga(identifier)
+            if manga is not None:
+                self.database.set_manga_attributes(manga)
+                self.cache[cache_identifier] = (manga, time.time())
+                return manga.attributes
+        else:
+            manga = None
         db_manga = self.database.get_manga_attributes(identifier)
         if db_manga:
             return db_manga
@@ -106,10 +110,99 @@ class MangaRepository:
         return pages
 
     def get_next_prev(self, identifier: ChapterIdentifier):
+        """
+        This fucntion walks the aggregate provided from mangadex and gets next and prev chapter thanks to this
+        of manga has multiple chapters it will go to next one with the bonus of keeping the same scanlation group
+        if possible if not it will choose first one in the list `others`
+
+        if my implementation is right it should be exact same function as mangadex
+        """
+        _next, prev = None, None
         muuid = self.database.chapter_to_manga_identifier(identifier)
         feed = self.get_manga_feed(muuid, force_latest=False)
-        next_prev = self.database.get_next_prev(muuid, identifier, feed)
-        return next_prev
+        current_chapter_filtered = list(filter(lambda chapter: chapter.id == identifier, feed.data))
+        if not current_chapter_filtered:
+            return _next, prev
+        current_chapter: Chapter = current_chapter_filtered[0]
+        current_chapter_groups = get_relationships(current_chapter.relationships, "scanlation_group")
+        aggregate = self.connection.get_manga_aggregate(muuid, {
+            "groups[]": [group.id for group in current_chapter_groups],
+            "translatedLanguage[]": self.settings.translatedLanguage
+        })
+        volume, chapter = current_chapter.attributes.volume, current_chapter.attributes.chapter
+        volumes = aggregate["volumes"]
+
+        if volume not in volumes:
+            raise KeyError(f"Volume {volume} not found")
+        current_volume_chapters = volumes[volume]["chapters"]
+
+        if chapter not in current_volume_chapters:
+            raise KeyError(f"Chapter {chapter} not found in volume {volume}")
+        current_chapter_index = list(current_volume_chapters.keys()).index(chapter)
+
+        next_chapter_index = current_chapter_index - 1
+        if next_chapter_index >= 0:
+            next_chapter = current_volume_chapters[list(current_volume_chapters.keys())[next_chapter_index]]
+            if next_chapter["isUnavailable"] or not next_chapter["id"]:
+                if not next_chapter["others"]:
+                    _next = None
+                else:
+                    _next = next_chapter["others"][0]
+            else:
+                _next = next_chapter["id"]
+        else:
+            next_chapter_volume_index = list(volumes.keys()).index(volume) - 1
+            if next_chapter_volume_index < 0:
+                _next = None
+            else:
+                next_volume_chapters = volumes[list(volumes.keys())[next_chapter_volume_index]]["chapters"]
+                if len(next_volume_chapters) == 0:
+                    _next = None
+                else:
+                    next_chapter = next_volume_chapters[list(next_volume_chapters.keys())[-1]]
+                    if next_chapter["isUnavailable"] or not next_chapter["id"]:
+                        if not next_chapter["others"]:
+                            _next = None
+                        else:
+                            _next = next_chapter["others"][0]
+                    else:
+                        _next = next_chapter["id"]
+
+        prev_chapter_index = current_chapter_index + 1
+        if prev_chapter_index < len(current_volume_chapters):
+            prev_chapter = current_volume_chapters[list(current_volume_chapters.keys())[prev_chapter_index]]
+            if prev_chapter["isUnavailable"] or not prev_chapter["id"]:
+                if not prev_chapter["others"]:
+                    prev = None
+                else:
+                    prev = prev_chapter["others"][0]
+            else:
+                prev = prev_chapter["id"]
+        else:
+            prev_chapter_volume_index = list(volumes.keys()).index(volume) + 1
+            if prev_chapter_volume_index >= len(volumes):
+                prev = None
+            else:
+                prev_volume_chapters = volumes[list(volumes.keys())[prev_chapter_volume_index]]["chapters"]
+                if len(prev_volume_chapters) == 0:
+                    prev = None
+                else:
+                    prev_chapter = prev_volume_chapters[list(prev_volume_chapters.keys())[0]]
+                    if prev_chapter["isUnavailable"] or not prev_chapter["id"]:
+                        if not prev_chapter["others"]:
+                            prev = None
+                        else:
+                            prev = prev_chapter["others"][0]
+                    else:
+                        prev = prev_chapter["id"]
+
+
+        if not self.database.is_chapter_downloaded(_next):
+            _next = None
+        if not self.database.is_chapter_downloaded(prev):
+            prev = None
+
+        return _next, prev
 
     def get_manga_feed(self, identifier: MangaIdentifier, force_latest = False) -> ChapterList:
         if not force_latest:
@@ -121,19 +214,6 @@ class MangaRepository:
             self.database.set_manga_feed(identifier, feed)
         return feed
 
-
-    # @perf_test
-    # def popular_new_titles(self):
-    #     popular = self.connection.get_popular_new_titles()
-    #     for manga in popular.data:
-    #         for relationship in manga.relationships:
-    #             if relationship.type == "cover_art":
-    #                 coverurl = f"https://mangadex.org/covers/{manga.id}/" + relationship.attributes["fileName"]
-    #                 if not self.database.get_cover_art(manga.id):
-    #                     self.database.set_cover_art(manga.id, self.connection.safe_request("GET", coverurl).content)
-    #     if popular is None:
-    #         return popular
-    #     return asdict(popular)["data"]
 
     async def _fetch_and_store_cover(self, session, identifier: MangaIdentifier, coverurl: str) -> None:
         async with session.get(coverurl) as resp:

@@ -123,11 +123,24 @@ class Database:
         # Sqlite3 dose not like access from multiple threads so we use lock to make sure to only access one at time
         self.lock = threading.Lock()
 
+    def is_chapter_downloaded(self, cuuid):
+        with self.lock:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT page_number FROM chapter_page WHERE cuuid = :cuuid", {"cuuid": cuuid})
+            fetch = cursor.fetchall()
+            cursor.close()
+            if fetch:
+                return True
+            else:
+                return False
+
+
     def add_read_record(self, muuid, cuuid):
         with self.lock:
             cursor = self.conn.cursor()
             cursor.execute("INSERT INTO chapters_read VALUES (:muuid, :cuuid)", {"muuid": muuid, "cuuid": cuuid})
             self.conn.commit()
+            cursor.close()
 
     def remove_read_record(self, muuid, cuuid):
         with self.lock:

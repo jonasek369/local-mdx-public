@@ -249,6 +249,25 @@ def read_manga(chapteruuid, page):
                            ), 200
 
 
+def push_job_from_data(data: dict):
+    if "id" not in data:
+        return {"status": "error", "response": "id not in JSON body"}, 400
+
+    if not is_uuid4(data.get("id")):
+        return {"status": "error", "response": "invalid id"}, 400
+
+    repository.downloader.queue.put(
+        MangaDownloadJob(
+            data["id"],
+            repository.get_manga_attributes(data["id"]),
+            repository.get_chapter_list(data["id"]),
+            repository.database.get_manga_job(data["id"]),
+            repository.settings
+        )
+    )
+
+    return {"status": "success"}, 200
+
 @server.route("/manga/download/push-job", methods=["POST"])
 def push_job():
     try:
@@ -257,21 +276,22 @@ def push_job():
         repository.settings.logger.log(error, f"Caught exception while search! {e}")
         return {"status": "error", "response": "Invalid JSON body"}, 400
 
-    if "id" not in data:
-        return {"status": "error", "response": "id not in JSON body"}, 400
-    if not is_uuid4(data.get("id")):
-        return {"status": "error", "response": "invalid id"}, 400
+    return push_job_from_data(data)
 
-    repository.downloader.queue.put(
-        MangaDownloadJob(
-            data.get("id"),
-            repository.get_manga_attributes(data.get("id")),
-            repository.get_chapter_list(data.get("id")),
-            repository.database.get_manga_job(data.get("id")),
-            repository.settings
-        )
-    )
-    return {"status": "success"}
+@server.route("/manga/download/pop-job", methods=["POST"])
+def pop_job():
+    try:
+        data = request.get_json(force=True)
+    except Exception:
+        return {"status": "error", "response": "no JSON provided"}, 400
+    if "identifier" not in data:
+        return {"status": "error", "response": "Index not in JSON"}, 400
+    if not is_uuid4(data["identifier"]):
+        return {"status": "error", "response": "'identifier' is not valid uuid4"}
+
+    repository.downloader.queue.remove_job(data["identifier"])
+
+    return {"status": "success", "response": "popped job"}, 200
 
 
 @server.route("/manga/download/contains", methods=["POST"])
@@ -357,20 +377,6 @@ def push_to_top():
     return {"status": "success", "response": "pushed job to top"}, 200
 
 
-@server.route("/manga/download/pop-job", methods=["POST"])
-def pop_job():
-    try:
-        data = request.get_json(force=True)
-    except Exception:
-        return {"status": "error", "response": "no JSON provided"}, 400
-    if "identifier" not in data:
-        return {"status": "error", "response": "Index not in JSON"}, 400
-    if not is_uuid4(data["identifier"]):
-        return {"status": "error", "response": "'identifier' is not valid uuid4"}
-
-    repository.downloader.queue.remove_job(data["identifier"])
-
-    return {"status": "success", "response": "popped job"}, 200
 
 
 @server.route("/manga/library/data", methods=["GET"])
@@ -390,10 +396,24 @@ def library_data():
     repository.sync_libraries(list(to_send.keys()))
     return {"status": "success", "response": to_send}
 
+@server.route("/manga/library/update")
+def library_update():
+    mangas = repository.database.all_manga_in_db()
+    if not mangas:
+        return {"status": "error", "response": "No downloaded manga"}
+
+    for manga in mangas:
+        push_job_from_data({"id": manga[0]})
+
+    return {"status": "success", "response": "Mangas addded to downloaded queue"}, 200
+
+
+
 
 @server.route("/manga/library", methods=["GET"])
 def library():
     return render_template("library.html", darktheme=repository.settings.darkTheme)
+
 
 
 @server.route("/popular-new-titles", methods=["GET"])
@@ -485,10 +505,31 @@ def latest_updated_chapters():
     return chapters
 
 
+@server.route("/local-port")
+def local_port():
+    # test function that will "port" all mangas from saved to local
+    token = repository.credential_manager.token
+    if not repository.credential_manager.validate_token(token):
+        return {"status": "error", "response": "Invalid credentials"}, 403
+    port = repository.connection.get_followed_manga()
+    for manga in port.data:
+        repository.downloader.queue.put(
+            MangaDownloadJob(
+                manga.id,
+                repository.get_manga_attributes(manga.id),
+                repository.get_chapter_list(manga.id),
+                repository.database.get_manga_job(manga.id),
+                repository.settings
+            )
+        )
+
+        time.sleep(5)
+    return {"status": "ok"}, 200
+
 if __name__ == "__main__":
     use_actual_server = False
     if not use_actual_server:
-        server.run(threaded=True)
+        server.run(threaded=True, debug=True)
     else:
         from waitress import serve
 

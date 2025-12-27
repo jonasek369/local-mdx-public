@@ -6,11 +6,13 @@ import os
 import time
 import uuid
 from enum import Enum
-from typing import Dict, List, Union
+from typing import Dict, List, Union, Optional
 
 from PIL import Image
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+
+from rewrite.backend.schemas import Relationship
 
 
 def perf_test(func):
@@ -27,6 +29,16 @@ def perf_test(func):
         return result
 
     return wrapper
+
+def get_relationships(relationships: List[Relationship], relationship_type_to_find: str) -> Optional[List[Relationship]]:
+    # from https://api.mangadex.org/docs/3-enumerations/
+    allowed_types = {"manga", "chapter", "cover_art", "author", "artist", "scanlation_group", "tag", "user", "custom_list"}
+    if relationship_type_to_find not in allowed_types:
+        return None
+    found = list(filter(lambda relationship: relationship_type_to_find == relationship.type, relationships))
+    if not found:
+        return None
+    return found
 
 
 def normalize_language_input(data):

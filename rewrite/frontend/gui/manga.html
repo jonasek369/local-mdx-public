@@ -218,31 +218,67 @@
             gap: 12px;
         }
 
+        .chapter-group {
+            background-color: var(--md-surface);
+            border: 1px solid var(--md-border);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
         .chapter-item {
             display: flex;
             flex-direction: column;
             gap: 8px;
             padding: 16px 20px;
-            background-color: var(--md-surface);
-            border: 1px solid var(--md-border);
-            border-radius: 6px;
             cursor: pointer;
             transition: all 0.2s ease;
+            border-bottom: 1px solid var(--md-border);
+        }
+
+        .chapter-item:last-child {
+            border-bottom: none;
         }
 
         .chapter-item:hover {
             background-color: var(--md-surface-hover);
-            border-color: var(--md-accent);
             transform: translateX(4px);
         }
 
         .chapter-item.read {
             opacity: 0.5;
-            background-color: var(--md-bg);
         }
 
         .chapter-item.read:hover {
             opacity: 0.7;
+        }
+
+        .chapter-item.grouped {
+            background-color: var(--md-bg);
+        }
+
+        .chapter-item.grouped:hover {
+            background-color: var(--md-surface-hover);
+        }
+
+        .chapter-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            background-color: var(--md-surface);
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .chapter-header:hover {
+            background-color: var(--md-surface-hover);
+        }
+
+        .chapter-header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
         }
 
         .chapter-main {
@@ -257,6 +293,38 @@
             color: var(--md-text);
             font-size: 15px;
             font-weight: 500;
+        }
+
+        .chapter-count {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--md-accent);
+            color: white;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 12px;
+            min-width: 24px;
+        }
+
+        .expand-icon {
+            color: var(--md-text-secondary);
+            font-size: 18px;
+            transition: transform 0.3s ease;
+        }
+
+        .expand-icon.expanded {
+            transform: rotate(180deg);
+        }
+
+        .chapter-versions {
+            display: none;
+            border-top: 1px solid var(--md-border);
+        }
+
+        .chapter-versions.expanded {
+            display: block;
         }
 
         .chapter-meta {
@@ -518,10 +586,87 @@
         window.location.href = "/read/" + chapterId;
     }
 
-    fetch("/manga/{{muuid}}/info").then(response => response.json())/*.then(data => sortVolumesDescending(data))*/.then(data => {
-        var contdiv = document.getElementById("content");
+    function toggleChapterGroup(groupKey) {
+        const versionsDiv = document.getElementById(`versions-${groupKey}`);
+        const expandIcon = document.getElementById(`expand-${groupKey}`);
 
-        // Clear loading state
+        versionsDiv.classList.toggle('expanded');
+        expandIcon.classList.toggle('expanded');
+    }
+
+    function groupChapters(chapters) {
+        const grouped = {};
+
+        chapters.forEach(chapter => {
+            const key = `v${chapter.volume}-c${chapter.chapter}`;
+            if (!grouped[key]) {
+                grouped[key] = [];
+            }
+            grouped[key].push(chapter);
+        });
+
+        return grouped;
+    }
+
+    function createChapterItem(chapter, isGrouped = false) {
+        const chapterDiv = document.createElement("div");
+        chapterDiv.className = "chapter-item" + (isGrouped ? " grouped" : "");
+        chapterDiv.onclick = function() { navigateToChapter(chapter.identifier); };
+
+        let titleText = "Volume " + chapter.volume + " Chapter " + chapter.chapter;
+        if (chapter.title) {
+            titleText += " - " + chapter.title;
+        }
+
+        const user = chapter.user?.username || "Unknown User";
+        const user_id = chapter.user?.id;
+        const scanlationGroup = chapter.scanlation_group?.name || "Unknown Group";
+        const group_id = chapter.scanlation_group?.id;
+        const read_status = chapter.read_status;
+
+        chapterDiv.innerHTML = `
+            <div class="chapter-main">
+                <div class="chapter-viewed-status">${read_status ? svg_crossed_eye : svg_eye}</div>
+                <div class="chapter-title">${titleText}</div>
+                <div class="chapter-meta">
+                    <div class="meta-item">
+                        <span class="meta-icon">👤</span>
+                        <a href="https://mangadex.org/user/${user_id}" class="meta-link">${user}</a>
+                    </div>
+                    <div class="meta-divider"></div>
+                    <div class="meta-item">
+                        <span class="meta-icon">👥</span>
+                        <a href="https://mangadex.org/group/${group_id}" class="meta-link">${scanlationGroup}</a>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const statusIcon = chapterDiv.querySelector('.chapter-viewed-status');
+        statusIcon.dataset.read = read_status ? "true" : "false";
+
+        statusIcon.addEventListener('click', (event) => {
+            const isRead = statusIcon.dataset.read === "true";
+            statusIcon.dataset.read = (!isRead).toString();
+            statusIcon.innerHTML = !isRead ? svg_crossed_eye : svg_eye;
+
+            fetch("/manga/read-status", {
+                method: "POST",
+                body: JSON.stringify({
+                    "cuuid": chapter.identifier,
+                    "read_state": !isRead
+                })
+            });
+
+            event.stopPropagation();
+        });
+
+        return chapterDiv;
+    }
+
+    fetch("/manga/{{muuid}}/info").then(response => response.json()).then(data => {
+        const contdiv = document.getElementById("content");
+
         while (contdiv.firstChild) {
             contdiv.removeChild(contdiv.firstChild);
         }
@@ -537,76 +682,48 @@
             return;
         }
 
-        data.forEach(chapter => {
-            var chapterDiv = document.createElement("div");
-            chapterDiv.className = "chapter-item";
-            chapterDiv.onclick = function() { navigateToChapter(chapter.identifier); };
+        const grouped = groupChapters(data);
 
-            // Build chapter title text
-            var titleText = "Volume " + chapter.volume + " Chapter " + chapter.chapter;
-            if (chapter.title) {
-                titleText += " - " + chapter.title;
+        Object.entries(grouped).forEach(([key, chapters]) => {
+            if (chapters.length === 1) {
+                contdiv.appendChild(createChapterItem(chapters[0]));
+            } else {
+                const groupDiv = document.createElement("div");
+                groupDiv.className = "chapter-group";
+
+                const firstChapter = chapters[0];
+                let titleText = "Volume " + firstChapter.volume + " Chapter " + firstChapter.chapter;
+
+                const headerDiv = document.createElement("div");
+                headerDiv.className = "chapter-header";
+                headerDiv.onclick = function() { toggleChapterGroup(key); };
+
+                headerDiv.innerHTML = `
+                    <div class="chapter-header-left">
+                        <div class="chapter-title">${titleText}</div>
+                        <span class="chapter-count">${chapters.length}</span>
+                    </div>
+                    <span class="expand-icon" id="expand-${key}">▼</span>
+                `;
+
+                const versionsDiv = document.createElement("div");
+                versionsDiv.className = "chapter-versions";
+                versionsDiv.id = `versions-${key}`;
+
+                chapters.forEach(chapter => {
+                    versionsDiv.appendChild(createChapterItem(chapter, true));
+                });
+
+                groupDiv.appendChild(headerDiv);
+                groupDiv.appendChild(versionsDiv);
+                contdiv.appendChild(groupDiv);
             }
+        });
 
-            // Get user and scanlation group (with fallback to placeholders)
-            var user = chapter.user?.username || "Unknown User";
-            var user_id = chapter.user?.id
-            var scanlationGroup = chapter.scanlation_group?.name|| "Unknown Group";
-            var group_id = chapter.scanlation_group?.id
+        check_queue();
+    });
 
-			let read_status = chapter.read_status
-
-			chapterDiv.innerHTML = `
-			    <div class="chapter-main">
-			    	<div class="chapter-viewed-status">${read_status ? svg_crossed_eye : svg_eye}</div>
-			        <div class="chapter-title">${titleText}</div>
-			        <div class="chapter-meta">
-			            <div class="meta-item">
-			                <span class="meta-icon">👤</span>
-			                <a href="https://mangadex.org/user/${user_id}" class="meta-link">${user}</a>
-			            </div>
-			            <div class="meta-divider"></div>
-			            <div class="meta-item">
-			                <span class="meta-icon">👥</span>
-			                <a href="https://mangadex.org/group/${group_id}" class="meta-link">${scanlationGroup}</a>
-			            </div>
-			        </div>
-			    </div>
-			`;
-
-
-			const statusIcon = chapterDiv.querySelector('.chapter-viewed-status');
-
-			statusIcon.dataset.read = read_status ? "true" : "false";
-
-			statusIcon.addEventListener('click', (event) => {
-			    const isRead = statusIcon.dataset.read === "true";
-
-			    // flip state
-			    statusIcon.dataset.read = (!isRead).toString();
-
-			    // update icon according to new state
-			    statusIcon.innerHTML = !isRead ? svg_crossed_eye : svg_eye;
-
-			    // send fetch
-			    fetch("/manga/read-status", {
-			        method: "POST",
-			        body: JSON.stringify({
-			            "cuuid": chapter.identifier,
-			            "read_state": !isRead
-			        })
-			    });
-
-			    event.stopPropagation(); // prevent parent click
-			});
-
-            // Append to container
-            contdiv.appendChild(chapterDiv);
-        })
-
-        check_queue()
-    })
-	check_queue()
+	check_queue();
     function check_queue() {
         fetch("/manga/download/contains", {
             method: "POST",
@@ -625,45 +742,12 @@
         })
     }
 
-    function sortVolumesDescending(dictionary) {
-        // Convert the dictionary into an array of objects
-        const array = Object.entries(dictionary).map(([id, value]) => ({
-            id: id,
-            ...value
-        }));
-
-        // Sort the array in descending order based on volumes and chapters
-        array.sort((a, b) => {
-            if (a.volume === b.volume) {
-                const chapterA = parseFloat(a.chapter);
-                const chapterB = parseFloat(b.chapter);
-                return chapterB - chapterA;
-            } else {
-                return b.volume - a.volume;
-            }
-        });
-
-        var sorted_dictionary = {}
-        array.forEach(element => {
-            sorted_dictionary[element.id] = {
-                "chapter": element.chapter,
-                "volume": element.volume,
-                "title": element.title,
-                "user": element.user,
-                "scanlation_group": element.scanlation_group
-            }
-        })
-
-        return sorted_dictionary;
-    }
-
     function reverse_div() {
         const orderButton = document.getElementById("order");
         const contdiv = document.getElementById("content");
         const items = Array.from(contdiv.children);
 
         items.reverse();
-
         items.forEach(item => contdiv.appendChild(item));
 
         if (orderButton.innerText.includes("Descending")) {
@@ -673,7 +757,6 @@
         }
     }
 
-    // Close modal when clicking outside
     document.getElementById('warningModal').addEventListener('click', function (event) {
         if (event.target === this) {
             hideDeleteWarning();

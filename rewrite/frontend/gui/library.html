@@ -435,6 +435,11 @@
         setView(savedView);
     }
 
+
+    function updateLibrary(){
+        fetch("/manga/library/update")
+	}
+
     fetch("/manga/library/data")
         .then(response => response.json())
         .then(data => set_library(data.response))

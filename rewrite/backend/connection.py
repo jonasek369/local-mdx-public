@@ -19,8 +19,9 @@ from rewrite.backend.settings import Settings, MangadexCredentials
 from datetime import datetime
 
 from rewrite.backend.utils import error, info, warning, perf_test, get_correct_language, \
-    Logger, run_async
+    Logger, run_async, success
 import aiohttp
+
 
 
 class DownloaderState(Enum):
@@ -61,7 +62,7 @@ class MangaDownloadJob:
         self.downloaded = False
         self.chapter_info = chapter_list
         self.database_info = database_info
-        if self.chapter_info.data is not None:
+        if self.chapter_info is not None and self.chapter_info.data is not None:
             self.title = get_correct_language(manga_attribute.title, manga_attribute.altTitles, settings)
         else:
             self.title = None
@@ -95,30 +96,30 @@ async def async_get_chapter_page(
         identifier,
         db_pages: Sequence,
         logger: Logger,
-        rate_limit_callback: Optional[Callable[[float], bool]] = None,
         can_continue_download: Optional[Callable[[], bool]] = None,
         page_download_cb: Optional[Callable] = None
-) -> Optional[MangaDownload]:
+) -> Tuple[Optional[MangaDownload], bool]:
     """
     Async version of threaded_get_chapter_page.
     If rate_limit_callback returns False, retries after waiting.
     """
 
     async with aiohttp.ClientSession() as session:
+        was_rate_limited = False
         async with session.get(f"https://api.mangadex.org/at-home/server/{identifier}") as metadata:
-            remaining = metadata.headers.get("X-RateLimit-Remaining", "1")
-            retry_after = metadata.headers.get("X-RateLimit-Retry-After", "1")
+            if "X-RateLimit-Remaining" not in metadata.headers:
+                logger.log(error, "Metadata do not contain X-RateLimit-Remaining")
+                return None, was_rate_limited
+            remaining = metadata.headers["X-RateLimit-Remaining"]
+            retry_after = metadata.headers["X-RateLimit-Retry-After"]
             logger.log(info, f"RateLimit Rem. {remaining}. RateLimit after {retry_after}")
 
             if int(remaining) <= 0:
-                wait_time = float(retry_after) - time.time()
-                if rate_limit_callback and rate_limit_callback(wait_time):
-                    return None
-                else:
-                    logger.log(warning, f"Rate limited, retrying after {wait_time}s...")
-                    await asyncio.sleep(wait_time)
-                    return await async_get_chapter_page(identifier, db_pages, logger,
-                                                        rate_limit_callback, can_continue_download, page_download_cb)
+                was_rate_limited = True
+                wait_time = (float(retry_after) - time.time()) + 5
+                logger.log(warning, f"Rate limited, retrying after {wait_time}s...")
+                await asyncio.sleep(wait_time)
+                return None, was_rate_limited
 
             metadata_json = await metadata.json()
         try:
@@ -127,9 +128,12 @@ async def async_get_chapter_page(
             pages = len(metadata_json["chapter"]["data"])
         except KeyError as e:
             logger.log(error, f"KeyError {e}: {metadata_json}")
+            return None, was_rate_limited
         manga_download = MangaDownload(int(pages), [])
 
-        sem = asyncio.Semaphore(min(max(pages, 4), os.cpu_count() or 4))
+        # when using "asyncio.Semaphore(min(max(pages, 4), os.cpu_count() or 4))" some at-home server time us out for
+        # too many request
+        sem = asyncio.Semaphore(min(max(pages, 1), 8))
 
         downloaded_pages = []
 
@@ -167,26 +171,31 @@ async def async_get_chapter_page(
         for i in sorted(downloaded_pages, key=lambda x: x[0]):
             manga_download.data.append(i[1])
 
-        return manga_download
-
-
-class Empty(Exception):
-    pass
+        return manga_download, was_rate_limited
 
 
 class JobsQueue:
-    def __init__(self):
+    def __init__(self, settings):
         self.queue: Deque[MangaDownloadJob] = deque()
         self.condition = threading.Condition()
+        self.logger = settings.logger
+
+    def len(self):
+        with self.condition:
+            return len(self.queue)
 
     def snapshot(self) -> List[MangaDownloadJob]:
         with self.condition:
             return list(self.queue)
 
     def put(self, job: MangaDownloadJob):
-        for job_in_queue in self.queue:
+        snapshot = self.snapshot()
+
+        for job_in_queue in snapshot:
             if job_in_queue.identifier == job.identifier:
+                self.logger.log(warning, "Trying to add job duplicate!")
                 return
+
         with self.condition:
             self.queue.append(job)
             self.condition.notify()
@@ -220,7 +229,7 @@ class MangaDownloader:
         self.stop_event = threading.Event()
         # Should be only called on the end
         self.exit_event = threading.Event()
-        self.queue = JobsQueue()
+        self.queue = JobsQueue(settings)
         self.finished = {}
         self.currently_working_on: Optional[dict] = None
         self.speed = "NORMAL"
@@ -253,7 +262,7 @@ class MangaDownloader:
         return False
 
     def can_continue_downloading(self):
-        return self.state != DownloaderState.Off
+        return self.state != DownloaderState.Off or self.state != DownloaderState.Ratelimited
 
     def __loop(self):
         while not self.exit_event.is_set():  # Outer loop checks exit_event
@@ -290,14 +299,27 @@ class MangaDownloader:
                     pass
 
                 pages_in_db = job.database_info.pages_in_db.get(chapter.id, [])
-                downloaded_data = run_async(async_get_chapter_page,
-                                            chapter.id,
-                                            pages_in_db,
-                                            self.logger,
-                                            None,
-                                            self.can_continue_downloading,
-                                            None
-                                            )
+
+                MAX_RETRIES = 3
+
+                downloaded_data = None
+                was_rate_limited = False
+
+                for attempt in range(1, MAX_RETRIES + 1):
+                    downloaded_data, was_rate_limited = run_async(
+                        async_get_chapter_page,
+                        chapter.id,
+                        pages_in_db,
+                        self.logger,
+                        self.can_continue_downloading,
+                        None,
+                    )
+
+                    if downloaded_data is not None:
+                        break
+
+                if downloaded_data is None:
+                    continue
 
                 if job.identifier not in self.finished:
                     self.finished[job.identifier] = {}
@@ -530,6 +552,20 @@ class MangadexConnection:
             direct_manga = from_json(DirectSearchManga, query).data
             self.cache_cover_art_filename(direct_manga)
             return direct_manga
+        except AttributeError:
+            return None
+
+    def get_manga_aggregate(self, identifier: MangaIdentifier, params) -> Optional[dict]:
+        req = self.safe_request("GET", f"{self.API}/manga/{identifier}/aggregate", params=params, default_parameters=False)
+        if req and req.status_code != 200:
+            return None
+
+        query = req.json()
+
+        if query["result"] != "ok":
+            return None
+        try:
+            return query # TODO: Add scheme if needed
         except AttributeError:
             return None
 
