@@ -9,7 +9,7 @@ import aiohttp
 from rewrite.backend.connection import MangadexConnection, CredentialManager, MangaDownloader
 from rewrite.backend.database import Database
 from rewrite.backend.schemas import MangaIdentifier, ChapterIdentifier, ChapterList, MangaAttributes, \
-    ChapterAttributes, LatestChapter, MangaList, COVER_ART_MAX_SIZE, COVER_ART_512_SIZE, from_json, Chapter
+    ChapterAttributes, LatestChapter, MangaList, COVER_ART_MAX_SIZE, COVER_ART_512_SIZE, from_json, Chapter, Manga
 from rewrite.backend.settings import load_settings, load_credentials
 from rewrite.backend.utils import perf_test, info, error, get_relationships
 
@@ -28,8 +28,6 @@ class MangaRepository:
         self.connection = MangadexConnection(self.settings, self.credential_manager)
         self.downloader = MangaDownloader(self.settings)
 
-        self.cache = {}
-
     def store_downloaded_pages(self, muuid: MangaIdentifier, cuuid: ChapterIdentifier, downloader: MangaDownloader):
         chapter = self.database.get_chapter_attribute(cuuid)
         if not chapter:
@@ -42,22 +40,12 @@ class MangaRepository:
         self.settings.logger.log(info, f"Saved {len(batch)} pages")
         del downloader.finished[muuid][cuuid]
 
-    def get_manga_attributes(self, identifier: MangaIdentifier, local_only: bool=False) -> Optional[MangaAttributes]:
-        cache_identifier = f"MA:{identifier}"
-        cache_hit: tuple | None = self.cache.get(cache_identifier, None)
-        if cache_hit:
-            if (time.time() - cache_hit[1]) > 600:
-                del self.cache[cache_identifier]
-            else:
-                return cache_hit[0].attributes
+    def get_manga_attributes(self, identifier: MangaIdentifier, local_only: bool = False) -> Optional[MangaAttributes]:
         if not local_only:
             manga = self.connection.get_manga(identifier)
             if manga is not None:
                 self.database.set_manga_attributes(manga)
-                self.cache[cache_identifier] = (manga, time.time())
                 return manga.attributes
-        else:
-            manga = None
         db_manga = self.database.get_manga_attributes(identifier)
         if db_manga:
             return db_manga
@@ -71,7 +59,6 @@ class MangaRepository:
         raise NotImplemented("Error. Offline usage of get_chapter_list is not Implemented!")
 
     def get_cover_art(self, identifier: MangaIdentifier, size: int, size_any=False) -> Optional[bytes]:
-        # Cache here is useless because user caches it inside the browser
         cover_art = self.database.get_cover_art(identifier, size=size, size_any=size_any)
         if not cover_art:
             fetch_cover_art = self.connection.get_cover_art(identifier, size=size)
@@ -109,6 +96,57 @@ class MangaRepository:
         pages = self.database.get_pages(identifier)
         return pages
 
+    @staticmethod
+    def resolve_chapter_id(chapter):
+        if chapter["isUnavailable"] or not chapter["id"]:
+            return chapter["others"][0] if chapter["others"] else None
+        return chapter["id"]
+
+    @staticmethod
+    def get_adjacent_chapter_id(
+            *,
+            volumes,
+            volume,
+            current_volume_chapters,
+            current_chapter_index,
+            direction
+    ):
+        """
+        MangaDex aggregate chapters are sorted in descending order.
+        Index 0 = highest chapter in volume.
+        direction:
+            -1 -> next chapter
+             1 -> previous chapter
+        """
+        if direction not in (-1, 1) or not isinstance(direction, int):
+            raise Exception("Only 1 and -1 is supported as an direction. -1 -> next. 1 -> prev")
+
+        keys = list(current_volume_chapters.keys())
+        target_index = current_chapter_index + direction
+
+        if 0 <= target_index < len(keys):
+            chapter = current_volume_chapters[keys[target_index]]
+            return MangaRepository.resolve_chapter_id(chapter)
+
+        volume_keys = list(volumes.keys())
+        volume_index = volume_keys.index(volume) + direction
+
+        if volume_index < 0 or volume_index >= len(volume_keys):
+            return None
+
+        adjacent_volume_chapters = volumes[volume_keys[volume_index]]["chapters"]
+        if not adjacent_volume_chapters:
+            return None
+
+        chapter_keys = list(adjacent_volume_chapters.keys())
+        chapter = (
+            adjacent_volume_chapters[chapter_keys[-1]]
+            if direction == -1
+            else adjacent_volume_chapters[chapter_keys[0]]
+        )
+
+        return MangaRepository.resolve_chapter_id(chapter)
+
     def get_next_prev(self, identifier: ChapterIdentifier):
         """
         This fucntion walks the aggregate provided from mangadex and gets next and prev chapter thanks to this
@@ -120,7 +158,7 @@ class MangaRepository:
         _next, prev = None, None
         muuid = self.database.chapter_to_manga_identifier(identifier)
         feed = self.get_manga_feed(muuid, force_latest=False)
-        current_chapter_filtered = list(filter(lambda chapter: chapter.id == identifier, feed.data))
+        current_chapter_filtered = list(filter(lambda chap: chap.id == identifier, feed.data))
         if not current_chapter_filtered:
             return _next, prev
         current_chapter: Chapter = current_chapter_filtered[0]
@@ -129,9 +167,12 @@ class MangaRepository:
             "groups[]": [group.id for group in current_chapter_groups],
             "translatedLanguage[]": self.settings.translatedLanguage
         })
+        start = time.perf_counter()
         volume, chapter = current_chapter.attributes.volume, current_chapter.attributes.chapter
         volumes = aggregate["volumes"]
-
+        # if no volume is set mangadex expects string 'none' not json null
+        if volume is None:
+            volume = "none"
         if volume not in volumes:
             raise KeyError(f"Volume {volume} not found")
         current_volume_chapters = volumes[volume]["chapters"]
@@ -140,71 +181,34 @@ class MangaRepository:
             raise KeyError(f"Chapter {chapter} not found in volume {volume}")
         current_chapter_index = list(current_volume_chapters.keys()).index(chapter)
 
-        next_chapter_index = current_chapter_index - 1
-        if next_chapter_index >= 0:
-            next_chapter = current_volume_chapters[list(current_volume_chapters.keys())[next_chapter_index]]
-            if next_chapter["isUnavailable"] or not next_chapter["id"]:
-                if not next_chapter["others"]:
-                    _next = None
-                else:
-                    _next = next_chapter["others"][0]
-            else:
-                _next = next_chapter["id"]
-        else:
-            next_chapter_volume_index = list(volumes.keys()).index(volume) - 1
-            if next_chapter_volume_index < 0:
-                _next = None
-            else:
-                next_volume_chapters = volumes[list(volumes.keys())[next_chapter_volume_index]]["chapters"]
-                if len(next_volume_chapters) == 0:
-                    _next = None
-                else:
-                    next_chapter = next_volume_chapters[list(next_volume_chapters.keys())[-1]]
-                    if next_chapter["isUnavailable"] or not next_chapter["id"]:
-                        if not next_chapter["others"]:
-                            _next = None
-                        else:
-                            _next = next_chapter["others"][0]
-                    else:
-                        _next = next_chapter["id"]
 
-        prev_chapter_index = current_chapter_index + 1
-        if prev_chapter_index < len(current_volume_chapters):
-            prev_chapter = current_volume_chapters[list(current_volume_chapters.keys())[prev_chapter_index]]
-            if prev_chapter["isUnavailable"] or not prev_chapter["id"]:
-                if not prev_chapter["others"]:
-                    prev = None
-                else:
-                    prev = prev_chapter["others"][0]
-            else:
-                prev = prev_chapter["id"]
-        else:
-            prev_chapter_volume_index = list(volumes.keys()).index(volume) + 1
-            if prev_chapter_volume_index >= len(volumes):
-                prev = None
-            else:
-                prev_volume_chapters = volumes[list(volumes.keys())[prev_chapter_volume_index]]["chapters"]
-                if len(prev_volume_chapters) == 0:
-                    prev = None
-                else:
-                    prev_chapter = prev_volume_chapters[list(prev_volume_chapters.keys())[0]]
-                    if prev_chapter["isUnavailable"] or not prev_chapter["id"]:
-                        if not prev_chapter["others"]:
-                            prev = None
-                        else:
-                            prev = prev_chapter["others"][0]
-                    else:
-                        prev = prev_chapter["id"]
+        _next = self.get_adjacent_chapter_id(
+            volumes=volumes,
+            volume=volume,
+            current_volume_chapters=current_volume_chapters,
+            current_chapter_index=current_chapter_index,
+            direction=-1
+        )
 
+        prev = self.get_adjacent_chapter_id(
+            volumes=volumes,
+            volume=volume,
+            current_volume_chapters=current_volume_chapters,
+            current_chapter_index=current_chapter_index,
+            direction=1
+        )
 
         if not self.database.is_chapter_downloaded(_next):
             _next = None
         if not self.database.is_chapter_downloaded(prev):
             prev = None
 
+        end = time.perf_counter()
+        print(f"Local next-prev took {end-start}seconds")
+
         return _next, prev
 
-    def get_manga_feed(self, identifier: MangaIdentifier, force_latest = False) -> ChapterList:
+    def get_manga_feed(self, identifier: MangaIdentifier, force_latest=False) -> ChapterList:
         if not force_latest:
             feed = self.database.get_manga_feed(identifier)
             if feed is not None:
@@ -213,7 +217,6 @@ class MangaRepository:
         if feed is not None:
             self.database.set_manga_feed(identifier, feed)
         return feed
-
 
     async def _fetch_and_store_cover(self, session, identifier: MangaIdentifier, coverurl: str) -> None:
         async with session.get(coverurl) as resp:

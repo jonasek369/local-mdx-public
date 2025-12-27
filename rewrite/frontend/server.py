@@ -1,7 +1,16 @@
+try:
+    import os
+    from pathlib import Path
+
+    # Ensure all files (database, settings, etc.) are created in the folder containing server.py
+    os.chdir(Path(__file__).parent)
+except Exception as e:
+    print("Could not set dir to files parent")
+    exit(1)
+
 import asyncio
 import base64
 import json
-import os
 import time
 from dataclasses import asdict
 
@@ -268,6 +277,7 @@ def push_job_from_data(data: dict):
 
     return {"status": "success"}, 200
 
+
 @server.route("/manga/download/push-job", methods=["POST"])
 def push_job():
     try:
@@ -277,6 +287,7 @@ def push_job():
         return {"status": "error", "response": "Invalid JSON body"}, 400
 
     return push_job_from_data(data)
+
 
 @server.route("/manga/download/pop-job", methods=["POST"])
 def pop_job():
@@ -377,8 +388,6 @@ def push_to_top():
     return {"status": "success", "response": "pushed job to top"}, 200
 
 
-
-
 @server.route("/manga/library/data", methods=["GET"])
 def library_data():
     to_send = {}
@@ -396,6 +405,7 @@ def library_data():
     repository.sync_libraries(list(to_send.keys()))
     return {"status": "success", "response": to_send}
 
+
 @server.route("/manga/library/update")
 def library_update():
     mangas = repository.database.all_manga_in_db()
@@ -408,12 +418,9 @@ def library_update():
     return {"status": "success", "response": "Mangas addded to downloaded queue"}, 200
 
 
-
-
 @server.route("/manga/library", methods=["GET"])
 def library():
     return render_template("library.html", darktheme=repository.settings.darkTheme)
-
 
 
 @server.route("/popular-new-titles", methods=["GET"])
@@ -526,11 +533,18 @@ def local_port():
         time.sleep(5)
     return {"status": "ok"}, 200
 
-if __name__ == "__main__":
-    use_actual_server = False
-    if not use_actual_server:
-        server.run(threaded=True, debug=True)
-    else:
-        from waitress import serve
 
-        serve(server, host="0.0.0.0", port=5000, threads=os.cpu_count())
+if __name__ == "__main__":
+    use_actual_server = True
+    try:
+        if not use_actual_server:
+                server.run(threaded=True)
+
+        else:
+            from waitress import serve
+
+            serve(server, host="0.0.0.0", port=5000, threads=os.cpu_count())
+    finally:
+        # Wakeup and exit thread
+        repository.downloader.exit()
+        repository.downloader.queue.put(None)

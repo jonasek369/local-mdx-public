@@ -1,7 +1,6 @@
 import asyncio
 import json
 import os
-import queue
 import threading
 import time
 from collections import deque
@@ -19,9 +18,12 @@ from rewrite.backend.settings import Settings, MangadexCredentials
 from datetime import datetime
 
 from rewrite.backend.utils import error, info, warning, perf_test, get_correct_language, \
-    Logger, run_async, success
+    Logger, run_async, is_expired, success
 import aiohttp
 
+CACHE_AGGREGATE_TTL        = 60 * 5
+CACHE_COVER_ART_TTL        = 60 * 10
+CACHE_MANGA_ATTRIBUTES_TTL = 60 * 2
 
 
 class DownloaderState(Enum):
@@ -277,6 +279,9 @@ class MangaDownloader:
 
             self.state = DownloaderState.Awaiting
             job = self.queue.pop()
+            if self.exit_event.is_set() or self.stop_event.is_set():
+                # the thread was waiting for object att it either got a job or None was sent to wakeup
+                continue
             self.state = DownloaderState.Downloading
             self.currently_working_on = job.to_cwo()
 
@@ -476,7 +481,14 @@ class MangadexConnection:
         self.logger = settings.logger
         self.credentials_manager = credentials_manager
 
-        self.cover_file_name_cache = {}
+        self.cover_file_name_cache  = {}
+        self.manga_aggregate_cache  = {}
+        self.manga_attributes_cache = {}
+
+    def clear_caches(self):
+        self.cover_file_name_cache.clear()
+        self.manga_aggregate_cache.clear()
+        self.manga_attributes_cache.clear()
 
     def safe_request(self, method: str, url: str, params=None, headers=None, _json=None, default_parameters=True,
                      default_parameter_exclude: List[str] = None) -> Optional[requests.Response]:
@@ -502,12 +514,15 @@ class MangadexConnection:
             self.logger.log(error, f"An error occurred: {e}")
             return None
 
-    def cache_cover_art_from_relationships(self, identifier: MangaIdentifier, relationships: [Relationship]):
+    def cache_cover_art_from_relationships(self, identifier: str, relationships: [Relationship]):
         for relationship in relationships:
             if relationship.type == "cover_art" and relationship.attributes is not None:
                 if identifier not in self.cover_file_name_cache:
                     self.logger.log(info, f"Caching cover art filename for {identifier}")
-                    self.cover_file_name_cache[identifier] = relationship.attributes["fileName"]
+                    self.cover_file_name_cache[identifier] = {
+                        "timestamp": time.time(),
+                        "data": relationship.attributes["fileName"]
+                    }
 
     # most queries that revolve around manga has cover_art filename saving us 1 mangadex api request
     def cache_cover_art_filename(self, manga_object: Any):
@@ -539,6 +554,12 @@ class MangadexConnection:
             return None
 
     def get_manga(self, identifier: MangaIdentifier) -> Optional[Manga]:
+        if identifier in self.manga_attributes_cache:
+            if is_expired(self.manga_attributes_cache[identifier]["timestamp"], CACHE_MANGA_ATTRIBUTES_TTL):
+                del self.manga_attributes_cache[identifier]
+            else:
+                return self.manga_attributes_cache[identifier]["data"]
+
         req = self.safe_request("GET", f"{self.API}/manga/{identifier}", params={"includes[]": ["cover_art"]})
 
         if req and req.status_code != 200:
@@ -551,12 +572,24 @@ class MangadexConnection:
         try:
             direct_manga = from_json(DirectSearchManga, query).data
             self.cache_cover_art_filename(direct_manga)
+            self.manga_attributes_cache[identifier] = {"timestamp": time.time(), "data": direct_manga}
             return direct_manga
         except AttributeError:
             return None
 
     def get_manga_aggregate(self, identifier: MangaIdentifier, params) -> Optional[dict]:
-        req = self.safe_request("GET", f"{self.API}/manga/{identifier}/aggregate", params=params, default_parameters=False)
+        # Using dict cache because if were reading manga from one group for extended time
+        # all the aggregates are same and do not change. Caching makes sense
+        groups = ",".join(sorted(params.get("groups[]", [])))
+        langs = ",".join(sorted(params.get("translatedLanguage[]", [])))
+        cache_key = f"{groups}:{langs}:{identifier}"
+        if cache_key in self.manga_aggregate_cache:
+            if is_expired(self.manga_aggregate_cache[cache_key]["timestamp"], CACHE_AGGREGATE_TTL):
+                del self.manga_aggregate_cache[cache_key]
+            else:
+                return self.manga_aggregate_cache[cache_key]["data"]
+        req = self.safe_request("GET", f"{self.API}/manga/{identifier}/aggregate", params=params,
+                                default_parameters=False)
         if req and req.status_code != 200:
             return None
 
@@ -565,12 +598,13 @@ class MangadexConnection:
         if query["result"] != "ok":
             return None
         try:
-            return query # TODO: Add scheme if needed
+            self.manga_aggregate_cache[cache_key] = {"timestamp": time.time(), "data": query}
+            return query  # TODO: Add scheme if needed
         except AttributeError:
             return None
 
     @perf_test
-    def get_cover_art(self, identifier: MangaIdentifier, size=COVER_ART_MAX_SIZE) -> Optional[bytes]:
+    def get_cover_art(self, identifier: str, size=COVER_ART_MAX_SIZE) -> Optional[bytes]:
         # as defined in https://api.mangadex.org/docs/03-manga/covers/
         size_suffix = ""
         if size == COVER_ART_256_SIZE:
@@ -578,12 +612,14 @@ class MangadexConnection:
         elif size == COVER_ART_512_SIZE:
             size_suffix = ".512.jpg"
 
-        cache_hit: Optional[str] = self.cover_file_name_cache.get(identifier, None)
-        if cache_hit is not None:
-            cover_url = f"https://uploads.mangadex.org/covers/{identifier}/" + cache_hit + size_suffix
-            cover_art = self.safe_request("GET", cover_url)
-            self.logger.log(info, "Getting coverart from cached filename!")
-            return cover_art.content
+        if identifier in self.cover_file_name_cache:
+            if is_expired(self.cover_file_name_cache[identifier]["timestamp"], CACHE_COVER_ART_TTL):
+                del self.cover_file_name_cache[identifier]
+            else:
+                cover_url = f"https://uploads.mangadex.org/covers/{identifier}/" + self.cover_file_name_cache[identifier]["data"] + size_suffix
+                cover_art = self.safe_request("GET", cover_url)
+                self.logger.log(info, "Getting coverart from cached filename!")
+                return cover_art.content
 
         req = self.safe_request("GET", f"{self.API}/manga/{identifier}", params={"includes[]": ["cover_art"]})
 
@@ -595,11 +631,13 @@ class MangadexConnection:
         if query["result"] != "ok":
             return None
 
-        for relationship in from_json(DirectSearchManga, query).data.relationships:
+        manga = from_json(DirectSearchManga, query)
+        if manga is None:
+            return None
+
+        for relationship in manga.data.relationships:
             if relationship.type == "cover_art":
-                coverurl = f"https://uploads.mangadex.org/covers/{identifier}/" + relationship.attributes[
-                    "fileName"] + size_suffix
-                self.cover_file_name_cache[identifier] = relationship.attributes["fileName"]
+                coverurl = f"https://uploads.mangadex.org/covers/{identifier}/" + relationship.attributes["fileName"] + size_suffix
                 return self.safe_request("GET", coverurl).content
 
     def get_chapter_list(self, identifier: MangaIdentifier, lang: str = "en") -> Optional[ChapterList]:

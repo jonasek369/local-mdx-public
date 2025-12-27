@@ -724,7 +724,7 @@
 	{% if login == 1 %}
 	<button class="login-button">{{ name }}</button>
 	{% else %}
-	<button onClick="document.location.href='/auth?from=/'" class="login-button">Login</button>
+	<button onClick="window.location.href = '/auth?from=/'" class="login-button">Login</button>
 	{% endif %}
 	{% endblock content %}
 </div>
@@ -771,15 +771,15 @@
 
 <script>
     function redirect_to_download_manager() {
-        window.location.replace("/manga/download/manager");
+        window.location.href ="/manga/download/manager";
     }
 
     function redirect_to_library() {
-        window.location.replace("/manga/library");
+        window.location.href = "/manga/library";
     }
 
     function redirect_to_updates() {
-        window.location.replace("/updates");
+        window.location.href = "/updates";
     }
 
     let currentIndex = 1;
@@ -1007,11 +1007,11 @@
                 if (groupRl) {
                     groupHTML = groupRl.attributes.name;
                     groupClass = "group-clickable";
-                    groupOnClick = `onclick="event.stopPropagation(); window.location.replace('https://mangadex.org/group/${groupRl.id}');"`;
+                    groupOnClick = `onclick="event.stopPropagation(); window.location.href ='https://mangadex.org/group/${groupRl.id}';"`;
                 }
 
                 htmlContent += `
-                    <div class="latest-updates-item" onclick="window.location.replace('/manga/${mangaRl.id}')">
+                    <div class="latest-updates-item" onclick="window.location.href = '/manga/${mangaRl.id}'">
                         <img src="/manga/cover/${mangaRl.id}?size=256" alt="${mangaRl.attributes.title || 'Untitled'}">
                         <div class="latest-updates-content">
                             <h1>${mangaRl.attributes.title || "Untitled"}</h1>
@@ -1050,7 +1050,7 @@
     })
 
     function to_manga() {
-        window.location.replace("/manga/" + popular_manga[currentIndex - 1].id);
+		window.location.href = "/manga/" + popular_manga[currentIndex - 1].id;
     }
 
     function updatePopularManga() {

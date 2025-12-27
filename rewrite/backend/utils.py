@@ -30,15 +30,22 @@ def perf_test(func):
 
     return wrapper
 
-def get_relationships(relationships: List[Relationship], relationship_type_to_find: str) -> Optional[List[Relationship]]:
+
+def get_relationships(relationships: List[Relationship], relationship_type_to_find: str) -> Optional[
+    List[Relationship]]:
     # from https://api.mangadex.org/docs/3-enumerations/
-    allowed_types = {"manga", "chapter", "cover_art", "author", "artist", "scanlation_group", "tag", "user", "custom_list"}
+    allowed_types = {"manga", "chapter", "cover_art", "author", "artist", "scanlation_group", "tag", "user",
+                     "custom_list"}
     if relationship_type_to_find not in allowed_types:
         return None
     found = list(filter(lambda relationship: relationship_type_to_find == relationship.type, relationships))
     if not found:
         return None
     return found
+
+# helper that makes the code more readable
+def is_expired(created_ts, ttl_seconds):
+    return time.time() - created_ts > ttl_seconds
 
 
 def normalize_language_input(data):
@@ -55,13 +62,14 @@ def normalize_language_input(data):
 
     return []
 
+
 TRANSLATION_FALLBACK = "ja-ro"
 
 
 def get_correct_language(
-    from_languages: Union[Dict, List[Dict]],
-    from_alt: Union[Dict, List[Dict]] | None,
-    settings
+        from_languages: Union[Dict, List[Dict]],
+        from_alt: Union[Dict, List[Dict]] | None,
+        settings
 ) -> str | None:
     desired_langs: List[str] = settings.translatedLanguage
     if from_alt is None:
@@ -110,7 +118,8 @@ def is_uuid4(value: str) -> bool:
     return str(val) == value.lower()
 
 
-_executor = ThreadPoolExecutor(max_workers= os.cpu_count() if os.cpu_count() is not None else 4)
+_executor = ThreadPoolExecutor(max_workers=os.cpu_count() if os.cpu_count() is not None else 4)
+
 
 def run_async_in_thread(async_func, *args, **kwargs):
     import asyncio
@@ -121,6 +130,7 @@ def run_async_in_thread(async_func, *args, **kwargs):
         return loop.run_until_complete(async_func(*args, **kwargs))
 
     return _executor.submit(runner).result()
+
 
 def run_async(func, *args, **kwargs):
     loop = asyncio.new_event_loop()
@@ -136,12 +146,11 @@ def convert_to_webp(image: bytes, compression=100, lossless=False) -> bytes:
 
     output_buffer = io.BytesIO()
     if lossless:
-        image.save(output_buffer, format="WEBP", lossless = True)
+        image.save(output_buffer, format="WEBP", lossless=True)
     else:
-        image.save(output_buffer, format="WEBP", quality = compression)
+        image.save(output_buffer, format="WEBP", quality=compression)
 
     return output_buffer.getvalue()
-
 
 
 def colored(rgb, text):
@@ -158,11 +167,11 @@ class LogType(Enum):
     TRACEBACK = 6
 
 
-info      = LogType.INFO
-success   = LogType.SUCCESSS
-warning   = LogType.WARNING
-error     = LogType.ERROR
-critical  = LogType.CRITICAL
+info = LogType.INFO
+success = LogType.SUCCESSS
+warning = LogType.WARNING
+error = LogType.ERROR
+critical = LogType.CRITICAL
 traceback = LogType.TRACEBACK
 
 
@@ -206,13 +215,16 @@ class Logger:
             for log_event in self.file_log:
                 file.write(f"{log_event[0]}:{log_event[1]}: {log_event[2]}\n")
 
+
 def input_as_bool(inp: str) -> bool:
     stripped = inp.strip().lower()
     if stripped == "true" or stripped == "1" or stripped == "t" or stripped == "y" or stripped == "yes":
         return True
     return False
 
+
 EXCLUDED_SETTINGS_FIELDS = {"logger", "onMangaDownloadFinishHandler"}
+
 
 def dataclass_to_jsonable_dict(obj):
     result = {}
@@ -221,4 +233,3 @@ def dataclass_to_jsonable_dict(obj):
         if not f.name in EXCLUDED_SETTINGS_FIELDS:
             result[f.name] = value
     return result
-

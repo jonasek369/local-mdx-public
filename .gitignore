@@ -21,8 +21,5 @@ __pycache__/
 *.token
 .token
 
-# Downloader process
-curl-ca-bundle.crt
-*.dll
-*.exe
-/rewrite/frontend/downloads/
+# venv
+/venv/
