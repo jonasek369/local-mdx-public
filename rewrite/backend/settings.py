@@ -3,7 +3,8 @@ import os
 from dataclasses import dataclass, asdict, fields
 from typing import Optional, Callable, List
 
-from rewrite.backend.utils import Logger, warning, error, dataclass_to_jsonable_dict, info
+from rewrite.backend.utils import Logger, warning, error, info, settings_to_jsonable_dict
+import keyring
 
 
 @dataclass
@@ -36,7 +37,7 @@ def load_settings() -> Settings:
             None,
             json_settings.get('contentRating', ["safe", "suggestive", "erotica"]),
             json_settings.get('translatedLanguage', ["en"]),  # [] means all languages will be fetched
-            json_settings.get('cacheTokenToDisk', True),
+            json_settings.get('cacheTokenToDisk', False),
             json_settings.get('logLevel', 1),
             json_settings.get('fileLogger', False),
             Logger(json_settings.get('logLevel', 1), json_settings.get('fileLogger', False)),
@@ -45,7 +46,7 @@ def load_settings() -> Settings:
     except (FileNotFoundError, json.decoder.JSONDecodeError):
         Logger().log(warning, f"Could not find settings.json in {os.getcwd()} using default")
         # return default if we cant find the settings
-        default = Settings(None, ["safe", "suggestive", "erotica"], ["en"], True, 1, False, Logger(1, False), True)
+        default = Settings(None, ["safe", "suggestive", "erotica"], ["en"], False, 1, False, Logger(1, False), True)
         save_settings(default)
         default.logger.log(warning, "Create settings.json with default values")
         return default
@@ -53,7 +54,7 @@ def load_settings() -> Settings:
 
 def save_settings(settings: Settings) -> bool:
     try:
-        json_dict = dataclass_to_jsonable_dict(settings)
+        json_dict = settings_to_jsonable_dict(settings)
         with open('settings.json', 'w') as f:
             json.dump(json_dict, f, indent=4)
         return True
@@ -64,17 +65,21 @@ def save_settings(settings: Settings) -> bool:
 
 def load_credentials() -> MangadexCredentials:
     try:
-        with open('mangadex_account.json', 'r') as f:
-            credentials = json.load(f)
         return MangadexCredentials(
-            credentials.get("username", None),
-            credentials.get("password", None),
-            credentials.get("client_id", None),
-            credentials.get("client_secret", None),
+            username=keyring.get_password("LocalMangaDex", "username"),
+            password=keyring.get_password("LocalMangaDex", "password"),
+            clientId=keyring.get_password("LocalMangaDex", "client_id"),
+            clientSecret=keyring.get_password("LocalMangaDex", "client_secret"),
         )
     except FileNotFoundError:
         Logger().log(warning, f"Could not find mangadex_account.json in {os.getcwd()} using empty credentials")
         return MangadexCredentials(None, None, None, None)
+
+def clear_keyring():
+    keyring.delete_password("LocalMangaDex", "username"),
+    keyring.delete_password("LocalMangaDex", "password"),
+    keyring.delete_password("LocalMangaDex", "client_id"),
+    keyring.delete_password("LocalMangaDex", "client_secret"),
 
 
 def credentials_from_json(_json):
@@ -87,10 +92,7 @@ def credentials_from_json(_json):
 
 
 def save_credentials(credentials: MangadexCredentials):
-    with open("mangadex_account.json", "w") as file:
-        json.dump({
-            "username": credentials.username,
-            "password": credentials.password,
-            "client_id": credentials.clientId,
-            "client_secret": credentials.clientSecret
-        }, file)
+    keyring.set_password("LocalMangaDex", "username", credentials.username)
+    keyring.set_password("LocalMangaDex", "password", credentials.password)
+    keyring.set_password("LocalMangaDex", "client_id", credentials.clientId)
+    keyring.set_password("LocalMangaDex", "client_secret", credentials.clientSecret)

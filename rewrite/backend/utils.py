@@ -159,14 +159,15 @@ def colored(rgb, text):
 
 
 class LogType(Enum):
-    INFO = 1
-    SUCCESSS = 2
-    WARNING = 3
-    ERROR = 4
-    CRITICAL = 5
-    TRACEBACK = 6
+    DEBUG = 1
+    INFO = 2
+    SUCCESSS = 3
+    WARNING = 4
+    ERROR = 5
+    CRITICAL = 6
+    TRACEBACK = 7
 
-
+debug = LogType.DEBUG
 info = LogType.INFO
 success = LogType.SUCCESSS
 warning = LogType.WARNING
@@ -190,18 +191,20 @@ class Logger:
     def log(self, ll: LogType, text):
         if ll.value >= self.log_level:
             match ll:
+                case LogType.DEBUG:
+                    print(colored([230, 230, 230], f"Debug: {text}"))
                 case LogType.INFO:
-                    print(colored([0, 100, 255], "Info: " + text))
+                    print(colored([0, 100, 255], f"Info: {text}"))
                 case LogType.SUCCESSS:
-                    print(colored([0, 255, 0], "Success: " + text))
+                    print(colored([0, 255, 0], f"Success: {text}"))
                 case LogType.WARNING:
-                    print(colored([255, 255, 0], "Warning: " + text))
+                    print(colored([255, 255, 0], f"Warning: {text}"))
                 case LogType.ERROR:
-                    print(colored([255, 60, 60], "Error: " + text))
+                    print(colored([255, 60, 60], f"Error: {text}"))
                 case LogType.CRITICAL:
-                    print(colored([255, 0, 0], "Critical: " + text))
+                    print(colored([255, 0, 0], f"Critical: {text}"))
                 case LogType.TRACEBACK:
-                    print(colored([255, 255, 255], "Traceback: " + text))
+                    print(colored([255, 255, 255], f"Traceback: {text}"))
                 case _:
                     raise Exception("Unknown log level")
 
@@ -226,7 +229,7 @@ def input_as_bool(inp: str) -> bool:
 EXCLUDED_SETTINGS_FIELDS = {"logger", "onMangaDownloadFinishHandler"}
 
 
-def dataclass_to_jsonable_dict(obj):
+def settings_to_jsonable_dict(obj):
     result = {}
     for f in fields(obj):
         value = getattr(obj, f.name)

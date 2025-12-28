@@ -1,83 +1,285 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8">
-    <title>Updates Settings</title>
-    <style>
-        .button {
-            display: inline-block;
-            padding: 8px 16px;
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Config</title>
+	<style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --md-bg: #1a1a1a;
+            --md-surface: #242424;
+            --md-surface-hover: #2a2a2a;
+            --md-border: #3a3a3a;
+            --md-text: #e8e8e8;
+            --md-text-secondary: #a0a0a0;
+            --md-accent: #ff6740;
+            --md-accent-hover: #ff7d5c;
+        }
+
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
+            background-color: var(--md-bg);
+            color: var(--md-text);
+        }
+
+        .main-content {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 32px 24px;
+        }
+
+        .section-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--md-text);
+            margin-bottom: 24px;
+        }
+
+        .config-card {
+            background-color: var(--md-surface);
+            border: 1px solid var(--md-border);
+            border-radius: 6px;
+            padding: 24px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--md-border);
+        }
+
+        .form-group:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+
+        .form-label {
+            display: block;
             font-size: 14px;
-            font-weight: bold;
-            text-decoration: none;
-            background-color: #4CAF50;
-            color: #fff;
-            border: none;
-            border-radius: 4px;
+            font-weight: 600;
+            color: var(--md-text);
+            margin-bottom: 8px;
+        }
+
+        .form-description {
+            display: block;
+            font-size: 12px;
+            color: var(--md-text-secondary);
+            margin-bottom: 12px;
+        }
+
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
             cursor: pointer;
+            accent-color: var(--md-accent);
+        }
+
+        input[type="number"] {
+            width: 100%;
+            max-width: 200px;
+            padding: 10px 12px;
+            background-color: var(--md-bg);
+            border: 1px solid var(--md-border);
+            border-radius: 4px;
+            color: var(--md-text);
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        input[type="number"]:focus {
+            outline: none;
+            border-color: var(--md-accent);
+        }
+
+        .checkbox-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+            padding-top: 24px;
+            border-top: 1px solid var(--md-border);
+        }
+
+        .button {
+            background-color: var(--md-accent);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-weight: 500;
+            font-size: 14px;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s;
         }
 
         .button:hover {
-            background-color: #45a049;
+            background-color: var(--md-accent-hover);
         }
 
-        .button:active {
-            background-color: #3e8e41;
+        .button-secondary {
+            background-color: transparent;
+            color: var(--md-text);
+            border: 1px solid var(--md-border);
         }
 
-        .config-field #data {
-            width: 700px;
-            height: 750px;
-            resize: none;
+        .button-secondary:hover {
+            background-color: var(--md-surface-hover);
         }
 
-    </style>
+        @media (max-width: 768px) {
+            .main-content {
+                padding: 20px 16px;
+            }
+
+            .section-title {
+                font-size: 20px;
+            }
+
+            .config-card {
+                padding: 16px;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            .button-group button {
+                width: 100%;
+            }
+        }
+	</style>
 </head>
-<body>
-<button class="button" onClick="window.location.href='/';">Back</button>
-<div class="config-field">
-    <label for="data">
-        Config
-    </label>
-    <br>
-    <textarea id="data">
-        Wait to load current settings!
-    </textarea>
-</div>
-<button class="button" onClick="send_config()">
-    update config
-</button>
 
+<body>
+
+<div class="main-content">
+	<h2 class="section-title">Settings</h2>
+
+	<div class="config-card">
+		<form id="configForm">
+			<div class="form-group">
+				<label class="form-label">Cache Token</label>
+				<span class="form-description">Save authentication token to disk (stored in plaintext on your device with password)</span>
+				<div class="checkbox-wrapper">
+					<input type="checkbox" id="cacheToken" name="cacheToken">
+					<label for="cacheToken" style="margin: 0; font-weight: normal; cursor: pointer;">Enable token caching</label>
+				</div>
+			</div>
+
+			<div class="form-group">
+				<label class="form-label" for="logLevel">Logging Level</label>
+				<span class="form-description">Set the verbosity of application logs (1 = debug, 7 = traceback)</span>
+				<input type="number" id="logLevel" name="logLevel" min="1" max="7" value="2">
+			</div>
+
+			<div class="form-group">
+				<label class="form-label">File Logger</label>
+				<span class="form-description">Write logs to a file on disk</span>
+				<div class="checkbox-wrapper">
+					<input type="checkbox" id="fileLogger" name="fileLogger">
+					<label for="fileLogger" style="margin: 0; font-weight: normal; cursor: pointer;">Enable file logging</label>
+				</div>
+			</div>
+
+			<div class="form-group">
+				<label class="form-label">Theme</label>
+				<span class="form-description">Toggle between light and dark mode</span>
+				<div class="checkbox-wrapper">
+					<input type="checkbox" id="darkTheme" name="darkTheme" checked>
+					<label for="darkTheme" style="margin: 0; font-weight: normal; cursor: pointer;">Dark theme</label>
+				</div>
+			</div>
+
+			<div class="button-group">
+				<button type="submit" class="button">Save Changes</button>
+				<button type="button" class="button button-secondary" onclick="resetForm()">Reset to Defaults</button>
+			</div>
+		</form>
+	</div>
+</div>
 
 <script>
-    window.token = '{{ token }}';
+	window.addEventListener('DOMContentLoaded', () => {
+		fetch("/config/data", {method: "GET"}).then(response => response.json()).then(settings => {
+            document.getElementById('cacheToken').checked = settings.cacheTokenToDisk === true;
+			document.getElementById('logLevel').value = settings.logLevel || 2;
+			document.getElementById('fileLogger').checked = settings.fileLogger === true;
+			document.getElementById('darkTheme').checked = settings.darkTheme === true;
+		}).then(response => {
+            updateTheme();
+		});
+	});
 
-    function send_config() {
-        let data = JSON.parse(document.getElementById("data").value);
-        fetch("config/data", {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            "body": JSON.stringify(data)
-        }).then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-            return response.json();
-        }).then(jsonData => {
-            location.reload();
-        })
-    }
+	document.getElementById('configForm').addEventListener('submit', (e) => {
+		e.preventDefault();
 
-    fetch("/config/data").then(response => {
-        if (!response.ok) {
-            throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-        return response.json();
-    }).then(jsonData => {
-        let element = document.getElementById("data");
-        element.innerHTML = JSON.stringify(jsonData, null, 4);
-    })
+		const settings = {
+			cacheTokenToDisk: document.getElementById('cacheToken').checked,
+			logLevel: parseInt(document.getElementById('logLevel').value),
+			fileLogger: document.getElementById('fileLogger').checked,
+			darkTheme: document.getElementById('darkTheme').checked
+		};
 
+        fetch("/config/data", {method: "POST", body: JSON.stringify(settings)})
+
+		// Show success feedback
+		const btn = e.target.querySelector('button[type="submit"]');
+		const originalText = btn.textContent;
+		btn.textContent = 'Saved!';
+		btn.style.backgroundColor = '#4caf50';
+
+		setTimeout(() => {
+			btn.textContent = originalText;
+			btn.style.backgroundColor = '';
+		}, 2000);
+	});
+
+	function resetForm() {
+		document.getElementById('cacheToken').checked = false;
+		document.getElementById('logLevel').value = 2;
+		document.getElementById('fileLogger').checked = false;
+		document.getElementById('darkTheme').checked = true;
+		updateTheme();
+	}
+
+	document.getElementById('darkTheme').addEventListener('change', updateTheme);
+
+	function updateTheme() {
+		const isDark = document.getElementById('darkTheme').checked;
+		const root = document.documentElement;
+
+		if (isDark) {
+			root.style.setProperty('--md-bg', '#1a1a1a');
+			root.style.setProperty('--md-surface', '#242424');
+			root.style.setProperty('--md-surface-hover', '#2a2a2a');
+			root.style.setProperty('--md-border', '#3a3a3a');
+			root.style.setProperty('--md-text', '#e8e8e8');
+			root.style.setProperty('--md-text-secondary', '#a0a0a0');
+		} else {
+			root.style.setProperty('--md-bg', '#f5f5f5');
+			root.style.setProperty('--md-surface', '#ffffff');
+			root.style.setProperty('--md-surface-hover', '#f9f9f9');
+			root.style.setProperty('--md-border', '#e0e0e0');
+			root.style.setProperty('--md-text', '#1a1a1a');
+			root.style.setProperty('--md-text-secondary', '#666666');
+		}
+	}
 </script>
 </body>
+
 </html>

@@ -4,8 +4,9 @@ try:
 
     # Ensure all files (database, settings, etc.) are created in the folder containing server.py
     os.chdir(Path(__file__).parent)
+    print(Path(__file__).parent)
 except Exception as e:
-    print("Could not set dir to files parent")
+    print("Could not set dir to 'server.py' parent folder")
     exit(1)
 
 import asyncio
@@ -17,8 +18,9 @@ from dataclasses import asdict
 from rewrite.backend.connection import MangaDownloadJob
 from rewrite.backend.repository import MangaRepository
 from rewrite.backend.schemas import COVER_ART_MAX_SIZE, COVER_ART_256_SIZE, COVER_ART_512_SIZE
-from rewrite.backend.settings import credentials_from_json, save_credentials
-from rewrite.backend.utils import info, error, get_correct_language, is_uuid4, critical
+from rewrite.backend.settings import credentials_from_json, save_credentials, save_settings, MangadexCredentials, \
+    clear_keyring
+from rewrite.backend.utils import info, error, get_correct_language, is_uuid4, critical, settings_to_jsonable_dict
 from flask import Flask, jsonify, render_template, request, make_response, stream_with_context, Response
 
 gui_dir = os.path.join(os.getcwd(), 'gui')
@@ -86,7 +88,7 @@ def get_cover_art(identifier):
         return jsonify({"status": "error", "message": "Invalid identifier"}), 400
 
     try:
-        size = int(request.args.get("size", COVER_ART_MAX_SIZE))
+        size = int(request.args.get("size", COVER_ART_256_SIZE))
     except (TypeError, ValueError):
         size = COVER_ART_MAX_SIZE
 
@@ -473,6 +475,11 @@ def set_credentials():
     return {"status": "error", "response": "invalid credentials"}, 401
 
 
+@server.route("/auth/null-credentials")
+def null_credentials():
+    clear_keyring()
+    return {"status": "ok", "response": "creadentials nulled credentials"}, 200
+
 @server.route("/updates")
 def updates():
     auth = check_auth()[0]
@@ -533,13 +540,35 @@ def local_port():
         time.sleep(5)
     return {"status": "ok"}, 200
 
+@server.route("/config")
+def config():
+    return render_template("config.html")
+
+@server.route("/config/data", methods=["GET", "POST"])
+def config_data():
+    if request.method == "GET":
+        return jsonify(settings_to_jsonable_dict(repository.settings)), 200
+    if request.method == "POST":
+        try:
+            request_data = request.get_json(force=True)
+        except Exception as e:
+            return {"status": "error", "response": "Json is invalid"}, 400
+
+        repository.settings.cacheTokenToDisk = bool(request_data.get("cacheTokenToDisk", False))
+        repository.settings.logLevel = max(min(7, int(request_data.get("logLevel", 1))), 1)
+        repository.settings.logger.log_level = repository.settings.logLevel
+        repository.settings.fileLogger = bool(request_data.get("fileLogger", False))
+        repository.settings.darkTheme = bool(request_data.get("darkTheme", True))
+
+        save_settings(repository.settings)
+        return {"status": "ok", "response": "Settings saved"}, 200
+
 
 if __name__ == "__main__":
     use_actual_server = True
     try:
         if not use_actual_server:
                 server.run(threaded=True)
-
         else:
             from waitress import serve
 

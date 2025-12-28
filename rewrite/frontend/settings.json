@@ -7,7 +7,7 @@
     "translatedLanguage": [
         "en"
     ],
-    "cacheTokenToDisk": true,
+    "cacheTokenToDisk": false,
     "logLevel": 1,
     "fileLogger": false,
     "darkTheme": true

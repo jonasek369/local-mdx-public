@@ -169,7 +169,6 @@ class Database:
                 return read
             return None
 
-    @perf_test
     def get_chapter_attribute(self, identifier: ChapterIdentifier) -> Optional[ChapterAttributes]:
         with self.lock:
             cursor = self.conn.cursor()
@@ -180,7 +179,6 @@ class Database:
                 return ChapterAttributes(*fetch[2:])
             return None
 
-    @perf_test
     def get_chapter_attribute_raw(self, identifier: ChapterIdentifier) -> Optional[ChapterAttributes]:
         # Returns the raw fetch. Because the raw fetch returns muuid and cuuid which can be usefull
         with self.lock:
@@ -192,7 +190,6 @@ class Database:
                 return fetch
             return None
 
-    @perf_test
     def set_chapter_attributes(self, identifier: MangaIdentifier, chapters: List[Chapter]) -> None:
         with self.lock:
             cursor = self.conn.cursor()
@@ -205,7 +202,6 @@ class Database:
             self.conn.commit()
             cursor.close()
 
-    @perf_test
     def get_user_and_groups(self, cuuids: List[str]) -> Optional[List[dict]]:
         with self.lock:
             if not cuuids:
@@ -242,7 +238,6 @@ class Database:
 
             return result
 
-    @perf_test
     def set_manga_attributes(self, manga: Manga):
         with self.lock:
             cursor = self.conn.cursor()
@@ -257,7 +252,6 @@ class Database:
             self.conn.commit()
             cursor.close()
 
-    @perf_test
     def get_manga_attributes(self, identifier: MangaIdentifier) -> Optional[MangaAttributes]:
         with self.lock:
             cursor = self.conn.cursor()
@@ -268,7 +262,6 @@ class Database:
                 return from_database_row(MangaAttributes, fetch[1:])
             return None
 
-    @perf_test
     def get_chapter_list(self, identifier: MangaIdentifier) -> Optional[List[ChapterAttributes]]:
         with self.lock:
             cursor = self.conn.cursor()
@@ -279,7 +272,6 @@ class Database:
                 return chapters
             return None
 
-    @perf_test
     def set_chapter_page(self, page, content, cuuid) -> None:
         with self.lock:
             cursor = self.conn.cursor()
@@ -288,7 +280,6 @@ class Database:
             self.conn.commit()
             cursor.close()
 
-    @perf_test
     def set_chapter_pages(self, batch: List[Tuple[int, bytes, str]], is_webp=False):
         with self.lock:
             cursor = self.conn.cursor()
@@ -308,7 +299,6 @@ class Database:
             self.conn.commit()
             cursor.close()
 
-    @perf_test
     def get_manga_job(self, identifier: MangaIdentifier) -> MangaDownloadJobInDatabase:
         with self.lock:
             cursor = self.conn.cursor()
@@ -355,7 +345,6 @@ class Database:
                 return fetch[0]
             return fetch
 
-    @perf_test
     def set_cover_art(self, identifier: MangaIdentifier, size: int, content: bytes) -> None:
         with self.lock:
             cursor = self.conn.cursor()
@@ -367,7 +356,6 @@ class Database:
             self.conn.commit()
             cursor.close()
 
-    @perf_test
     def get_page(self, identifier: str, page: int) -> Optional[bytes]:
         with self.lock:
             cursor = self.conn.cursor()
@@ -377,7 +365,6 @@ class Database:
             cursor.close()
             return None if fetch is None else fetch[0]
 
-    @perf_test
     def get_pages(self, identifier: ChapterIdentifier):
         with self.lock:
             cursor = self.conn.cursor()
@@ -389,7 +376,6 @@ class Database:
                 return fetch
             return None
 
-    @perf_test
     def all_manga_in_db(self) -> Optional[List[str]]:
         with self.lock:
             cursor = self.conn.cursor()
@@ -400,7 +386,6 @@ class Database:
                 return fetch
             return None
 
-    @perf_test
     def get_downloaded_pages(self, identifier: MangaIdentifier):
         with self.lock:
             cursor = self.conn.cursor()
@@ -436,7 +421,6 @@ class Database:
                 return None
             return muuid[0]
 
-    @perf_test
     def get_next_prev(self, muuid: MangaIdentifier, target_cuuid: ChapterIdentifier, feed: ChapterList) -> Optional[tuple]:
         downloaded_chapters = [i[0] for i in self.get_downloaded_pages(muuid)]
         with self.lock:

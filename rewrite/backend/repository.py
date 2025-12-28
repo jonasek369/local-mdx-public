@@ -11,7 +11,7 @@ from rewrite.backend.database import Database
 from rewrite.backend.schemas import MangaIdentifier, ChapterIdentifier, ChapterList, MangaAttributes, \
     ChapterAttributes, LatestChapter, MangaList, COVER_ART_MAX_SIZE, COVER_ART_512_SIZE, from_json, Chapter, Manga
 from rewrite.backend.settings import load_settings, load_credentials
-from rewrite.backend.utils import perf_test, info, error, get_relationships
+from rewrite.backend.utils import perf_test, info, error, get_relationships, warning
 
 
 # Taking inspiration from how android works utilizing repositories which take connection nad database
@@ -301,7 +301,7 @@ class MangaRepository:
         sync_list_uuid, _ = self.connection.get_sync_list()
         feed = self.connection.get_custom_list_feed(sync_list_uuid, limit, offset)
         if feed is None:
-            self.settings.logger.log(error, "Could not get the feed")
+            self.settings.logger.log(warning, "Could not get the feed")
             return None
         if isinstance(feed, int):
             self.settings.logger.log(info, "Credentials are not set")

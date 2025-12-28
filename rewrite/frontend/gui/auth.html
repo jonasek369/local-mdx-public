@@ -139,6 +139,24 @@
             background-color: var(--md-accent-hover);
         }
 
+		input[type="button"] {
+            margin-top: 24px;
+            width: 100%;
+            padding: 12px 16px;
+            background-color: var(--md-accent);
+            border: none;
+            border-radius: 6px;
+            color: white;
+            font-weight: 600;
+            font-size: 15px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        input[type="button"]:hover {
+            background-color: var(--md-accent-hover);
+        }
+
         .footer-note {
             margin-top: 20px;
             text-align: center;
@@ -175,12 +193,17 @@
             <input type="password" id="client-secret" name="client-secret" required>
 
             <input type="submit" value="Save Credentials">
+			<input type="button" value="Clear keyring" onclick="clear_keyring()">
         </form>
 	</div>
 
 <script>
     window.token = '{{ token }}';
-    const redirect = "{{ back_redirect }}";
+	const redirect = "{{ back_redirect }}";
+
+    function clear_keyring() {
+        fetch("/auth/null-credentials")
+	}
 
     function handle_login() {
         const payload = {
