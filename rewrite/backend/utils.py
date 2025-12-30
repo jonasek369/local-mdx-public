@@ -1,14 +1,11 @@
-import json
 from dataclasses import fields
 from datetime import datetime
-import io
 import os
 import time
 import uuid
 from enum import Enum
 from typing import Dict, List, Union, Optional
 
-from PIL import Image
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
@@ -138,20 +135,6 @@ def run_async(func, *args, **kwargs):
     return loop.run_until_complete(func(*args, **kwargs))
 
 
-# TODO: Make compression, lossless user changeable
-@perf_test
-def convert_to_webp(image: bytes, compression=100, lossless=False) -> bytes:
-    input_buffer = io.BytesIO(image)
-    image = Image.open(input_buffer)
-
-    output_buffer = io.BytesIO()
-    if lossless:
-        image.save(output_buffer, format="WEBP", lossless=True)
-    else:
-        image.save(output_buffer, format="WEBP", quality=compression)
-
-    return output_buffer.getvalue()
-
 
 def colored(rgb, text):
     return "\033[38;2;{};{};{}m{} \033[38;2;255;255;255m".format(rgb[0], rgb[1], rgb[2],
@@ -177,16 +160,35 @@ traceback = LogType.TRACEBACK
 
 
 class Logger:
-    def __init__(self, ll: int = 1, file_logger: bool = False):
+    def __init__(self, ll: int = 1, enable_file_logger: bool = False):
+        self.file_log = None
+        self.file_start = None
+        self.file = None
+
         self.log_level = ll
-        self.file_logger = file_logger
-        if self.file_logger:
-            self.file_log = []
-            self.file_start = time.time()
-            if not os.path.isdir("logs"):
-                os.mkdir("logs")
-            self.file = open(f"logs\\{self.file_start}.log", "w")
+        self.enable_file_logger = enable_file_logger
+        if self.enable_file_logger:
+            self.setup_file_logger()
         os.system("cls")
+
+    def setup_file_logger(self):
+        self.file_log = []
+        self.file_start = time.time()
+        if not os.path.isdir("logs"):
+            os.mkdir("logs")
+        self.file = open(f"logs\\{self.file_start}.log", "w")
+
+    def change_file_logger(self, enable_file_logger: bool):
+        if enable_file_logger == self.enable_file_logger:
+            return
+
+        if enable_file_logger:
+            self.setup_file_logger()
+        else:
+            self.finish_file_logger()
+
+        self.enable_file_logger = enable_file_logger
+
 
     def log(self, ll: LogType, text):
         if ll.value >= self.log_level:
@@ -208,15 +210,18 @@ class Logger:
                 case _:
                     raise Exception("Unknown log level")
 
-        if self.file_logger:
+        if self.enable_file_logger:
             self.file_log.append((datetime.now(), ll, text))
 
-    def __del__(self):
-        if not self.file_logger:
-            return
+    def finish_file_logger(self):
         with self.file as file:
             for log_event in self.file_log:
                 file.write(f"{log_event[0]}:{log_event[1]}: {log_event[2]}\n")
+
+    def __del__(self):
+        if not self.enable_file_logger:
+            return
+        self.finish_file_logger()
 
 
 def input_as_bool(inp: str) -> bool:

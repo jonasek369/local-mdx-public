@@ -16,6 +16,9 @@ __pycache__/
 # Other
 .env
 
+# Logs
+/rewrite/frontend/logs
+
 # For updates
 /rewrite/frontend/mangadex_account.json
 *.token

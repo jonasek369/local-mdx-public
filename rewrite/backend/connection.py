@@ -116,7 +116,7 @@ async def async_get_chapter_page(
                 return None, was_rate_limited
             remaining = metadata.headers["X-RateLimit-Remaining"]
             retry_after = metadata.headers["X-RateLimit-Retry-After"]
-            logger.log(info, f"RateLimit Rem. {remaining}. RateLimit after {retry_after}")
+            logger.log(debug, f"RateLimit Rem. {remaining}. RateLimit after {retry_after}")
 
             if int(remaining) <= 0:
                 was_rate_limited = True
@@ -282,7 +282,7 @@ class MangaDownloader:
             self.state = DownloaderState.Awaiting
             job = self.queue.pop()
             if self.exit_event.is_set() or self.stop_event.is_set():
-                # the thread was waiting for object att it either got a job or None was sent to wakeup
+                # the thread was waiting for object and it either got a job or None was sent to wakeup
                 continue
             self.state = DownloaderState.Downloading
             self.currently_working_on = job.to_cwo()
@@ -363,7 +363,7 @@ class CredentialManager:
         self.__token = {}
 
         if not credentials.is_valid():
-            self.settings.logger.log(error, "Credentials are not set properly")
+            self.settings.logger.log(warning, "Credentials are not set properly or are not set")
             return
 
     def set_credentials(self, credentials: MangadexCredentials):
@@ -902,7 +902,10 @@ class MangadexConnection:
                                 default_parameters=True,
                                 params=params
                                 )
-        if req and req.status_code != 200:
+        if not req:
+            return None
+
+        if req.status_code != 200:
             self.logger.log(error, f"API returned code {req.status_code} when getting latest updates")
             return None
 

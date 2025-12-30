@@ -1,11 +1,9 @@
 import json
 import sqlite3
 import threading
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 from typing import List, Optional, Tuple, Dict
 
-from rewrite.backend.utils import perf_test, convert_to_webp
 from rewrite.backend.schemas import MangaIdentifier, ChapterIdentifier, ChapterAttributes, Chapter, Manga, \
     MangaAttributes, LatestChapter, COVER_ART_MAX_SIZE, COVER_ART_256_SIZE, COVER_ART_512_SIZE, from_json, \
     from_database_row, ChapterList
@@ -280,22 +278,10 @@ class Database:
             self.conn.commit()
             cursor.close()
 
-    def set_chapter_pages(self, batch: List[Tuple[int, bytes, str]], is_webp=False):
+    def set_chapter_pages(self, batch: List[Tuple[int, bytes, str]]):
         with self.lock:
             cursor = self.conn.cursor()
-            if not is_webp:
-                png_images_batch = [i[1] for i in batch]
-
-                with ThreadPoolExecutor() as executor:
-                    results = list(executor.map(convert_to_webp, png_images_batch))
-
-                webp_batch = []
-                for idx, i in enumerate(batch):
-                    webp_batch.append((i[0], results[idx], i[2]))
-
-                cursor.executemany("INSERT OR REPLACE INTO chapter_page VALUES (?, ?, ?)", webp_batch)
-            else:
-                cursor.executemany("INSERT OR REPLACE INTO chapter_page VALUES (?, ?, ?)", batch)
+            cursor.executemany("INSERT OR REPLACE INTO chapter_page VALUES (?, ?, ?)", batch)
             self.conn.commit()
             cursor.close()
 
@@ -349,10 +335,9 @@ class Database:
         with self.lock:
             cursor = self.conn.cursor()
             assert size in {COVER_ART_MAX_SIZE, COVER_ART_256_SIZE, COVER_ART_512_SIZE}, "Unsupported cover art size"
-            webp_image = convert_to_webp(content)
             cursor.execute(
                 """INSERT INTO cover_art (muuid, size, data) VALUES (?, ?, ?) ON CONFLICT(muuid, size) DO UPDATE SET data = excluded.data""",
-                (identifier, size, webp_image))
+                (identifier, size, content))
             self.conn.commit()
             cursor.close()
 

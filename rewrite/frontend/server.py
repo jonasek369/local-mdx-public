@@ -4,7 +4,6 @@ try:
 
     # Ensure all files (database, settings, etc.) are created in the folder containing server.py
     os.chdir(Path(__file__).parent)
-    print(Path(__file__).parent)
 except Exception as e:
     print("Could not set dir to 'server.py' parent folder")
     exit(1)
@@ -20,7 +19,8 @@ from rewrite.backend.repository import MangaRepository
 from rewrite.backend.schemas import COVER_ART_MAX_SIZE, COVER_ART_256_SIZE, COVER_ART_512_SIZE
 from rewrite.backend.settings import credentials_from_json, save_credentials, save_settings, MangadexCredentials, \
     clear_keyring
-from rewrite.backend.utils import info, error, get_correct_language, is_uuid4, critical, settings_to_jsonable_dict
+from rewrite.backend.utils import debug, info, error, get_correct_language, is_uuid4, critical, settings_to_jsonable_dict, \
+    get_relationships
 from flask import Flask, jsonify, render_template, request, make_response, stream_with_context, Response
 
 gui_dir = os.path.join(os.getcwd(), 'gui')
@@ -29,7 +29,7 @@ server = Flask(__name__, static_folder=gui_dir, template_folder=gui_dir)
 
 repository = MangaRepository()
 
-repository.settings.logger.log(info, gui_dir + " is static and template dir!")
+repository.settings.logger.log(debug, gui_dir + " is static and template dir!")
 
 
 @server.route("/")
@@ -101,8 +101,8 @@ def get_cover_art(identifier):
         return jsonify({"error": "No image found"}), 404
 
     response = make_response(image_binary)
-    response.headers.set("Content-Type", "image/webp")
-    response.headers.set("Content-Disposition", f"inline; filename={identifier}.webp")
+    response.headers.set("Content-Type", "image/png")
+    response.headers.set("Content-Disposition", f"inline; filename={identifier}.png")
     response.headers["Cache-Control"] = "public, max-age=86400"
     return response, 200
 
@@ -206,8 +206,8 @@ def get_chapter_image(identifier, page):
     image_binary = repository.database.get_page(identifier, int(page))
     if image_binary is not None:
         response = make_response(image_binary)
-        response.headers.set('Content-Type', 'image/webp')
-        response.headers.set('Content-Disposition', 'inline', filename=f'{identifier}-{page}.webp')
+        response.headers.set('Content-Type', 'image/png')
+        response.headers.set('Content-Disposition', 'inline', filename=f'{identifier}-{page}.png')
         return response, 200
     return {"status": "error", "response": "no image found"}, 404
 
@@ -244,6 +244,15 @@ def read_manga(chapteruuid, page):
     ids = {}
     # ids are passed and filled with data in the functions
     attributes = repository.get_chapter_attributes(chapteruuid, ids)
+    if ids.get("muuid", None) is not None:
+        manga_attributes = repository.get_manga_attributes(ids["muuid"])
+
+    page_render = "NORMAL"
+
+    for tag in manga_attributes.tags:
+        if tag.attributes.group == "format" and tag.attributes.name["en"] == "Long Strip":
+            page_render = "LONG_STRIP"
+
     if not attributes:
         return {"status": "error", "response": "Data not in database"}
 
@@ -256,7 +265,8 @@ def read_manga(chapteruuid, page):
                            muuid=ids["muuid"],
                            chapter_no=attributes.chapter,
                            page=page,
-                           page_render="NORMAL"  # TODO: Add logic for long strips when reader supports it
+                           page_render=page_render,
+                           darktheme=repository.settings.darkTheme
                            ), 200
 
 
@@ -389,7 +399,6 @@ def push_to_top():
 
     return {"status": "success", "response": "pushed job to top"}, 200
 
-
 @server.route("/manga/library/data", methods=["GET"])
 def library_data():
     to_send = {}
@@ -478,7 +487,8 @@ def set_credentials():
 @server.route("/auth/null-credentials")
 def null_credentials():
     clear_keyring()
-    return {"status": "ok", "response": "creadentials nulled credentials"}, 200
+    return {"status": "ok", "response": "creadentials nulled"}, 200
+
 
 @server.route("/updates")
 def updates():
@@ -540,9 +550,11 @@ def local_port():
         time.sleep(5)
     return {"status": "ok"}, 200
 
+
 @server.route("/config")
 def config():
     return render_template("config.html")
+
 
 @server.route("/config/data", methods=["GET", "POST"])
 def config_data():
@@ -558,6 +570,7 @@ def config_data():
         repository.settings.logLevel = max(min(7, int(request_data.get("logLevel", 1))), 1)
         repository.settings.logger.log_level = repository.settings.logLevel
         repository.settings.fileLogger = bool(request_data.get("fileLogger", False))
+        repository.settings.logger.change_file_logger(repository.settings.fileLogger)
         repository.settings.darkTheme = bool(request_data.get("darkTheme", True))
 
         save_settings(repository.settings)
@@ -568,12 +581,12 @@ if __name__ == "__main__":
     use_actual_server = True
     try:
         if not use_actual_server:
-                server.run(threaded=True)
+            server.run(threaded=True)
         else:
             from waitress import serve
 
             serve(server, host="0.0.0.0", port=5000, threads=os.cpu_count())
     finally:
         # Wakeup and exit thread
-        repository.downloader.exit()
-        repository.downloader.queue.put(None)
+        repository.downloader.exit()          # signals the thread for exit
+        repository.downloader.queue.put(None) # this will wakeup the thread because it is most likely waiting for queue.pop()

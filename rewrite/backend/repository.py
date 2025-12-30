@@ -11,13 +11,11 @@ from rewrite.backend.database import Database
 from rewrite.backend.schemas import MangaIdentifier, ChapterIdentifier, ChapterList, MangaAttributes, \
     ChapterAttributes, LatestChapter, MangaList, COVER_ART_MAX_SIZE, COVER_ART_512_SIZE, from_json, Chapter, Manga
 from rewrite.backend.settings import load_settings, load_credentials
-from rewrite.backend.utils import perf_test, info, error, get_relationships, warning
+from rewrite.backend.utils import perf_test, info, error, get_relationships, warning, debug
 
 
 # Taking inspiration from how android works utilizing repositories which take connection nad database
 # so it interfaces finding offline and online data
-
-
 class MangaRepository:
     def __init__(self):
         self.settings = load_settings()
@@ -36,8 +34,8 @@ class MangaRepository:
         batch = []
         for page, content in enumerate(downloader.finished[muuid][cuuid]):
             batch.append((page + 1, content, cuuid))
-        self.database.set_chapter_pages(batch, is_webp=True)  # Dont use webp for now
-        self.settings.logger.log(info, f"Saved {len(batch)} pages")
+        self.database.set_chapter_pages(batch)
+        self.settings.logger.log(debug, f"Saved {len(batch)} pages")
         del downloader.finished[muuid][cuuid]
 
     def get_manga_attributes(self, identifier: MangaIdentifier, local_only: bool = False) -> Optional[MangaAttributes]:
@@ -167,7 +165,7 @@ class MangaRepository:
             "groups[]": [group.id for group in current_chapter_groups],
             "translatedLanguage[]": self.settings.translatedLanguage
         })
-        start = time.perf_counter()
+
         volume, chapter = current_chapter.attributes.volume, current_chapter.attributes.chapter
         volumes = aggregate["volumes"]
         # if no volume is set mangadex expects string 'none' not json null
@@ -202,9 +200,6 @@ class MangaRepository:
             _next = None
         if not self.database.is_chapter_downloaded(prev):
             prev = None
-
-        end = time.perf_counter()
-        print(f"Local next-prev took {end-start}seconds")
 
         return _next, prev
 

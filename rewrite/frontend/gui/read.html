@@ -12,25 +12,29 @@
 
         :root {
             {% if darktheme %}
-            --md-bg: #0d0d0d;
-            --md-surface: #1a1a1a;
-            --md-surface-hover: #242424;
-            --md-border: #2a2a2a;
-            --md-text: #ffffff;
-            --md-text-secondary: #b0b0b0;
+            --md-bg: #1a1a1a;
+            --md-surface: #242424;
+            --md-surface-hover: #2a2a2a;
+            --md-border: #3a3a3a;
+            --md-text: #e8e8e8;
+            --md-text-secondary: #a0a0a0;
             --md-accent: #ff6740;
             --md-accent-hover: #ff7d5c;
-            --md-shadow: rgba(0, 0, 0, 0.7);
+            --md-success: #4caf50;
+            --md-danger: #f44336;
+            --md-shadow: rgba(0, 0, 0, 0.5);
             {% else %}
-            --md-bg: #0d0d0d;
-            --md-surface: #1a1a1a;
-            --md-surface-hover: #242424;
-            --md-border: #2a2a2a;
-            --md-text: #ffffff;
-            --md-text-secondary: #b0b0b0;
+            --md-bg: #f5f5f5;
+            --md-surface: #ffffff;
+            --md-surface-hover: #f9f9f9;
+            --md-border: #e0e0e0;
+            --md-text: #1a1a1a;
+            --md-text-secondary: #666666;
             --md-accent: #ff6740;
             --md-accent-hover: #ff7d5c;
-            --md-shadow: rgba(0, 0, 0, 0.7);
+            --md-success: #4caf50;
+            --md-danger: #f44336;
+            --md-shadow: rgba(0, 0, 0, 0.1);
             {% endif %}
         }
 
@@ -40,152 +44,332 @@
             background-color: var(--md-bg);
             display: flex;
             flex-direction: column;
-            align-items: center;
-            overflow-y: auto;
-            overflow-x: hidden;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
+            overflow-x: hidden;
         }
 
-        /* Top navigation bar */
-        .reader-header {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
+        body.long-strip {
+            overflow-y: auto;
+        }
+
+        /* Fixed top bar */
+        .top-bar {
+            position: relative;
             background-color: var(--md-surface);
             border-bottom: 1px solid var(--md-border);
-            padding: 12px 20px;
+            padding: 0 20px;
+            height: 56px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             z-index: 1000;
-            transition: transform 0.3s ease;
         }
 
-        .reader-header.hidden {
-            transform: translateY(-100%);
-        }
-
-        .header-left {
+        .top-bar-left {
             display: flex;
             align-items: center;
-            gap: 16px;
+            gap: 20px;
         }
 
-        .button {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 8px 16px;
-            font-size: 14px;
-            font-weight: 500;
-            background-color: transparent;
-            color: var(--md-text);
-            border: 1px solid var(--md-border);
-            border-radius: 4px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            text-decoration: none;
-        }
-
-        .button:hover {
-            background-color: var(--md-surface-hover);
-        }
-
-        .button-accent {
-            background-color: var(--md-accent);
-            color: white;
-            border-color: var(--md-accent);
-        }
-
-        .button-accent:hover {
-            background-color: var(--md-accent-hover);
-        }
-
-        .page-info {
+        .top-bar-center {
             display: flex;
             align-items: center;
             gap: 12px;
+        }
+
+        .top-bar-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .back-btn {
+            color: var(--md-text);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            padding: 8px 16px;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+
+        .back-btn:hover {
+            background-color: var(--md-surface-hover);
+        }
+
+        .chapter-title {
             font-size: 14px;
             color: var(--md-text);
             font-weight: 500;
         }
 
-        .page-counter {
-            background-color: var(--md-surface);
-            padding: 6px 12px;
-            border-radius: 4px;
-            border: 1px solid var(--md-accent);
-            color: var(--md-text);
-            font-weight: 600;
+        .page-nav {
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
-        /* Navigation arrows */
-        .nav-arrow {
-            position: fixed;
-            top: 50%;
-            transform: translateY(-50%);
-            background-color: var(--md-surface);
+        body.long-strip .page-nav {
+            display: none;
+        }
+
+        .nav-btn {
+            background-color: transparent;
             border: 1px solid var(--md-border);
             color: var(--md-text);
-            width: 48px;
-            height: 48px;
-            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            border-radius: 4px;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: all 0.2s ease;
-            z-index: 100;
-            font-size: 20px;
-            opacity: 0.7;
+            transition: all 0.2s;
+            font-size: 18px;
         }
 
-        .nav-arrow:hover {
-            opacity: 1;
-            background-color: var(--md-accent);
+        .nav-btn:hover:not(:disabled) {
+            background-color: var(--md-surface-hover);
             border-color: var(--md-accent);
-            transform: translateY(-50%) scale(1.1);
         }
 
-        .nav-arrow.left {
-            left: 20px;
+        .nav-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
         }
 
-        .nav-arrow.right {
-            right: 20px;
+        .page-input-container {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background-color: var(--md-bg);
+            border: 1px solid var(--md-border);
+            border-radius: 4px;
+            padding: 4px 10px;
+            font-size: 13px;
+            color: var(--md-text);
         }
 
-        .nav-arrow.hidden {
+        .page-input {
+            background: transparent;
+            border: none;
+            color: var(--md-text);
+            width: 40px;
+            text-align: center;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .page-input:focus {
+            outline: none;
+        }
+
+        .page-total {
+            color: var(--md-text-secondary);
+        }
+
+        .chapter-nav-btn {
+            background-color: transparent;
+            border: 1px solid var(--md-border);
+            color: var(--md-text);
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 13px;
+            font-weight: 500;
             display: none;
         }
 
-        /* Image container */
-        .page-content {
-            margin-top: 60px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            width: 100%;
-            min-height: calc(100vh - 60px);
-            padding: 20px;
+        .chapter-nav-btn:hover {
+            background-color: var(--md-surface-hover);
+            border-color: var(--md-accent);
         }
 
-        .page-content img {
+        /* Main content area */
+        .content-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+        }
+
+        .content-wrapper.long-strip {
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .page-container {
             max-width: 100%;
-            max-height: calc(100vh - 100px);
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+        }
+
+        .page-container.long-strip {
+            flex-direction: column;
+            align-items: center;
+            gap: 0;
+            width: 100%;
+        }
+
+        .page-container img {
+            max-width: 100%;
+            height: 100vh;
             width: auto;
-            height: auto;
             display: block;
-            border-radius: 4px;
-            box-shadow: 0 4px 12px var(--md-shadow);
             cursor: pointer;
             user-select: none;
             object-fit: contain;
         }
 
-        .page-content img.hidden {
+        .page-container.long-strip img {
+            height: auto;
+            max-height: none;
+            cursor: pointer;
+        }
+
+        .page-container img.hidden {
             display: none;
+        }
+
+        .page-container.long-strip img.hidden {
+            display: block;
+        }
+
+        /* Side navigation zones */
+        .nav-zone {
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            width: 15%;
+            cursor: pointer;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        body.long-strip .nav-zone {
+            display: none;
+        }
+
+        /* Long strip footer navigation */
+        .longstrip-footer {
+            display: none;
+            width: 100%;
+            background-color: var(--md-surface);
+            border-top: 1px solid var(--md-border);
+            padding: 40px 20px;
+            margin-top: 40px;
+        }
+
+        body.long-strip .longstrip-footer {
+            display: block;
+        }
+
+        .longstrip-footer-content {
+            max-width: 800px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .longstrip-chapter-info {
+            text-align: center;
+            color: var(--md-text-secondary);
+            font-size: 14px;
+        }
+
+        .longstrip-nav-buttons {
+            display: flex;
+            gap: 16px;
+            width: 100%;
+            max-width: 600px;
+        }
+
+        .longstrip-chapter-btn {
+            flex: 1;
+            padding: 16px 24px;
+            font-size: 15px;
+            font-weight: 600;
+            background-color: var(--md-accent);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: none;
+        }
+
+        .longstrip-chapter-btn:hover {
+            background-color: #ff8c6b;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(255, 103, 64, 0.4);
+        }
+
+        .longstrip-chapter-btn:active {
+            transform: translateY(0);
+        }
+
+        .longstrip-chapter-btn.visible {
+            display: block;
+        }
+
+        .longstrip-back-btn {
+            width: 100%;
+            max-width: 600px;
+            padding: 16px 24px;
+            font-size: 15px;
+            font-weight: 600;
+            background-color: var(--md-surface-hover);
+            color: var(--md-text);
+            border: 1px solid var(--md-border);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .longstrip-back-btn:hover {
+            background-color: var(--md-border);
+            border-color: var(--md-text-secondary);
+        }
+
+        @media (max-width: 768px) {
+            .longstrip-footer {
+                padding: 30px 16px;
+            }
+
+            .longstrip-nav-buttons {
+                flex-direction: column;
+            }
+        }
+
+        .nav-zone:hover {
+            opacity: 1;
+            background: linear-gradient(to right, rgba(0,0,0,0.3), transparent);
+        }
+
+        .nav-zone.right:hover {
+            background: linear-gradient(to left, rgba(0,0,0,0.3), transparent);
+        }
+
+        .nav-zone.left {
+            left: 0;
+        }
+
+        .nav-zone.right {
+            right: 0;
+        }
+
+        .nav-zone-icon {
+            font-size: 48px;
+            color: var(--md-text);
+            text-shadow: 0 2px 8px rgba(0,0,0,0.8);
         }
 
         /* Loading state */
@@ -201,7 +385,6 @@
             justify-content: center;
             align-items: center;
             z-index: 2000;
-            color: var(--md-text);
         }
 
         .loading-spinner {
@@ -219,19 +402,19 @@
         }
 
         .loading-text {
-            font-size: 16px;
+            font-size: 14px;
             color: var(--md-text-secondary);
         }
 
-        /* Progress bar */
+        /* Progress indicator */
         .progress-bar {
-            position: fixed;
-            bottom: 0;
+            position: absolute;
+            top: 0;
             left: 0;
             right: 0;
-            height: 4px;
-            background-color: var(--md-surface);
-            z-index: 999;
+            height: 3px;
+            background-color: var(--md-border);
+            z-index: 1001;
         }
 
         .progress-fill {
@@ -240,65 +423,18 @@
             transition: width 0.3s ease;
         }
 
-        /* Chapter navigation */
-        .chapter-nav {
-            display: flex;
-            gap: 12px;
-            margin: 20px 0;
-        }
-
-        /* Keyboard shortcuts hint */
-        .shortcuts-hint {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: var(--md-surface);
-            border: 1px solid var(--md-border);
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 12px;
-            color: var(--md-text-secondary);
-            opacity: 0;
-            transition: opacity 0.3s ease;
-            pointer-events: none;
-            z-index: 100;
-        }
-
-        .shortcuts-hint.show {
-            opacity: 0.9;
-        }
-
         @media (max-width: 768px) {
-            .reader-header {
-                padding: 10px 16px;
+            .top-bar {
+                padding: 0 12px;
+                height: 48px;
             }
 
-            .page-info {
-                font-size: 13px;
-            }
-
-            .nav-arrow {
-                width: 40px;
-                height: 40px;
-                font-size: 16px;
-            }
-
-            .nav-arrow.left {
-                left: 10px;
-            }
-
-            .nav-arrow.right {
-                right: 10px;
-            }
-
-            .page-content {
-                margin-top: 50px;
-                padding: 10px;
-            }
-
-            .shortcuts-hint {
+            .chapter-title {
                 display: none;
+            }
+
+            .nav-zone {
+                width: 25%;
             }
         }
     </style>
@@ -307,79 +443,95 @@
     <!-- Loading overlay -->
     <div class="loading-overlay" id="loading">
         <div class="loading-spinner"></div>
-        <div class="loading-text">Loading pages...</div>
+        <div class="loading-text">Loading chapter...</div>
     </div>
-
-    <!-- Top navigation -->
-    <div class="reader-header" id="header">
-        <div class="header-left">
-            <button class="button" onClick="window.location.href='/manga/{{muuid}}';">Back to manga</button>
-            <div class="page-counter" id="page-header">1/{{ pages }}</div>
-        </div>
-        <div class="chapter-nav">
-            <button class="button" id="prev-chapter" style="display: none;">← Previous Chapter</button>
-            <button class="button button-accent" id="next-chapter" style="display: none;">Next Chapter →</button>
-        </div>
-    </div>
-
-    <!-- Navigation arrows -->
-    <button class="nav-arrow left" id="nav-left" onclick="page_back()">‹</button>
-    <button class="nav-arrow right" id="nav-right" onclick="page_next()">›</button>
 
     <!-- Progress bar -->
     <div class="progress-bar">
         <div class="progress-fill" id="progress"></div>
     </div>
 
-    <!-- Image container -->
-    <div id="content" class="page-content"></div>
+    <!-- Top navigation bar -->
+    <div class="top-bar">
+        <div class="top-bar-left">
+            <a href="/manga/{{muuid}}" class="back-btn">← Back</a>
+            <span class="chapter-title">Chapter {{ chapter_no }}</span>
+        </div>
 
-    <!-- Keyboard shortcuts hint -->
-    <div class="shortcuts-hint" id="shortcuts">
-        Use ← → arrow keys or click sides to navigate
+        <div class="top-bar-center">
+            <div class="page-nav">
+                <button class="nav-btn" id="first-page" onclick="goToFirstPage()">⟪</button>
+                <button class="nav-btn" id="prev-page" onclick="page_back()">‹</button>
+                <div class="page-input-container">
+                    <input type="number" class="page-input" id="page-input" value="{{page}}" min="1" max="{{pages}}">
+                    <span class="page-total">/ {{pages}}</span>
+                </div>
+                <button class="nav-btn" id="next-page" onclick="page_next()">›</button>
+                <button class="nav-btn" id="last-page" onclick="goToLastPage()">⟫</button>
+            </div>
+        </div>
+
+        <div class="top-bar-right">
+            <button class="chapter-nav-btn" id="prev-chapter">← Previous</button>
+            <button class="chapter-nav-btn" id="next-chapter">Next →</button>
+        </div>
+    </div>
+
+    <!-- Side navigation zones -->
+    <div class="nav-zone left" onclick="page_back()">
+        <div class="nav-zone-icon">‹</div>
+    </div>
+    <div class="nav-zone right" onclick="page_next()">
+        <div class="nav-zone-icon">›</div>
+    </div>
+
+    <!-- Main content -->
+    <div class="content-wrapper">
+        <div class="page-container" id="content"></div>
+    </div>
+
+    <!-- Long strip footer navigation -->
+    <div class="longstrip-footer">
+        <div class="longstrip-footer-content">
+            <div class="longstrip-chapter-info">
+                End of Chapter {{ chapter_no }}
+            </div>
+            <div class="longstrip-nav-buttons">
+                <button class="longstrip-chapter-btn" id="longstrip-prev-chapter">← Previous Chapter</button>
+                <button class="longstrip-chapter-btn" id="longstrip-next-chapter">Next Chapter →</button>
+            </div>
+            <button class="longstrip-back-btn" onclick="window.location.href='/manga/{{muuid}}'">
+                Back to Manga
+            </button>
+        </div>
     </div>
 
     <script>
         window.token = '{{ token }}';
+        const pageRenderMode = '{{ page_render }}';
+        const isLongStrip = pageRenderMode === 'LONG_STRIP';
 
         const content = document.getElementById('content');
-        const page_header = document.getElementById("page-header");
         const loading = document.getElementById("loading");
-        const header = document.getElementById("header");
         const progress = document.getElementById("progress");
-        const shortcutsHint = document.getElementById("shortcuts");
-        const navLeft = document.getElementById("nav-left");
-        const navRight = document.getElementById("nav-right");
+        const pageInput = document.getElementById("page-input");
+        const firstPageBtn = document.getElementById("first-page");
+        const prevPageBtn = document.getElementById("prev-page");
+        const nextPageBtn = document.getElementById("next-page");
+        const lastPageBtn = document.getElementById("last-page");
 
         let nextChapter = null;
         let prevChapter = null;
         let relocated = false;
         let pageCount = {{pages}};
         let page = {{page}};
-        let headerVisible = true;
-        let hideHeaderTimeout = null;
 
-        // Show shortcuts hint on load
-        setTimeout(() => {
-            shortcutsHint.classList.add('show');
-            setTimeout(() => {
-                shortcutsHint.classList.remove('show');
-            }, 3000);
-        }, 1000);
-
-        // Auto-hide header
-        function resetHeaderTimeout() {
-            headerVisible = true;
-            header.classList.remove('hidden');
-            clearTimeout(hideHeaderTimeout);
-            hideHeaderTimeout = setTimeout(() => {
-                headerVisible = false;
-                header.classList.add('hidden');
-            }, 3000);
+        // Apply long strip mode styling
+        if (isLongStrip) {
+            document.body.classList.add('long-strip');
+            document.querySelector('.content-wrapper').classList.add('long-strip');
+            content.classList.add('long-strip');
         }
-
-        document.addEventListener('mousemove', resetHeaderTimeout);
-        resetHeaderTimeout();
 
         function updateProgress() {
             const percentage = (page / pageCount) * 100;
@@ -387,61 +539,97 @@
         }
 
         function updateNavButtons() {
-            if (page === 1) {
-                navLeft.classList.add('hidden');
-            } else {
-                navLeft.classList.remove('hidden');
-            }
+            firstPageBtn.disabled = page === 1;
+            prevPageBtn.disabled = page === 1 && prevChapter === null;
+            nextPageBtn.disabled = page === pageCount && nextChapter === null;
+            lastPageBtn.disabled = page === pageCount;
+        }
 
-            if (page === pageCount && !nextChapter) {
-                navRight.classList.add('hidden');
-            } else {
-                navRight.classList.remove('hidden');
+        function goToFirstPage() {
+            if (page !== 1) {
+                set_page(1);
             }
         }
 
-        // Fetches all the pages at once
+        function goToLastPage() {
+            if (page !== pageCount) {
+                set_page(pageCount);
+            }
+        }
+
+        pageInput.addEventListener('change', (e) => {
+            let newPage = parseInt(e.target.value);
+            if (isNaN(newPage) || newPage < 1) newPage = 1;
+            if (newPage > pageCount) newPage = pageCount;
+            pageInput.value = newPage;
+            if (newPage !== page) {
+                set_page(newPage);
+            }
+        });
+
+        pageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                pageInput.blur();
+            }
+        });
+
         function full_load() {
             fetch("/manga/read-status", {
-			        method: "POST",
-			        body: JSON.stringify({
-			            "cuuid": "{{ cuuid }}",
-			            "read_state": 1
-			        })
-			    });
+                method: "POST",
+                body: JSON.stringify({
+                    "cuuid": "{{ cuuid }}",
+                    "read_state": 1
+                })
+            });
+
             fetch("/page-images/{{cuuid}}")
                 .then(response => response.json())
                 .then(data => {
                     for (const key in data) {
                         const img = document.createElement("img");
-                        img.id = "page-panel";
-                        img.src = `data:image/webp;base64,${data[key]}`;
-                        img.classList.add("hidden");
-                        img.addEventListener("mousedown", handle_click);
+                        img.src = `data:image/png;base64,${data[key]}`;
+
+                        if (!isLongStrip) {
+                            img.classList.add("hidden");
+                            img.addEventListener("click", handle_click);
+                        } else {
+                            img.addEventListener("click", handleLongStripClick);
+                        }
+
                         content.appendChild(img);
                     }
-                    page_header.innerHTML = `${page}/${pageCount}`;
-                    set_page(page);
+
+                    if (!isLongStrip) {
+                        set_page(page);
+                    }
+
                     loading.style.display = 'none';
                     updateProgress();
                     updateNavButtons();
+                    // Start at top when first loading
+                    window.scrollTo({ top: 0, behavior: 'instant' });
                 });
         }
 
         function set_page(to_page) {
-            if (content.children.length === 0) {
-                return;
-            }
+            if (isLongStrip || content.children.length === 0) return;
+
             let current_page = content.children.item(page - 1);
             let _set_page = content.children.item(to_page - 1);
 
-            current_page.classList.add("hidden");
-            _set_page.classList.remove("hidden");
-            page_header.innerHTML = to_page + "/" + pageCount;
-            document.title = `${to_page} | Chapter {{ chapter_no }}`
+            if (current_page) current_page.classList.add("hidden");
+            if (_set_page) _set_page.classList.remove("hidden");
 
-            // Scroll to top when changing pages
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            pageInput.value = to_page;
+            document.title = `${to_page} | Chapter {{ chapter_no }}`;
+
+            // Only scroll down on page changes, not on initial load
+            if (page !== to_page) {
+                const topBar = document.querySelector('.top-bar');
+                window.scrollTo({ top: topBar.offsetHeight, behavior: 'instant' });
+            }
+
+            page = to_page;
             updateProgress();
             updateNavButtons();
         }
@@ -460,47 +648,57 @@
             }
         }
 
+        function handleLongStripClick(event) {
+            const image = event.target;
+            const boundingRect = image.getBoundingClientRect();
+            const clickX = event.clientX - boundingRect.left;
+            const imageWidth = boundingRect.width;
+            const midpoint = imageWidth / 2;
+
+            const scrollAmount = window.innerHeight;
+
+            if (clickX < midpoint) {
+                // Scroll up
+                window.scrollBy({ top: -scrollAmount, behavior: 'smooth' });
+            } else {
+                // Scroll down
+                window.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+            }
+        }
+
         function page_next() {
-            if (relocated) {
+            if (isLongStrip || relocated) return;
+
+            if (page >= pageCount) {
+                if (nextChapter !== null) {
+                    window.location.href = "/read/" + nextChapter + "/1";
+                    relocated = true;
+                } else {
+                    window.location.href = "/manga/{{muuid}}";
+                }
                 return;
             }
-            var pageCopy = page;
-            if (page + 1 > pageCount && nextChapter !== null) {
-                window.location.href = "/read/" + nextChapter + "/1";
-                relocated = true;
-                return;
-            }
-            if (page === pageCount && nextChapter === null){
-                window.location.href = "/manga/{{muuid}}";
-                return;
-            }
-            var new_page = Math.max(1, Math.min(page + 1, pageCount));
-            if (new_page === pageCopy) {
-                return;
-            }
-            set_page(new_page);
-            page = new_page;
+
+            set_page(page + 1);
         }
 
         function page_back() {
-            if (relocated) {
+            if (isLongStrip || relocated) return;
+
+            if (page <= 1) {
+                if (prevChapter !== null) {
+                    window.location.href = "/read/" + prevChapter + "?end=true";
+                    relocated = true;
+                }
                 return;
             }
-            var pageCopy = page;
-            if (page - 1 < 1 && prevChapter !== null) {
-                window.location.href = "/read/" + prevChapter + "?end=true";
-                relocated = true;
-                return;
-            }
-            var new_page = Math.max(1, Math.min(page - 1, pageCount));
-            if (new_page === pageCopy) {
-                return;
-            }
-            set_page(new_page);
-            page = new_page;
+
+            set_page(page - 1);
         }
 
         document.addEventListener('keydown', (event) => {
+            if (document.activeElement === pageInput || isLongStrip) return;
+
             switch (event.key) {
                 case "ArrowRight":
                     page_next();
@@ -508,12 +706,22 @@
                 case "ArrowLeft":
                     page_back();
                     break;
-                default:
+                case "Home":
+                    goToFirstPage();
+                    break;
+                case "End":
+                    goToLastPage();
                     break;
             }
         });
 
+        // Update progress bar on scroll for long strip mode
+        if (isLongStrip) {
+            window.addEventListener('scroll', updateProgress);
+        }
+
         full_load();
+
         fetch("/read/next-prev/{{cuuid}}")
             .then(response => response.json())
             .then(data => {
@@ -522,17 +730,29 @@
 
                 const prevBtn = document.getElementById('prev-chapter');
                 const nextBtn = document.getElementById('next-chapter');
+                const longstripPrevBtn = document.getElementById('longstrip-prev-chapter');
+                const longstripNextBtn = document.getElementById('longstrip-next-chapter');
 
                 if (prevChapter) {
-                    prevBtn.style.display = 'inline-flex';
+                    prevBtn.style.display = 'inline-block';
                     prevBtn.onclick = () => {
+                        window.location.href = "/read/" + prevChapter + "?end=true";
+                    };
+
+                    longstripPrevBtn.classList.add('visible');
+                    longstripPrevBtn.onclick = () => {
                         window.location.href = "/read/" + prevChapter + "?end=true";
                     };
                 }
 
                 if (nextChapter) {
-                    nextBtn.style.display = 'inline-flex';
+                    nextBtn.style.display = 'inline-block';
                     nextBtn.onclick = () => {
+                        window.location.href = "/read/" + nextChapter + "/1";
+                    };
+
+                    longstripNextBtn.classList.add('visible');
+                    longstripNextBtn.onclick = () => {
                         window.location.href = "/read/" + nextChapter + "/1";
                     };
                 }
