@@ -3,8 +3,6 @@
 Local MangaDex is an open-source, self-hosted web application that uses the MangaDex API.  
 It allows you to download manga to your local drive and read them offline.
 
-Local storage has been tested with databases up to 200 GB
-
 ## Installation & Running
 
 1. Clone or download this repository.
@@ -22,7 +20,7 @@ Local storage has been tested with databases up to 200 GB
 
 ## Roadmap (Priority-Based)
 
-- [ ] Fix recently updated page
+- [x] Fix recently updated page
 - [x] Add more content to landing page
 - [x] Remove back buttons from pages and rely on browser navigation
 - [x] Add support for long strip manga

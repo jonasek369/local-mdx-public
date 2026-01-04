@@ -19,7 +19,7 @@ from rewrite.backend.settings import Settings, MangadexCredentials
 from datetime import datetime
 
 from rewrite.backend.utils import error, info, warning, perf_test, get_correct_language, \
-    Logger, run_async, is_expired, success, debug
+    Logger, run_async, is_expired, success, debug, get_relationships
 import aiohttp
 
 CACHE_AGGREGATE_TTL = 60 * 5
@@ -825,13 +825,19 @@ class MangadexConnection:
     def sync_custom_list(self, manga_uuids: List[MangaIdentifier]) -> bool:
         sync_list_uuid, sync_lists = self.get_sync_list()
         if sync_list_uuid is None:
-            return self.create_custom_list(manga_uuids)
-        sync_list: CustomList = next((x for x in sync_lists.data if x.id == sync_list_uuid), None)
+            if not self.create_custom_list(manga_uuids):
+                return False
+            sync_list_uuid, sync_lists = self.get_sync_list()
+        try:
+            sync_list: CustomList = next((x for x in sync_lists.data if x.id == sync_list_uuid), None)
+        except StopIteration:
+            # Should never happen because get_sync_list makes sure it exists
+            self.logger.log(error, "local-mangadex-sync not found in fetched custom lists")
+            return False
         sync_list_uuids = []
         version = sync_list.attributes.version
-        for relationship in sync_list.relationships:
-            if relationship.type == "manga":
-                sync_list_uuids.append(relationship.id)
+        for relationship in get_relationships(sync_list.relationships, "manga"):
+            sync_list_uuids.append(relationship.id)
         if sorted(sync_list_uuids) == sorted(manga_uuids):
             self.logger.log(debug, "Libraries are already synced")
             return True

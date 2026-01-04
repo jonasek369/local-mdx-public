@@ -1,287 +1,627 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-	<meta charset="UTF-8">
-	<title>Updates</title>
-	<style>
-        .button {
-            display: inline-block;
-            padding: 8px 16px;
-            font-size: 14px;
-            font-weight: bold;
-            text-decoration: none;
-            background-color: #4CAF50;
-            color: #fff;
-            border: none;
-            border-radius: 4px;
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Updates</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            {% if darktheme %}
+            --md-bg: #1a1a1a;
+            --md-surface: #242424;
+            --md-surface-hover: #2a2a2a;
+            --md-border: #3a3a3a;
+            --md-text: #e8e8e8;
+            --md-text-secondary: #a0a0a0;
+            --md-accent: #ff6740;
+            --md-accent-hover: #ff7d5c;
+            --md-success: #4caf50;
+            --md-danger: #f44336;
+            --md-shadow: rgba(0, 0, 0, 0.5);
+            {% else %}
+            --md-bg: #f5f5f5;
+            --md-surface: #ffffff;
+            --md-surface-hover: #f9f9f9;
+            --md-border: #e0e0e0;
+            --md-text: #1a1a1a;
+            --md-text-secondary: #666666;
+            --md-accent: #ff6740;
+            --md-accent-hover: #ff7d5c;
+            --md-success: #4caf50;
+            --md-danger: #f44336;
+            --md-shadow: rgba(0, 0, 0, 0.1);
+            {% endif %}
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
+            background-color: var(--md-bg);
+            color: var(--md-text);
+            min-height: 100vh;
+        }
+
+        .header {
+            background-color: var(--md-surface);
+            border-bottom: 1px solid var(--md-border);
+            padding: 16px 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-title {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 24px 20px;
+        }
+
+        .manga-update {
+            background-color: var(--md-surface);
+            border: 1px solid var(--md-border);
+            border-radius: 6px;
+            margin-bottom: 16px;
+            overflow: hidden;
+            transition: border-color 0.2s;
+        }
+
+        .manga-update:hover {
+            border-color: var(--md-accent);
+        }
+
+        .manga-header {
+            display: flex;
+            gap: 16px;
+            padding: 16px;
+            border-bottom: 1px solid var(--md-border);
             cursor: pointer;
         }
 
-        .button:hover {
-            background-color: #45a049;
+        .manga-cover {
+            width: 80px;
+            height: 112px;
+            flex-shrink: 0;
+            border-radius: 4px;
+            object-fit: cover;
+            background-color: var(--md-surface-hover);
         }
 
-        .button:active {
-            background-color: #3e8e41;
+        .manga-info {
+            flex: 1;
+            min-width: 0;
         }
 
-        #updates {
+		.download-btn {
+            padding: 6px 12px;
+            background-color: transparent;
+            color: var(--md-accent);
+            border: 1px solid var(--md-accent);
+            border-radius: 20px; /* Pill shape */
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+            white-space: nowrap;
+            align-self: center; /* Centers it vertically in the flex row */
+        }
+
+        .download-btn:hover {
+            background-color: var(--md-accent);
+            color: white;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px var(--md-shadow);
+        }
+
+        .download-btn:active {
+            transform: translateY(0);
+        }
+
+        .manga-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--md-text);
+            text-decoration: none;
+            display: block;
+        }
+
+        .manga-title:hover {
+            color: var(--md-accent);
+        }
+
+        .manga-stats {
             display: flex;
-            flex-direction: column; /* Stack items vertically */
+            gap: 16px;
+            font-size: 13px;
+            color: var(--md-text-secondary);
+        }
+
+        .chapters-list {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .chapters-list.expanded {
+            max-height: 2000px;
+        }
+
+        .chapter-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--md-border);
+            transition: background-color 0.2s;
+            cursor: pointer;
+            text-decoration: none;
+            color: var(--md-text);
+        }
+
+        .chapter-item:last-child {
+            border-bottom: none;
+        }
+
+        .chapter-item:hover {
+            background-color: var(--md-surface-hover);
+        }
+
+        .chapter-left {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .chapter-flag {
+            width: 24px;
+            height: 18px;
+            background-color: var(--md-border);
+            border-radius: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .chapter-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .chapter-title-line {
+            font-weight: 500;
+            font-size: 14px;
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .chapter-meta {
+            font-size: 12px;
+            color: var(--md-text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .chapter-right {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            color: var(--md-text-secondary);
+            font-size: 12px;
+            flex-shrink: 0;
+        }
+
+        .chapter-pages {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .expand-btn {
+            display: flex;
             justify-content: center;
             align-items: center;
+            padding: 8px;
+            background-color: transparent;
+            border: none;
+            color: var(--md-accent);
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            width: 100%;
+            transition: background-color 0.2s;
         }
 
-        #updates .update {
-            width: 500px;
-            height: 100px;
+        .expand-btn:hover {
+            background-color: var(--md-surface-hover);
+        }
+
+        .pagination {
             display: flex;
+            justify-content: center;
             align-items: center;
-            margin-top: 10px;
-            color: #333333;
-            text-decoration: none;
-            background-color: #f2f2f2;
-            border: 2px solid #999999;
-            overflow: hidden;
+            gap: 12px;
+            margin-top: 32px;
+            padding: 20px;
         }
 
-        #updates .update img {
-            max-width: 180px;
-            max-height: 80px;
-            margin-left: 10px;
-            object-fit: cover;
-            background-size: contain;
-            background-repeat: no-repeat;
-            background-position: center;
-            filter: drop-shadow(0px 0px 5px black);
+        .page-btn {
+            padding: 8px 16px;
+            background-color: var(--md-surface);
+            color: var(--md-text);
+            border: 1px solid var(--md-border);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
         }
 
-        #updates .update .name {
-            align-self: flex-start;
-            margin-top: 10px;
-            margin-left: 5px;
-
-            font-size: 28px;
-            font-weight: bold;
-            font-family: sans-serif;
-
-            white-space: nowrap;
+        .page-btn:hover:not(:disabled) {
+            background-color: var(--md-surface-hover);
+            border-color: var(--md-accent);
         }
 
-        #updates .update .chapter {
-            align-self: flex-start;
-            margin-top: 50px;
-            margin-left: 10px;
-
-            font-size: 16px;
-            font-weight: bold;
-            font-family: sans-serif;
-
-
-            overflow: hidden;
-            text-overflow: clip;
+        .page-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
         }
 
-        .chapter-update.hidden-chapter {
-            display: none !important;
+        .page-number {
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--md-text);
         }
-	</style>
-	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--md-text-secondary);
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--md-border);
+            border-top-color: var(--md-accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .header-content {
+                padding: 0 16px;
+            }
+
+            .container {
+                padding: 16px;
+            }
+
+            .manga-header {
+                padding: 12px;
+            }
+
+            .manga-cover {
+                width: 60px;
+                height: 84px;
+            }
+
+            .manga-title {
+                font-size: 16px;
+            }
+
+            .manga-stats {
+                flex-direction: column;
+                gap: 4px;
+            }
+
+			.download-btn {
+                width: auto;      /* Prevents full-width on mobile */
+                margin-top: 0;     /* Keeps it aligned with the header */
+                padding: 4px 10px; /* Slightly smaller on mobile */
+                font-size: 11px;
+            }
+
+            .chapter-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+            }
+
+            .chapter-right {
+                width: 100%;
+                justify-content: flex-end;
+            }
+        }
+    </style>
 </head>
 <body>
-<button class="button" onClick="window.location.href='/';">Back</button>
-<div class="container py-4">
-	<h1 class="mb-4">Updates</h1>
-	<div id="updates-container"></div>
-</div>
+    <div class="header">
+        <div class="header-content">
+            <h1 class="header-title">Latest Updates</h1>
+        </div>
+    </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<div>
-	<button class="button" onclick="change_page(-1)">&larr;</button>
-	<a id="page-counter">1</a>
-	<button class="button" onclick="change_page(1)">&rarr;</button>
-</div>
-<script>
-    window.token = '{{ token }}';
+    <div class="container">
+        <div id="loading" class="loading">
+            <div class="loading-spinner"></div>
+            <div>Loading updates...</div>
+        </div>
+        <div id="updates-container"></div>
+        <div class="pagination">
+            <button class="page-btn" id="prev-page" onclick="changePage(-1)">← Previous</button>
+            <span class="page-number" id="page-counter">Page 1</span>
+            <button class="page-btn" id="next-page" onclick="changePage(1)">Next →</button>
+        </div>
+    </div>
 
-    let page = 1;
-    let offset = 0;
+    <script>
+        window.token = '{{ token }}';
+        let currentPage = 1;
+        const itemsPerPage = 20;
 
-    function change_page(add) {
-        if (add === 1) {
-            page += add
-            update_page()
+        function changePage(direction) {
+            if (direction === -1 && currentPage <= 1) return;
+            currentPage += direction;
+            updatePage();
         }
-        if (page >= 2 && add === -1) {
-            page += add
-            update_page()
-        }
-    }
 
-    function update_page() {
-        document.getElementById('page-counter').innerHTML = page;
-        fetch(`/updates/data?limit=32&offset=${page * 32}`, {
-            method: "GET",
-        }).then(res => res.json()).then(data => {
+        async function updatePage() {
+            const loading = document.getElementById('loading');
             const container = document.getElementById('updates-container');
-            while (container.hasChildNodes()) {
-                container.removeChild(container.lastChild);
-            }
-            createUpdateElement(data)
-        })
-    }
+            const pageCounter = document.getElementById('page-counter');
+            const prevBtn = document.getElementById('prev-page');
+            const nextBtn = document.getElementById('next-page');
 
-    function getMuuidFromChapter(chapter) {
-        for (let relationship of chapter.relationships) {
-            if (relationship.type === "manga") {
-                return relationship.id
-            }
-        }
-        throw Error(`Chapter ${chapter.id} not found`)
-    }
+            loading.style.display = 'block';
+            container.innerHTML = '';
 
-    async function createUpdateElement(chapterList) {
-        // Group chapters by their manga UUID
-        const chaptersByManga = {};
-        chapterList.data.forEach(chapter => {
-            const muuid = getMuuidFromChapter(chapter);
-            if (!chaptersByManga[muuid]) {
-                chaptersByManga[muuid] = [];
-            }
-            chaptersByManga[muuid].push(chapter);
-        });
+            try {
+                const offset = (currentPage - 1) * itemsPerPage;
+                const response = await fetch(`/updates/data?limit=${itemsPerPage}&offset=${offset}`);
+                const data = await response.json();
 
-        // Get the container in which to render the update elements
-        const container = document.getElementById('updates-container');
+                loading.style.display = 'none';
 
-        // Iterate over each manga group
-        for (const muuid in chaptersByManga) {
-            const chapters = chaptersByManga[muuid];
-
-            // Fetch the manga attributes (for example, to get the title)
-            const response = await fetch("/manga/" + muuid + "/attributes");
-            const attributes = await response.json(); // assume attributes has a 'title' field
-
-            // Create the main update container
-            const updateDiv = document.createElement('div');
-            updateDiv.classList.add('mb-4', 'p-4', 'border', 'rounded', 'shadow', 'bg-white', 'd-flex', 'gap-3');
-
-            // Create and append the cover image
-            const coverImage = document.createElement('img');
-            coverImage.src = "/manga/cover/" + muuid + "?small=1";
-            coverImage.alt = `${attributes.title.en} Cover`;
-            coverImage.classList.add('img-fluid');
-            coverImage.style.width = "100px";
-            coverImage.style.height = "150px";
-            updateDiv.appendChild(coverImage);
-
-            // Create container for text and chapter updates
-            const textContent = document.createElement('div');
-            textContent.classList.add('flex-grow-1');
-
-            // Add the manga title
-            const titleEl = document.createElement('h2');
-            titleEl.classList.add('h5');
-            titleEl.textContent = attributes.title.en;
-            textContent.appendChild(titleEl);
-
-            // Create a container for the chapter updates
-            const chaptersContainer = document.createElement('div');
-
-            // Create a chapter element for each chapter in this manga group
-            chapters.forEach((chapter, index) => {
-                const chapterDiv = document.createElement('div');
-                chapterDiv.classList.add(
-                    'chapter-update',
-                    'mt-2',
-                    'p-2',
-                    'border',
-                    'rounded',
-                    'bg-light',
-                    'd-flex',
-                    'justify-content-between'
-                );
-                // If there are more than three chapters, initially hide the ones beyond index 2
-                if (index >= 3) {
-                    chapterDiv.classList.add('hidden-chapter');
+                if (!data.data || data.data.length === 0) {
+                    container.innerHTML = '<div class="loading">No updates found.</div>';
+                    return;
                 }
 
-                // Left side: chapter information
-                const leftContent = document.createElement('div');
+                await createUpdateElements(data);
 
-                // Language indicator
-                const langSpan = document.createElement('span');
-                langSpan.classList.add('fw-bold');
-                langSpan.textContent = chapter.attributes.translatedLanguage;
-                leftContent.appendChild(langSpan);
+                pageCounter.textContent = `Page ${currentPage}`;
+                prevBtn.disabled = currentPage === 1;
+                nextBtn.disabled = data.data.length < itemsPerPage;
 
-                // Chapter details (volume, chapter, and title)
-                const chapterInfo = document.createElement('p');
-                chapterInfo.classList.add('mb-1');
-                const volText = chapter.attributes.volume ? `Vol. ${chapter.attributes.volume}` : "";
-                const chText = chapter.attributes.chapter ? `Ch. ${chapter.attributes.chapter}` : "";
-                const separator = (volText && chText) ? " " : "";
-                const chapTitle = chapter.attributes.title || "";
-                chapterInfo.textContent = `${volText}${separator}${chText} - ${chapTitle}`;
-                leftContent.appendChild(chapterInfo);
+            } catch (error) {
+                loading.style.display = 'none';
+                container.innerHTML = '<div class="loading">Error loading updates.</div>';
+                console.error('Error loading updates:', error);
+            }
+        }
 
-                // Uploader and creation time (or any other info you need)
-                const uploaderInfo = document.createElement('small');
-                uploaderInfo.classList.add('text-muted');
-                uploaderInfo.textContent = `${chapter.attributes.uploader || "Unknown"} • ${chapter.attributes.createdAt}`;
-                leftContent.appendChild(uploaderInfo);
+        function getMuuidFromChapter(chapter) {
+            for (let relationship of chapter.relationships) {
+                if (relationship.type === "manga") {
+                    return relationship.id;
+                }
+            }
+            throw Error(`Chapter ${chapter.id} manga not found`);
+        }
 
-                // Right side: additional chapter data (for example, page count)
-                const rightContent = document.createElement('div');
-                rightContent.classList.add('text-muted', 'd-flex', 'align-items-center', 'gap-2');
-                const pagesIcon = document.createElement('i');
-                pagesIcon.classList.add('fas', 'fa-file');
-                rightContent.appendChild(pagesIcon);
-                const pagesSpan = document.createElement('span');
-                pagesSpan.textContent = chapter.attributes.pages;
-                rightContent.appendChild(pagesSpan);
+        function formatTimeAgo(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const seconds = Math.floor((now - date) / 1000);
 
-                // Assemble the chapter update
-                chapterDiv.appendChild(leftContent);
-                chapterDiv.appendChild(rightContent);
-                chaptersContainer.appendChild(chapterDiv);
+            if (seconds < 60) return 'just now';
+            const minutes = Math.floor(seconds / 60);
+            if (minutes < 60) return `${minutes}m ago`;
+            const hours = Math.floor(minutes / 60);
+            if (hours < 24) return `${hours}h ago`;
+            const days = Math.floor(hours / 24);
+            if (days < 7) return `${days}d ago`;
+            const weeks = Math.floor(days / 7);
+            if (weeks < 4) return `${weeks}w ago`;
+            const months = Math.floor(days / 30);
+            if (months < 12) return `${months}mo ago`;
+            const years = Math.floor(days / 365);
+            return `${years}y ago`;
+        }
+
+        function downloadUpdates(muuid) {
+            fetch("/manga/download/push-job", {
+            	method: "POST",
+            	headers: {
+            	    "Content-Type": "application/json",
+            	},
+            	body: JSON.stringify({
+            	    id: muuid
+            	})
+        	})
+        }
+
+        async function createUpdateElements(chapterList) {
+            const chaptersByManga = {};
+
+            chapterList.data.forEach(chapter => {
+                const muuid = getMuuidFromChapter(chapter);
+                if (!chaptersByManga[muuid]) {
+                    chaptersByManga[muuid] = [];
+                }
+                chaptersByManga[muuid].push(chapter);
             });
 
-            textContent.appendChild(chaptersContainer);
+            const container = document.getElementById('updates-container');
 
-            // If there are more than three chapters, add a "Show All" button
-            if (chapters.length > 3) {
-                const showAllBtn = document.createElement('button');
-                showAllBtn.classList.add('btn', 'btn-link', 'p-0', 'mt-2');
-                showAllBtn.textContent = 'Show All';
+            for (const muuid in chaptersByManga) {
+                const chapters = chaptersByManga[muuid];
 
-                let isExpanded = false;
-                showAllBtn.addEventListener('click', () => {
-                    if (!isExpanded) {
-                        // Show all hidden chapters
-                        chaptersContainer
-                            .querySelectorAll('.chapter-update.hidden-chapter')
-                            .forEach(chap => chap.classList.remove('hidden-chapter'));
-                        showAllBtn.textContent = 'Show Less';
-                        isExpanded = true;
+                try {
+                    const response = await fetch("/manga/" + muuid + "/attributes");
+                    const attributes = await response.json();
+
+                    const mangaDiv = document.createElement('div');
+                    mangaDiv.className = 'manga-update';
+
+                    const headerDiv = document.createElement('div');
+                    headerDiv.className = 'manga-header';
+                    headerDiv.onclick = () => window.location.href = `/manga/${muuid}`;
+
+                    const cover = document.createElement('img');
+                    cover.className = 'manga-cover';
+                    cover.src = `/manga/cover/${muuid}?small=1`;
+                    cover.alt = attributes.title.en || 'Manga Cover';
+
+                    const infoDiv = document.createElement('div');
+                    infoDiv.className = 'manga-info';
+
+                    const title = document.createElement('a');
+                    title.className = 'manga-title';
+                    title.href = `/manga/${muuid}`;
+                    title.textContent = attributes.title || 'Unknown Title';
+                    title.onclick = (e) => e.stopPropagation();
+
+                    const stats = document.createElement('div');
+                    stats.className = 'manga-stats';
+                    stats.innerHTML = `
+                        <span>${chapters.length} new chapter${chapters.length > 1 ? 's' : ''}</span>
+                        <span>•</span>
+                        <span>${formatTimeAgo(chapters[0].attributes.createdAt)}</span>
+                    `;
+
+                    infoDiv.appendChild(title);
+                    infoDiv.appendChild(stats);
+
+                    const downloadBtn = document.createElement('button');
+                    downloadBtn.className = 'download-btn';
+                    downloadBtn.textContent = 'Download Updates';
+                    downloadBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        downloadUpdates(muuid);
+                    };
+
+                    headerDiv.appendChild(cover);
+                    headerDiv.appendChild(infoDiv);
+                    headerDiv.appendChild(downloadBtn);
+
+                    const chaptersList = document.createElement('div');
+                    chaptersList.className = 'chapters-list';
+                    chaptersList.id = `chapters-${muuid}`;
+
+                    const displayLimit = 3;
+                    chapters.forEach((chapter, index) => {
+                        const chapterLink = document.createElement('a');
+                        chapterLink.className = 'chapter-item';
+                        chapterLink.href = `/read/${chapter.id}/1`;
+
+                        const leftDiv = document.createElement('div');
+                        leftDiv.className = 'chapter-left';
+
+                        // TODO: Change to view status
+                        const flag = document.createElement('div');
+                        flag.className = 'chapter-flag';
+                        flag.textContent = (chapter.attributes.translatedLanguage || 'en').toUpperCase().slice(0, 2);
+
+                        const chapterInfo = document.createElement('div');
+                        chapterInfo.className = 'chapter-info';
+
+                        const titleLine = document.createElement('div');
+                        titleLine.className = 'chapter-title-line';
+                        const volText = chapter.attributes.volume ? `Vol. ${chapter.attributes.volume} ` : '';
+                        const chText = chapter.attributes.chapter ? `Ch. ${chapter.attributes.chapter}` : '';
+                        const chTitle = chapter.attributes.title ? ` - ${chapter.attributes.title}` : '';
+                        titleLine.textContent = `${volText}${chText}${chTitle}`;
+
+                        const meta = document.createElement('div');
+                        meta.className = 'chapter-meta';
+                        meta.textContent = `${chapter.attributes.uploader || 'Unknown'} • ${formatTimeAgo(chapter.attributes.createdAt)}`;
+
+                        chapterInfo.appendChild(titleLine);
+                        chapterInfo.appendChild(meta);
+
+                        const rightDiv = document.createElement('div');
+                        rightDiv.className = 'chapter-right';
+
+                        const pages = document.createElement('div');
+                        pages.className = 'chapter-pages';
+                        pages.innerHTML = `<span>📄</span><span>${chapter.attributes.pages}</span>`;
+
+                        rightDiv.appendChild(pages);
+                        leftDiv.appendChild(flag);
+                        leftDiv.appendChild(chapterInfo);
+                        chapterLink.appendChild(leftDiv);
+                        chapterLink.appendChild(rightDiv);
+
+                        chaptersList.appendChild(chapterLink);
+                    });
+
+                    mangaDiv.appendChild(headerDiv);
+                    mangaDiv.appendChild(chaptersList);
+
+                    if (chapters.length > displayLimit) {
+                        const expandBtn = document.createElement('button');
+                        expandBtn.className = 'expand-btn';
+                        expandBtn.textContent = `Show all ${chapters.length} chapters ▼`;
+                        let isExpanded = false;
+
+                        expandBtn.onclick = () => {
+                            isExpanded = !isExpanded;
+                            chaptersList.classList.toggle('expanded');
+                            expandBtn.textContent = isExpanded
+                                ? `Show less ▲`
+                                : `Show all ${chapters.length} chapters ▼`;
+                        };
+
+                        mangaDiv.appendChild(expandBtn);
                     } else {
-                        // Hide chapters beyond the first three again
-                        chaptersContainer.querySelectorAll('.chapter-update').forEach((chap, idx) => {
-                            if (idx >= 3) chap.classList.add('hidden-chapter');
-                        });
-                        showAllBtn.textContent = 'Show All';
-                        isExpanded = false;
+                        chaptersList.classList.add('expanded');
                     }
-                });
-                textContent.appendChild(showAllBtn);
+
+                    container.appendChild(mangaDiv);
+
+                } catch (error) {
+                    console.error(`Error loading manga ${muuid}:`, error);
+                }
             }
-
-            updateDiv.appendChild(textContent);
-            container.appendChild(updateDiv);
         }
-    }
 
-    update_page()
-</script>
+        updatePage();
+    </script>
 </body>
 </html>

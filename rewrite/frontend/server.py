@@ -186,7 +186,10 @@ def read_status():
 
 @server.route("/manga/<mangauuid>/attributes")
 def manga_attributes(mangauuid):
-    attributes = repository.get_manga_attributes(mangauuid)
+    # TODO: Having this local only and getting the correct lanaguage might not work for everything and might need
+    # TODO: To be reworked currently updates.html uses it
+    attributes = repository.get_manga_attributes(mangauuid, True)
+    attributes.title = get_correct_language(attributes.title, attributes.altTitles, repository.settings)
     if not attributes:
         return {"status": "error", "response": "Could not fetch attributes"}, 500
     return jsonify(asdict(attributes)), 200
@@ -244,8 +247,10 @@ def read_manga(chapteruuid, page):
     ids = {}
     # ids are passed and filled with data in the functions
     attributes = repository.get_chapter_attributes(chapteruuid, ids)
+    manga_attributes = None
     if ids.get("muuid", None) is not None:
         manga_attributes = repository.get_manga_attributes(ids["muuid"])
+
 
     page_render = "NORMAL"
 
@@ -295,7 +300,7 @@ def push_job():
     try:
         data = request.get_json(force=True)
     except Exception as e:
-        repository.settings.logger.log(error, f"Caught exception while search! {e}")
+        repository.settings.logger.log(error, f"Caught exception while pushing job! {e}")
         return {"status": "error", "response": "Invalid JSON body"}, 400
 
     return push_job_from_data(data)
@@ -322,7 +327,7 @@ def downloader_contains():
     try:
         data = request.get_json(force=True)
     except Exception as e:
-        repository.settings.logger.log(error, f"Caught exception while search! {e}")
+        repository.settings.logger.log(error, f"Caught exception while checking downloader contain! {e}")
         return {"status": "error", "response": "Invalid JSON body"}, 400
     if "id" not in data:
         return {"status": "error", "response": "id not in JSON body"}, 400
@@ -495,7 +500,8 @@ def updates():
     auth = check_auth()[0]
     if auth["status"] != "ok":
         return {"status": "error", "response": "Credentials are not set properly. Updates require them"}, 401
-    return render_template("updates.html"), 200
+    return render_template("updates.html", darktheme=repository.settings.darkTheme), 200
+
 
 
 @server.route("/updates/data")
