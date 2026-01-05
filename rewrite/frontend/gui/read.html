@@ -573,8 +573,8 @@
             }
         });
 
-        function full_load() {
-            fetch("/manga/read-status", {
+        async function full_load() {
+            await fetch("/manga/read-status", {
                 method: "POST",
                 body: JSON.stringify({
                     "cuuid": "{{ cuuid }}",
@@ -582,34 +582,35 @@
                 })
             });
 
-            fetch("/page-images/{{cuuid}}")
-                .then(response => response.json())
-                .then(data => {
-                    for (const key in data) {
-                        const img = document.createElement("img");
-                        img.src = `data:image/png;base64,${data[key]}`;
+            const totalPages = {{ pages }};
 
-                        if (!isLongStrip) {
-                            img.classList.add("hidden");
-                            img.addEventListener("click", handle_click);
-                        } else {
-                            img.addEventListener("click", handleLongStripClick);
-                        }
+            for (let i = 1; i <= totalPages; i++) {
+                const img = document.createElement("img");
+                img.src = `/page-image/{{cuuid}}/${i}`;
+                img.loading = "lazy";
+                img.decoding = "auto";
 
-                        content.appendChild(img);
-                    }
+                if (!isLongStrip) {
+                    img.classList.add("hidden");
+                    img.addEventListener("click", handle_click);
+                } else {
+                    img.addEventListener("click", handleLongStripClick);
+                }
 
-                    if (!isLongStrip) {
-                        set_page(page);
-                    }
+                content.appendChild(img);
 
+                updateProgress();
+                updateNavButtons();
+
+                // Hide loader after last page loads
+                if (i === totalPages) {
                     loading.style.display = 'none';
-                    updateProgress();
-                    updateNavButtons();
-                    // Start at top when first loading
-                    window.scrollTo({ top: 0, behavior: 'instant' });
-                });
+                }
+            }
+            set_page(page)
+            window.scrollTo({ top: 0, behavior: 'instant' });
         }
+
 
         function set_page(to_page) {
             if (isLongStrip || content.children.length === 0) return;

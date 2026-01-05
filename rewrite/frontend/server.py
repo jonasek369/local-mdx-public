@@ -19,7 +19,8 @@ from rewrite.backend.repository import MangaRepository
 from rewrite.backend.schemas import COVER_ART_MAX_SIZE, COVER_ART_256_SIZE, COVER_ART_512_SIZE
 from rewrite.backend.settings import credentials_from_json, save_credentials, save_settings, MangadexCredentials, \
     clear_keyring
-from rewrite.backend.utils import debug, info, error, get_correct_language, is_uuid4, critical, settings_to_jsonable_dict, \
+from rewrite.backend.utils import debug, info, error, get_correct_language, is_uuid4, critical, \
+    settings_to_jsonable_dict, \
     get_relationships
 from flask import Flask, jsonify, render_template, request, make_response, stream_with_context, Response
 
@@ -220,9 +221,12 @@ def get_chapter_images(identifier):
     image_binary = repository.database.get_pages(identifier)
     if image_binary is not None:
         data = {}
+        start = time.perf_counter()
         for page, image in image_binary:
-            encoded_image = base64.b64encode(image).decode('utf-8')
+            encoded_image = base64.b64encode(image).decode("ascii")
             data[page] = encoded_image
+        end = time.perf_counter()
+        repository.settings.logger.log(debug, f"packing took {(end - start) * 1000}ms")
         return jsonify(data), 200
     return {"status": "error", "response": "no image found"}, 404
 
@@ -247,14 +251,13 @@ def read_manga(chapteruuid, page):
     ids = {}
     # ids are passed and filled with data in the functions
     attributes = repository.get_chapter_attributes(chapteruuid, ids)
-    manga_attributes = None
+    muuid_attributes = None
     if ids.get("muuid", None) is not None:
-        manga_attributes = repository.get_manga_attributes(ids["muuid"])
-
+        muuid_attributes = repository.get_manga_attributes(ids["muuid"])
 
     page_render = "NORMAL"
 
-    for tag in manga_attributes.tags:
+    for tag in muuid_attributes.tags:
         if tag.attributes.group == "format" and tag.attributes.name["en"] == "Long Strip":
             page_render = "LONG_STRIP"
 
@@ -404,6 +407,7 @@ def push_to_top():
 
     return {"status": "success", "response": "pushed job to top"}, 200
 
+
 @server.route("/manga/library/data", methods=["GET"])
 def library_data():
     to_send = {}
@@ -503,7 +507,6 @@ def updates():
     return render_template("updates.html", darktheme=repository.settings.darkTheme), 200
 
 
-
 @server.route("/updates/data")
 def updates_data():
     limit = request.args.get('limit', 32)
@@ -594,5 +597,6 @@ if __name__ == "__main__":
             serve(server, host="0.0.0.0", port=5000, threads=os.cpu_count())
     finally:
         # Wakeup and exit thread
-        repository.downloader.exit()          # signals the thread for exit
-        repository.downloader.queue.put(None) # this will wakeup the thread because it is most likely waiting for queue.pop()
+        repository.downloader.exit()  # signals the thread for exit
+        repository.downloader.queue.put(
+            None)  # this will wakeup the thread because it is most likely waiting for queue.pop()
