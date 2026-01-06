@@ -21,8 +21,11 @@ from rewrite.backend.settings import credentials_from_json, save_credentials, sa
     clear_keyring
 from rewrite.backend.utils import debug, info, error, get_correct_language, is_uuid4, critical, \
     settings_to_jsonable_dict, \
-    get_relationships
-from flask import Flask, jsonify, render_template, request, make_response, stream_with_context, Response
+    get_relationships, warning
+from flask import Flask, jsonify, render_template, request, make_response, stream_with_context, Response, abort, \
+    session, redirect
+from werkzeug.security import check_password_hash, generate_password_hash
+from datetime import timedelta
 
 gui_dir = os.path.join(os.getcwd(), 'gui')
 
@@ -31,6 +34,67 @@ server = Flask(__name__, static_folder=gui_dir, template_folder=gui_dir)
 repository = MangaRepository()
 
 repository.settings.logger.log(debug, gui_dir + " is static and template dir!")
+
+if repository.settings.requireAuth:
+    if repository.settings.authPassword is None:
+        repository.settings.logger.log(critical, "Auth is enabled but no password set. Aborting!")
+        exit(1)
+    if len(repository.settings.authPassword) <= 6:
+        repository.settings.logger.log(warning, "Auth is enabled but the password is short. This is not secure!")
+
+    AUTH_HASH = generate_password_hash(repository.settings.authPassword)
+
+server.permanent_session_lifetime = timedelta(hours=12)
+
+server.config.update(
+    SECRET_KEY=os.urandom(32),
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+)
+
+
+@server.before_request
+def require_auth():
+    if repository.settings.requireAuth:
+        if request.path in ("/login", "/login/check"):
+            return
+
+        if not session.get("authenticated"):
+            abort(401)
+
+
+@server.route("/login")
+def login():
+    if not repository.settings.requireAuth:
+        return {"status": "error", "response": "Auth is not enabled"}
+    return render_template("login.html", darktheme=repository.settings.darkTheme)
+
+
+@server.route("/login/check", methods=["POST"])
+def login_check():
+    if not repository.settings.requireAuth:
+        return {"status": "error", "response": "Auth is not enabled"}
+
+    try:
+        data = request.get_json(force=True)
+    except Exception as e:
+        return jsonify({"status": "error", "response": "Invalid JSON body"}), 400
+
+    if "password" not in data:
+        return jsonify({"status": "error", "response": "JSON body dose not have password"}), 400
+
+    if not data.get("password") or not check_password_hash(AUTH_HASH, data.get("password")):
+        return {"status": "error", "response": "bad password"}
+
+    session["authenticated"] = True
+    return {"status": "ok", "response": "Session authenticated"}
+
+
+@server.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/login")
 
 
 @server.route("/")
@@ -44,20 +108,20 @@ def search():
         request_data = request.get_json(force=True)
     except Exception as e:
         repository.settings.logger.log(error, f"Caught exception while search! {e}")
-        return jsonify({"status": "error", "message": "Invalid JSON body"}), 400
+        return jsonify({"status": "error", "response": "Invalid JSON body"}), 400
 
     search_term = request_data.get("searchTerm")
     if not search_term:
-        return jsonify({"status": "error", "message": "Missing or empty 'searchTerm'"}), 400
+        return jsonify({"status": "error", "response": "Missing or empty 'searchTerm'"}), 400
 
     limit_arg = request.args.get("limit", 5)
     try:
         limit = int(limit_arg)
     except ValueError:
-        return jsonify({"status": "error", "message": "Invalid limit"}), 400
+        return jsonify({"status": "error", "response": "Invalid limit"}), 400
 
     if limit > 50:
-        return jsonify({"status": "error", "message": "Limit too high (max 50)"}), 400
+        return jsonify({"status": "error", "response": "Limit too high (max 50)"}), 400
 
     try:
         result = repository.connection.search_manga(search_term, limit=limit)
@@ -80,13 +144,13 @@ def search():
         return jsonify(data), 200
     except Exception as e:
         repository.settings.logger.log(error, f"Search failed: {e}")
-        return jsonify({"status": "error", "message": "Internal server error"}), 500
+        return jsonify({"status": "error", "response": "Internal server error"}), 500
 
 
 @server.route("/manga/cover/<identifier>")
 def get_cover_art(identifier):
     if not is_uuid4(identifier):
-        return jsonify({"status": "error", "message": "Invalid identifier"}), 400
+        return jsonify({"status": "error", "response": "Invalid identifier"}), 400
 
     try:
         size = int(request.args.get("size", COVER_ART_256_SIZE))
@@ -206,7 +270,7 @@ def delete_manga(mangauuid):
 @server.route("/page-image/<identifier>/<page>")
 def get_chapter_image(identifier, page):
     if not page.isdigit():
-        return {"status": "error", "message": "page is not an number"}, 400
+        return {"status": "error", "response": "page is not an number"}, 400
     image_binary = repository.database.get_page(identifier, int(page))
     if image_binary is not None:
         response = make_response(image_binary)

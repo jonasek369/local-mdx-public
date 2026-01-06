@@ -17,6 +17,9 @@ class Settings:
     fileLogger: bool
     logger: Logger
     darkTheme: bool
+    requireAuth: bool
+    authPassword: Optional[str]
+
 
 @dataclass
 class MangadexCredentials:
@@ -41,12 +44,15 @@ def load_settings() -> Settings:
             json_settings.get('logLevel', 1),
             json_settings.get('fileLogger', False),
             Logger(json_settings.get('logLevel', 1), json_settings.get('fileLogger', False)),
-            json_settings.get('darkTheme', True)
+            json_settings.get('darkTheme', True),
+            json_settings.get("requireAuth", False),
+            json_settings.get("authPassword", None)
         )
     except (FileNotFoundError, json.decoder.JSONDecodeError):
         Logger().log(warning, f"Could not find settings.json in {os.getcwd()} using default")
         # return default if we cant find the settings
-        default = Settings(None, ["safe", "suggestive", "erotica"], ["en"], False, 1, False, Logger(1, False), True)
+        default = Settings(None, ["safe", "suggestive", "erotica"], ["en"], False, 1, False, Logger(1, False), True,
+                           False, None)
         save_settings(default)
         default.logger.log(warning, "Create settings.json with default values")
         return default
@@ -74,6 +80,7 @@ def load_credentials() -> MangadexCredentials:
     except FileNotFoundError:
         Logger().log(warning, f"Could not find mangadex_account.json in {os.getcwd()} using empty credentials")
         return MangadexCredentials(None, None, None, None)
+
 
 def clear_keyring():
     keyring.delete_password("LocalMangaDex", "username"),

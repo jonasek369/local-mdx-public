@@ -10,5 +10,7 @@
     "cacheTokenToDisk": false,
     "logLevel": 1,
     "fileLogger": false,
-    "darkTheme": true
+    "darkTheme": true,
+    "requireAuth": false,
+    "authPassword": null
 }
