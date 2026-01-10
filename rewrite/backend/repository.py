@@ -161,10 +161,15 @@ class MangaRepository:
             return _next, prev
         current_chapter: Chapter = current_chapter_filtered[0]
         current_chapter_groups = get_relationships(current_chapter.relationships, "scanlation_group")
-        aggregate = self.connection.get_manga_aggregate(muuid, {
-            "groups[]": [group.id for group in current_chapter_groups],
+
+        params = {
             "translatedLanguage[]": self.settings.translatedLanguage
-        })
+        }
+
+        if current_chapter_groups is not None:
+            params["groups[]"] = [group.id for group in current_chapter_groups]
+
+        aggregate = self.connection.get_manga_aggregate(muuid, params=params)
 
         volume, chapter = current_chapter.attributes.volume, current_chapter.attributes.chapter
         volumes = aggregate["volumes"]
@@ -178,7 +183,6 @@ class MangaRepository:
         if chapter not in current_volume_chapters:
             raise KeyError(f"Chapter {chapter} not found in volume {volume}")
         current_chapter_index = list(current_volume_chapters.keys()).index(chapter)
-
 
         _next = self.get_adjacent_chapter_id(
             volumes=volumes,

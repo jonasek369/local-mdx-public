@@ -15,6 +15,7 @@ class MangaDownloadJobInDatabase:
     pages_in_db: Dict  # {"cuuid": [1, 2, 3, 4, 5], ...}
     records: Dict  # {"cuuid": 12, ...}
 
+
 class Database:
     def __init__(self):
         self.conn = sqlite3.connect("database.db", check_same_thread=False, timeout=10)
@@ -132,7 +133,6 @@ class Database:
             else:
                 return False
 
-
     def add_read_record(self, muuid, cuuid):
         with self.lock:
             cursor = self.conn.cursor()
@@ -143,7 +143,8 @@ class Database:
     def remove_read_record(self, muuid, cuuid):
         with self.lock:
             cursor = self.conn.cursor()
-            cursor.execute("DELETE FROM chapters_read WHERE muuid=:muuid AND cuuid=:cuuid", {"muuid": muuid, "cuuid": cuuid})
+            cursor.execute("DELETE FROM chapters_read WHERE muuid=:muuid AND cuuid=:cuuid",
+                           {"muuid": muuid, "cuuid": cuuid})
             self.conn.commit()
             cursor.close()
 
@@ -192,7 +193,8 @@ class Database:
         with self.lock:
             cursor = self.conn.cursor()
             cursor.executemany("REPLACE INTO chapters VALUES (?, ?, ?)", [
-                [chapter.id, chapter.type, json.dumps([asdict(relationship) for relationship in chapter.relationships])] for
+                [chapter.id, chapter.type, json.dumps([asdict(relationship) for relationship in chapter.relationships])]
+                for
                 chapter in chapters
             ])
             cursor.executemany("REPLACE INTO chapter_attributes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -245,8 +247,9 @@ class Database:
                     data.append(json.dumps(i))
                 else:
                     data.append(i)
-            cursor.execute("REPLACE INTO manga_attributes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
-                           "?, ?, ?)", data)
+            cursor.execute(
+                "REPLACE INTO manga_attributes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
+                "?, ?, ?)", data)
             self.conn.commit()
             cursor.close()
 
@@ -399,14 +402,16 @@ class Database:
     def chapter_to_manga_identifier(self, identifier: ChapterIdentifier) -> Optional[MangaIdentifier]:
         with self.lock:
             cursor = self.conn.cursor()
-            cursor.execute("""SELECT muuid FROM chapter_attributes WHERE cuuid=:identifier""", {"identifier": identifier})
+            cursor.execute("""SELECT muuid FROM chapter_attributes WHERE cuuid=:identifier""",
+                           {"identifier": identifier})
             muuid = cursor.fetchone()
             cursor.close()
             if not muuid:
                 return None
             return muuid[0]
 
-    def get_next_prev(self, muuid: MangaIdentifier, target_cuuid: ChapterIdentifier, feed: ChapterList) -> Optional[tuple]:
+    def get_next_prev(self, muuid: MangaIdentifier, target_cuuid: ChapterIdentifier, feed: ChapterList) -> Optional[
+        tuple]:
         downloaded_chapters = [i[0] for i in self.get_downloaded_pages(muuid)]
         with self.lock:
             if not downloaded_chapters:
@@ -497,4 +502,3 @@ class Database:
                 return None
             cursor.close()
             return from_database_row(ChapterList, ("", "", feed, 0, 0, 0))
-

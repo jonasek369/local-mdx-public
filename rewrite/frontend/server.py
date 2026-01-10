@@ -17,23 +17,19 @@ from dataclasses import asdict
 from rewrite.backend.connection import MangaDownloadJob
 from rewrite.backend.repository import MangaRepository
 from rewrite.backend.schemas import COVER_ART_MAX_SIZE, COVER_ART_256_SIZE, COVER_ART_512_SIZE
-from rewrite.backend.settings import credentials_from_json, save_credentials, save_settings, MangadexCredentials, \
-    clear_keyring
+from rewrite.backend.settings import credentials_from_json, save_credentials, save_settings, clear_keyring
 from rewrite.backend.utils import debug, info, error, get_correct_language, is_uuid4, critical, \
-    settings_to_jsonable_dict, \
-    get_relationships, warning
+    settings_to_jsonable_dict, warning
 from flask import Flask, jsonify, render_template, request, make_response, stream_with_context, Response, abort, \
     session, redirect
 from werkzeug.security import check_password_hash, generate_password_hash
 from datetime import timedelta
 
-gui_dir = os.path.join(os.getcwd(), 'gui')
+template_dir = os.path.join(os.getcwd(), 'gui')
 
-server = Flask(__name__, static_folder=gui_dir, template_folder=gui_dir)
+server = Flask(__name__, static_folder=template_dir, template_folder=template_dir)
 
 repository = MangaRepository()
-
-repository.settings.logger.log(debug, gui_dir + " is static and template dir!")
 
 if repository.settings.requireAuth:
     if repository.settings.authPassword is None:
@@ -348,6 +344,10 @@ def push_job_from_data(data: dict):
 
     if not is_uuid4(data.get("id")):
         return {"status": "error", "response": "invalid id"}, 400
+
+    if repository.downloader.currently_working_on and repository.downloader.currently_working_on["id"] == data.get(
+            "id"):
+        return {"status": "error", "response": "id is already in queue"}, 400
 
     repository.downloader.queue.put(
         MangaDownloadJob(
