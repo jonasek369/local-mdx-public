@@ -2,7 +2,7 @@ import asyncio
 import json
 import time
 from dataclasses import asdict
-from typing import Optional, List
+from typing import Optional, List, Set, Tuple
 
 import aiohttp
 
@@ -83,7 +83,7 @@ class MangaRepository:
         return None
 
     def get_downloaded_pages(self, identifier: MangaIdentifier):
-        pages = self.database.get_downloaded_pages(identifier)
+        pages = self.database.get_downloaded_chapters(identifier)
         return pages
 
     def get_page(self, identifier: MangaIdentifier, page: int):
@@ -145,7 +145,22 @@ class MangaRepository:
 
         return MangaRepository.resolve_chapter_id(chapter)
 
-    def get_next_prev(self, identifier: ChapterIdentifier):
+    def get_manga_aggregate(self, muuid, params) -> Optional[dict]:
+        connection_aggregate = self.connection.get_manga_aggregate(muuid, params=params)
+        str_params = json.dumps(params)
+        if connection_aggregate is None:
+            database_aggregate = self.database.get_manga_aggragate(muuid, str_params)
+            if database_aggregate:
+                return database_aggregate
+            if database_aggregate is None:
+                self.settings.logger.log(warning,
+                                         "Could not fetch aggregate and there is no local saved. When reading it will result to redirection to the manga instead of next chapter. Connect to internet to resolve.")
+                return None
+        else:
+            self.database.set_manga_aggregate(muuid, str_params, json.dumps(connection_aggregate))
+            return connection_aggregate
+
+    def get_next_prev(self, identifier: ChapterIdentifier) -> Tuple[Optional[str], Optional[str]]:
         """
         This fucntion walks the aggregate provided from mangadex and gets next and prev chapter thanks to this
         of manga has multiple chapters it will go to next one with the bonus of keeping the same scanlation group
@@ -169,8 +184,9 @@ class MangaRepository:
         if current_chapter_groups is not None:
             params["groups[]"] = [group.id for group in current_chapter_groups]
 
-        aggregate = self.connection.get_manga_aggregate(muuid, params=params)
-
+        aggregate = self.get_manga_aggregate(muuid, params)
+        if aggregate is None:
+            return None, None
         volume, chapter = current_chapter.attributes.volume, current_chapter.attributes.chapter
         volumes = aggregate["volumes"]
         # if no volume is set mangadex expects string 'none' not json null

@@ -172,6 +172,9 @@ def get_cover_art(identifier):
 def server_manga(mangauuid):
     back = request.args.get('from', "/")
 
+    if not is_uuid4(mangauuid):
+        return {"status": "error", "message": "uuid is not a valid uuid4"}
+
     manga = repository.get_manga_attributes(mangauuid)
     if not manga:
         return jsonify({"status": "error", "response": "Manga could not be found"}), 404
@@ -194,6 +197,10 @@ def get_manga_info(mangauuid):
     user_and_groups = repository.database.get_user_and_groups([dp[0] for dp in downloaded_pages])
 
     feed = repository.get_manga_feed(mangauuid, force_latest=True)
+    if not feed:
+        feed = repository.get_manga_feed(mangauuid, force_latest=False)
+        if not feed:
+            return {"status": "error", "message": "Could not get feed"}, 400
 
     chapters = []
 
@@ -232,9 +239,18 @@ def read_status():
     except ValueError:
         return {"status": "error", "response": "'read_state' should be bool or 0/1"}, 400
 
+    change_all = bool(request.args.get('all', False))
+
     cuuid, muuid, *_ = repository.database.get_chapter_attribute_raw(data["cuuid"])
     if muuid is None:
         return {"status": "error", "response": "Database chapter attributes do not contain muuid"}, 400
+
+    if change_all and not read_state:
+        repository.database.remove_manga_read_records(muuid)
+        return {"status": "ok", "response": "Changed all read statuses"}
+    elif change_all and read_state:
+        repository.database.add_manga_read_records(muuid)
+        return {"status": "ok", "response": "Changed all read statuses"}
 
     contains_status = repository.database.get_chapter_read_status(cuuid)
     if contains_status is None and read_state is True:
@@ -406,7 +422,7 @@ def downloader_contains():
     dl_state = repository.downloader.get_downloader_state()
 
     if dl_state["currently_working_on"] is not None:
-        contains = muuid in dl_state["queue"] or dl_state["currently_working_on"]["id"] == dl_state
+        contains = muuid in dl_state["queue"] or dl_state["currently_working_on"]["id"] == muuid
     else:
         contains = muuid in dl_state["queue"]
 
@@ -479,7 +495,7 @@ def library_data():
     if not mangas:
         return {"status": "success", "response": to_send}, 200
     for manga in mangas:
-        pages = repository.database.get_downloaded_pages(manga[0])
+        pages = repository.database.get_downloaded_chapters(manga[0])
         if pages:
             to_send[manga[0]] = [
                 get_correct_language(json.loads(manga[1]), json.loads(manga[2]), repository.settings),
@@ -510,6 +526,8 @@ def library():
 @server.route("/popular-new-titles", methods=["GET"])
 def popular_new_titles():
     popular = asyncio.run(repository.popular_new_titles())
+    if popular is None:
+        return {"status": "error", "message": "Could not fetch popular new titles"}, 400
     new_popular = []
     for manga in popular.data:
         if not manga:
@@ -585,6 +603,8 @@ def updates_data():
 @server.route("/latest-updated-chapters")
 def latest_updated_chapters():
     chapters_datatype = repository.get_latest_updated_chapters()
+    if chapters_datatype is None:
+        return {"status": "error", "message": "Could not get latest updated chapters"}, 400
     chapters = []
     for chapter in chapters_datatype.data:
         new_chapter = asdict(chapter)

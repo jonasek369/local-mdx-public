@@ -105,6 +105,13 @@ class Database:
             PRIMARY KEY(muuid, cuuid)
         )""")
 
+        cursor.execute("""CREATE TABLE IF NOT EXISTS manga_aggregate (
+            muuid CHAR(36) NOT NULL,
+            fetch_params TEXT NOT NULL,
+            json TEXT,
+            PRIMARY KEY (muuid, fetch_params)
+        )""")
+
         cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_chapter_attributes_cuuid ON chapter_attributes(cuuid);
         """)
@@ -121,6 +128,30 @@ class Database:
         cursor.close()
         # Sqlite3 dose not like access from multiple threads so we use lock to make sure to only access one at time
         self.lock = threading.Lock()
+
+    def set_manga_aggregate(self, muuid: str, params: str, _json: str):
+        with self.lock:
+            cursor = self.conn.cursor()
+            cursor.execute("REPLACE INTO manga_aggregate VALUES (:muuid, :params, :json)", {
+                "muuid": muuid,
+                "params": params,
+                "json": _json
+            })
+            self.conn.commit()
+            cursor.close()
+
+    def get_manga_aggragate(self, muuid: str, params: str) -> Optional[dict]:
+        with self.lock:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT json FROM manga_aggregate WHERE muuid=:muuid AND fetch_params=:params", {
+                "muuid": muuid,
+                "params": params
+            })
+            fetch = cursor.fetchone()
+            cursor.close()
+            if fetch:
+                return json.loads(fetch[0])
+            return None
 
     def is_chapter_downloaded(self, cuuid):
         with self.lock:
@@ -145,6 +176,21 @@ class Database:
             cursor = self.conn.cursor()
             cursor.execute("DELETE FROM chapters_read WHERE muuid=:muuid AND cuuid=:cuuid",
                            {"muuid": muuid, "cuuid": cuuid})
+            self.conn.commit()
+            cursor.close()
+
+    def remove_manga_read_records(self, muuid):
+        with self.lock:
+            cursor = self.conn.cursor()
+            cursor.execute("DELETE FROM chapters_read WHERE muuid=:muuid", {"muuid": muuid})
+            self.conn.commit()
+            cursor.close()
+
+    def add_manga_read_records(self, muuid):
+        chapters = [(muuid, chapter[0]) for chapter in self.get_downloaded_chapters(muuid)]
+        with self.lock:
+            cursor = self.conn.cursor()
+            cursor.executemany("INSERT OR IGNORE INTO chapters_read VALUES (?, ?)", chapters)
             self.conn.commit()
             cursor.close()
 
@@ -374,7 +420,7 @@ class Database:
                 return fetch
             return None
 
-    def get_downloaded_pages(self, identifier: MangaIdentifier):
+    def get_downloaded_chapters(self, identifier: MangaIdentifier):
         with self.lock:
             cursor = self.conn.cursor()
             try:
@@ -412,7 +458,7 @@ class Database:
 
     def get_next_prev(self, muuid: MangaIdentifier, target_cuuid: ChapterIdentifier, feed: ChapterList) -> Optional[
         tuple]:
-        downloaded_chapters = [i[0] for i in self.get_downloaded_pages(muuid)]
+        downloaded_chapters = [i[0] for i in self.get_downloaded_chapters(muuid)]
         with self.lock:
             if not downloaded_chapters:
                 return None, None

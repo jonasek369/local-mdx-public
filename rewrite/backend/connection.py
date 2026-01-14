@@ -568,6 +568,9 @@ class MangadexConnection:
 
         req = self.safe_request("GET", f"{self.API}/manga/{identifier}", params={"includes[]": ["cover_art"]})
 
+        if not req:
+            return None
+
         if req and req.status_code != 200:
             return None
 
@@ -597,6 +600,9 @@ class MangadexConnection:
         req = self.safe_request("GET", f"{self.API}/manga/{identifier}/aggregate", params=params,
                                 default_parameters=False)
         if req and req.status_code != 200:
+            return None
+
+        if not req:
             return None
 
         query = req.json()
@@ -704,6 +710,9 @@ class MangadexConnection:
         }
         req = self.safe_request("GET", url=f"{self.API}/manga/{identifier}/feed", params=params)
 
+        if not req:
+            return None
+
         if req and req.status_code != 200:
             return None
 
@@ -759,6 +768,8 @@ class MangadexConnection:
             "hasAvailableChapters": "true",
             "createdAtSince": set_time.isoformat()
         }, default_parameter_exclude=["translatedLanguage[]"])
+        if data is None or data.status_code != 200:
+            return None
         try:
             manga_list: MangaList = from_json(MangaList, data.json())
             self.cache_cover_art_filename(manga_list)

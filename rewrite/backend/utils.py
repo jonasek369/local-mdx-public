@@ -40,6 +40,7 @@ def get_relationships(relationships: List[Relationship], relationship_type_to_fi
         return None
     return found
 
+
 # helper that makes the code more readable
 def is_expired(created_ts, ttl_seconds):
     return time.time() - created_ts > ttl_seconds
@@ -135,7 +136,6 @@ def run_async(func, *args, **kwargs):
     return loop.run_until_complete(func(*args, **kwargs))
 
 
-
 def colored(rgb, text):
     return "\033[38;2;{};{};{}m{} \033[38;2;255;255;255m".format(rgb[0], rgb[1], rgb[2],
                                                                  text)
@@ -149,6 +149,7 @@ class LogType(Enum):
     ERROR = 5
     CRITICAL = 6
     TRACEBACK = 7
+
 
 debug = LogType.DEBUG
 info = LogType.INFO
@@ -188,7 +189,6 @@ class Logger:
             self.finish_file_logger()
 
         self.enable_file_logger = enable_file_logger
-
 
     def log(self, ll: LogType, text):
         if ll.value >= self.log_level:
@@ -238,6 +238,6 @@ def settings_to_jsonable_dict(obj):
     result = {}
     for f in fields(obj):
         value = getattr(obj, f.name)
-        if not f.name in EXCLUDED_SETTINGS_FIELDS:
+        if f.name not in EXCLUDED_SETTINGS_FIELDS:
             result[f.name] = value
     return result
