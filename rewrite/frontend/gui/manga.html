@@ -971,27 +971,20 @@
         toggleIcon.classList.toggle('collapsed');
     }
 
-    function create_recommendation_item(identifier){
-        fetch(`/manga/${identifier}/attributes`, {method: "GET"}).then(response => response.json()).then(data => {
-            section.innerHTML += `
-				<div class="recommendations-item">
-				        <img src="/api/manga/cover/${identifier}" loading="lazy" onclick="window.location.href = '/manga/${identifier}'">
-				        <span class="subtitle">${data.title}</span>
-    			</div>
-            `
-		})
-	}
+	async function get_recommendation() {
+		section.innerHTML = "";
 
-	function get_recommendation() {
-        while (section.firstChild) {
-            section.removeChild(section.firstChild);
+	    const response = await fetch("/api/manga/{{ muuid }}/recommendation");
+	    const data = await response.json();
+
+		for(let key in data){
+            section.innerHTML += `
+	            <div class="recommendations-item">
+	                <img src="/api/manga/cover/${key}" loading="lazy" onclick="window.location.href = '/manga/${key}'">
+	                <span class="subtitle">${data[key]}</span>
+	            </div>
+	        `;
 		}
-		fetch("/api/manga/{{ muuid }}/recommendation", {"method": "GET"}).then(response => response.json()).then(data => {
-			data.data.forEach((item) => {
-                create_recommendation_item(item.id.split("_")[1]);
-			})
-		})
-        // ``
 	}
 
     document.getElementById('warningModal').addEventListener('click', function (event) {

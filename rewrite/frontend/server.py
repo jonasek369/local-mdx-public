@@ -19,7 +19,7 @@ from rewrite.backend.repository import MangaRepository
 from rewrite.backend.schemas import COVER_ART_MAX_SIZE, COVER_ART_256_SIZE, COVER_ART_512_SIZE, RecommendationList
 from rewrite.backend.settings import credentials_from_json, save_credentials, save_settings, clear_keyring
 from rewrite.backend.utils import debug, info, error, get_correct_language, is_uuid4, critical, \
-    settings_to_jsonable_dict, warning
+    settings_to_jsonable_dict, warning, get_relationships
 from flask import Flask, jsonify, render_template, request, make_response, stream_with_context, Response, abort, \
     session, redirect
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -688,8 +688,12 @@ def recommendation(muuid):
     recommendation: RecommendationList = repository.connection.get_recommendation(muuid)
     # Sort by best matches
     recommendation.data.sort(key=lambda rec: rec.attributes.score, reverse=True)
-    print(len(recommendation.data))
-    return asdict(recommendation)
+    recommendation_map = {}
+    for rec in recommendation.data:
+        for manga_relationship in get_relationships(rec.relationships, "manga"):
+            if manga_relationship.id != muuid:
+                recommendation_map[manga_relationship.id] = get_correct_language(manga_relationship.attributes["title"], manga_relationship.attributes["altTitles"], repository.settings)
+    return recommendation_map
 
 
 @server.route("/api/manga")

@@ -955,7 +955,7 @@ class MangadexConnection:
 
     def get_recommendation(self, muuid: MangaIdentifier) -> Optional[RecommendationList]:
         req = self.safe_request("GET", url=f"{self.API}/manga/{muuid}/recommendation",
-                                default_parameter_exclude=["translatedLanguage[]"])
+                                default_parameter_exclude=["translatedLanguage[]"], params={"includes[]": "manga"})
 
         if not req:
             return None
