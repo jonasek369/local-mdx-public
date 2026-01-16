@@ -14,7 +14,7 @@ from dateutil.relativedelta import relativedelta
 from rewrite.backend.schemas import MangaList, from_json, Manga, MangaIdentifier, ChapterIdentifier, ChapterList, \
     Chapter, \
     DirectSearchManga, DirectSearchChapter, CustomList, CustomListResponse, COVER_ART_256_SIZE, \
-    COVER_ART_512_SIZE, COVER_ART_MAX_SIZE, Relationship, MangaAttributes
+    COVER_ART_512_SIZE, COVER_ART_MAX_SIZE, Relationship, MangaAttributes, RecommendationList
 from rewrite.backend.settings import Settings, MangadexCredentials
 from datetime import datetime
 
@@ -545,6 +545,10 @@ class MangadexConnection:
     def search_manga(self, name: str, limit: int) -> Optional[MangaList]:
         params = {"title": name, "limit": limit, "includes[]": ["cover_art"]}
         req = self.safe_request("GET", f"{self.API}/manga", params, default_parameter_exclude=["translatedLanguage[]"])
+
+        if not req:
+            return None
+
         if req and req.status_code != 200:
             return None
 
@@ -559,7 +563,23 @@ class MangadexConnection:
         except AttributeError:
             return None
 
-    def get_manga(self, identifier: MangaIdentifier) -> Optional[Manga]:
+    def get_manga(self, params) -> Optional[MangaList]:
+        req = self.safe_request("GET", f"{self.API}/manga", params, default_parameter_exclude=["translatedLanguage[]"])
+
+        if not req:
+            return None
+
+        if req and req.status_code != 200:
+            return None
+
+        query = req.json()
+
+        if query["result"] != "ok":
+            return None
+
+        return from_json(MangaList, query)
+
+    def get_manga_from_muuid(self, identifier: MangaIdentifier) -> Optional[Manga]:
         if identifier in self.manga_attributes_cache:
             if is_expired(self.manga_attributes_cache[identifier]["timestamp"], CACHE_MANGA_ATTRIBUTES_TTL):
                 del self.manga_attributes_cache[identifier]
@@ -912,7 +932,7 @@ class MangadexConnection:
         self.cache_cover_art_filename(manga_list)
         return manga_list
 
-    def get_latest_updated_chapters(self) -> ChapterList | None:
+    def get_latest_updated_chapters(self) -> Optional[ChapterList]:
         params = {"limit": 100, "includes[]": ["scanlation_group", "manga"], "order[readableAt]": "desc"}
         req = self.safe_request("GET",
                                 url=f"{self.API}/chapter",
@@ -932,6 +952,24 @@ class MangadexConnection:
             return None
 
         return from_json(ChapterList, req.json())
+
+    def get_recommendation(self, muuid: MangaIdentifier) -> Optional[RecommendationList]:
+        req = self.safe_request("GET", url=f"{self.API}/manga/{muuid}/recommendation",
+                                default_parameter_exclude=["translatedLanguage[]"])
+
+        if not req:
+            return None
+
+        if req.status_code != 200:
+            self.logger.log(error, f"API returned code {req.status_code} when getting recommendation")
+            return None
+
+        query = req.json()
+
+        if query["result"] != "ok":
+            return None
+
+        return from_json(RecommendationList, query)
 
 # simple download to FS
 # def on_download(muuid: MangaIdentifier, cuuid: ChapterIdentifier, downloader: MangaDownloader):

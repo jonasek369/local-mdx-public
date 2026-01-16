@@ -412,7 +412,7 @@
 
             try {
                 const offset = (currentPage - 1) * itemsPerPage;
-                const response = await fetch(`/updates/data?limit=${itemsPerPage}&offset=${offset}`);
+                const response = await fetch(`/api/updates/data?limit=${itemsPerPage}&offset=${offset}`);
                 const data = await response.json();
 
                 loading.style.display = 'none';
@@ -505,7 +505,7 @@
 
                     const cover = document.createElement('img');
                     cover.className = 'manga-cover';
-                    cover.src = `/manga/cover/${muuid}?small=1`;
+                    cover.src = `/api/manga/cover/${muuid}?small=1`;
                     cover.alt = attributes.title.en || 'Manga Cover';
 
                     const infoDiv = document.createElement('div');

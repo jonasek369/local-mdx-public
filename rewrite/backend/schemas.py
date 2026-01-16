@@ -111,6 +111,7 @@ def from_database_row(dataclass_type, row):
     # Use your existing recursive converter
     return from_json(dataclass_type, json_data)
 
+
 @dataclass
 class TagAttributes:
     name: LocalizedString
@@ -192,7 +193,7 @@ class MangaAttributes:
     contentRating: str
     chapterNumbersResetOnNewVolume: bool
     availableTranslatedLanguages: List[str]
-    latestUploadedChapter: str
+    latestUploadedChapter: Optional[str]
     tags: List[Tag]
     state: str
     version: int
@@ -245,6 +246,29 @@ class CustomListResponse:
     result: str
     response: str
     data: List[CustomList]
+
+
+@dataclass
+class RecommendationAttributes:
+    score: float
+
+
+@dataclass
+class Recommendation:
+    id: str
+    type: str
+    attributes: RecommendationAttributes
+    relationships: List[Relationship]
+
+
+@dataclass
+class RecommendationList:
+    result: str
+    response: str
+    data: List[Recommendation]
+    limit: int
+    offset: int
+    total: int
 
 
 # Custom schema

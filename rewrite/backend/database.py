@@ -64,7 +64,7 @@ class Database:
             contentRating TEXT NOT NULL,
             chapterNumbersResetOnNewVolume BOOLEAN NOT NULL,
             availableTranslatedLanguages TEXT NOT NULL, -- List[str] as JSON
-            latestUploadedChapter TEXT NOT NULL,
+            latestUploadedChapter TEXT,
             tags TEXT NOT NULL, -- List[Tag] as JSON
             state TEXT NOT NULL,
             version INTEGER NOT NULL,

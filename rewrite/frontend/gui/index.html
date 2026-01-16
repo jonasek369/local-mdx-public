@@ -775,7 +775,7 @@
     }
 
     function redirect_to_library() {
-        window.location.href = "/manga/library";
+        window.location.href = "/library";
     }
 
     function redirect_to_updates() {
@@ -838,7 +838,7 @@
         searchResultsDropdown.classList.add('show');
 
         // Fetch search results
-        fetch("/search/manga", {
+        fetch("/api/search/manga", {
             method: "POST",
             headers: {
                 'Content-Type': 'application/json'
@@ -870,7 +870,7 @@
 
                         const img = document.createElement('img');
                         img.className = 'search-result-image';
-                        img.src = "/manga/cover/" + result.id + "?size=256";
+                        img.src = "/api/manga/cover/" + result.id + "?size=256";
                         img.alt = result.attributes.title || "Manga Cover";
                         img.loading = "eager"
                         img.decoding = "async"
@@ -952,7 +952,7 @@
 
 
     let popular_manga = null;
-    fetch("popular-new-titles").then(response => response.json()).then(data => {
+    fetch("/api/popular-new-titles").then(response => response.json()).then(data => {
         popular_manga = data
         updatePopularManga()
     })
@@ -983,7 +983,7 @@
 		return date.toLocaleDateString();
 	}
 
-	fetch("/latest-updated-chapters")
+	fetch("/api/latest-updated-chapters")
 	    .then(response => response.json())
 	    .then(data => {
         const latestUpdatedContainers = document.getElementsByClassName("latest-updates");
@@ -1014,7 +1014,7 @@
 
                 htmlContent += `
                     <div class="latest-updates-item" onclick="window.location.href = '/manga/${mangaRl.id}'">
-                        <img src="/manga/cover/${mangaRl.id}?size=256" alt="${mangaRl.attributes.title || 'Untitled'}" loading="lazy" decoding="async">
+                        <img src="/api/manga/cover/${mangaRl.id}?size=256" alt="${mangaRl.attributes.title || 'Untitled'}" loading="lazy" decoding="async">
                         <div class="latest-updates-content">
                             <h1>${mangaRl.attributes.title || "Untitled"}</h1>
                             <p class="chapter">${volChap}</p>
@@ -1062,7 +1062,7 @@
         while (genreTags.firstChild) {
             genreTags.removeChild(genreTags.firstChild);
         }
-        image.src = "/manga/cover/" + popular_manga[currentIndex - 1].id + "?size=512";
+        image.src = "/api/manga/cover/" + popular_manga[currentIndex - 1].id + "?size=512";
         image.loading="eager"
         image.decoding="async"
         title.innerText = popular_manga[currentIndex - 1].attributes.title;

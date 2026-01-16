@@ -362,11 +362,11 @@
     window.token = '{{ token }}';
 
     function start_download() {
-        fetch("/manga/download/start")
+        fetch("/downloader/start")
     }
 
     function stop_download() {
-        fetch("/manga/download/stop")
+        fetch("/downloader/stop")
 	}
 
     function update_state(data){
@@ -407,14 +407,14 @@
                 PushToTopButton.className = "button button-small button-success";
                 PushToTopButton.innerHTML = "↑ Push to top";
                 PushToTopButton.addEventListener("click", function () {
-                    fetch("/manga/download/push-to-top", {method: "POST", body: JSON.stringify({"identifier": key})});
+                    fetch("/downloader/push-to-top", {method: "POST", body: JSON.stringify({"identifier": key})});
                 });
 
                 const RemoveButton = document.createElement("button");
                 RemoveButton.className = "button button-small button-danger";
                 RemoveButton.innerHTML = "Remove";
                 RemoveButton.addEventListener("click", function () {
-                    fetch("/manga/download/pop-job", {method: "POST", body: JSON.stringify({"identifier": key})});
+                    fetch("/downloader/pop-job", {method: "POST", body: JSON.stringify({"identifier": key})});
                 });
 
                 ActionsCell.appendChild(PushToTopButton);
@@ -479,7 +479,7 @@
 
 
 
-	const source = new EventSource("/manga/download/stream");
+	const source = new EventSource("/downloader/stream");
 
     source.onmessage = (event) => {
 	    const data = JSON.parse(event.data);

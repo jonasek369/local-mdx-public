@@ -16,7 +16,7 @@ from dataclasses import asdict
 
 from rewrite.backend.connection import MangaDownloadJob
 from rewrite.backend.repository import MangaRepository
-from rewrite.backend.schemas import COVER_ART_MAX_SIZE, COVER_ART_256_SIZE, COVER_ART_512_SIZE
+from rewrite.backend.schemas import COVER_ART_MAX_SIZE, COVER_ART_256_SIZE, COVER_ART_512_SIZE, RecommendationList
 from rewrite.backend.settings import credentials_from_json, save_credentials, save_settings, clear_keyring
 from rewrite.backend.utils import debug, info, error, get_correct_language, is_uuid4, critical, \
     settings_to_jsonable_dict, warning
@@ -98,113 +98,43 @@ def landing():
     return render_template("index.html", darktheme=repository.settings.darkTheme)
 
 
-@server.route('/search/manga', methods=['POST'])
-def search():
-    try:
-        request_data = request.get_json(force=True)
-    except Exception as e:
-        repository.settings.logger.log(error, f"Caught exception while search! {e}")
-        return jsonify({"status": "error", "response": "Invalid JSON body"}), 400
-
-    search_term = request_data.get("searchTerm")
-    if not search_term:
-        return jsonify({"status": "error", "response": "Missing or empty 'searchTerm'"}), 400
-
-    limit_arg = request.args.get("limit", 5)
-    try:
-        limit = int(limit_arg)
-    except ValueError:
-        return jsonify({"status": "error", "response": "Invalid limit"}), 400
-
-    if limit > 50:
-        return jsonify({"status": "error", "response": "Limit too high (max 50)"}), 400
-
-    try:
-        result = repository.connection.search_manga(search_term, limit=limit)
-        data = [asdict(i) for i in result.data]
-        for manga in data:
-            try:
-                manga["attributes"]["title"] = get_correct_language(
-                    manga["attributes"]["title"],
-                    manga["attributes"]["altTitles"],
-                    repository.settings
-                )
-                for i, tag in enumerate(manga["attributes"]["tags"]):
-                    manga["attributes"]["tags"][i]["attributes"]["name"] = get_correct_language(
-                        manga["attributes"]["tags"][i]["attributes"]["name"],
-                        None,
-                        repository.settings
-                    )
-            except KeyError as e:
-                repository.settings.log(error, f"Caught exception while choosing search translation! {e}")
-        return jsonify(data), 200
-    except Exception as e:
-        repository.settings.logger.log(error, f"Search failed: {e}")
-        return jsonify({"status": "error", "response": "Internal server error"}), 500
-
-
-@server.route("/manga/cover/<identifier>")
-def get_cover_art(identifier):
-    if not is_uuid4(identifier):
-        return jsonify({"status": "error", "response": "Invalid identifier"}), 400
-
-    try:
-        size = int(request.args.get("size", COVER_ART_256_SIZE))
-    except (TypeError, ValueError):
-        size = COVER_ART_MAX_SIZE
-
-    allowed_sizes = {COVER_ART_MAX_SIZE, COVER_ART_256_SIZE, COVER_ART_512_SIZE}
-    if size not in allowed_sizes:
-        size = COVER_ART_MAX_SIZE
-
-    image_binary = repository.get_cover_art(identifier, size)
-    if not image_binary:
-        return jsonify({"error": "No image found"}), 404
-
-    response = make_response(image_binary)
-    response.headers.set("Content-Type", "image/png")
-    response.headers.set("Content-Disposition", f"inline; filename={identifier}.png")
-    response.headers["Cache-Control"] = "public, max-age=86400"
-    return response, 200
-
-
-@server.route("/manga/<mangauuid>", methods=["GET"])
-def server_manga(mangauuid):
+@server.route("/manga/<muuid>", methods=["GET"])
+def server_manga(muuid):
     back = request.args.get('from', "/")
 
-    if not is_uuid4(mangauuid):
+    if not is_uuid4(muuid):
         return {"status": "error", "message": "uuid is not a valid uuid4"}
 
-    manga = repository.get_manga_attributes(mangauuid)
+    manga = repository.get_manga_attributes(muuid)
     if not manga:
         return jsonify({"status": "error", "response": "Manga could not be found"}), 404
 
     return render_template("manga.html",
-                           muuid=mangauuid,
+                           muuid=muuid,
                            name=get_correct_language(manga.title, manga.altTitles, repository.settings),
                            description=get_correct_language(manga.description, None, repository.settings),
                            back_redirect=back,
                            darktheme=repository.settings.darkTheme), 200
 
 
-@server.route("/manga/<mangauuid>/info", methods=["GET"])
-def get_manga_info(mangauuid):
-    if not is_uuid4(mangauuid):
+@server.route("/manga/<muuid>/info", methods=["GET"])
+def get_manga_info(muuid):
+    if not is_uuid4(muuid):
         return {"status": "error", "response": "manga uuid is not valid uuid4"}, 400
-    downloaded_pages = repository.get_downloaded_pages(mangauuid)
-    downloaded_lookup = {i[0]: i[1:] for i in downloaded_pages}
+    downloaded_pages = repository.get_downloaded_pages(muuid)
+    downloaded_lookup = {page[0]: page[1:] for page in downloaded_pages}
 
-    user_and_groups = repository.database.get_user_and_groups([dp[0] for dp in downloaded_pages])
+    user_and_groups = repository.database.get_user_and_groups([page[0] for page in downloaded_pages])
 
-    feed = repository.get_manga_feed(mangauuid, force_latest=True)
+    feed = repository.get_manga_feed(muuid, force_latest=True)
     if not feed:
-        feed = repository.get_manga_feed(mangauuid, force_latest=False)
+        feed = repository.get_manga_feed(muuid, force_latest=False)
         if not feed:
             return {"status": "error", "message": "Could not get feed"}, 400
 
     chapters = []
 
-    read_chapters = repository.database.get_manga_read_chapters(mangauuid)
+    read_chapters = repository.database.get_manga_read_chapters(muuid)
     if not read_chapters:
         read_chapters = []
 
@@ -261,20 +191,21 @@ def read_status():
     return {"status": "ok", "response": "Changed read state"}, 200
 
 
-@server.route("/manga/<mangauuid>/attributes")
-def manga_attributes(mangauuid):
+@server.route("/manga/<muuid>/attributes")
+def manga_attributes(muuid):
     # TODO: Having this local only and getting the correct lanaguage might not work for everything and might need
     # TODO: To be reworked currently updates.html uses it
-    attributes = repository.get_manga_attributes(mangauuid, True)
+    attributes = repository.get_manga_attributes(muuid, False)
+
     attributes.title = get_correct_language(attributes.title, attributes.altTitles, repository.settings)
     if not attributes:
         return {"status": "error", "response": "Could not fetch attributes"}, 500
     return jsonify(asdict(attributes)), 200
 
 
-@server.route("/manga/delete/<mangauuid>")
-def delete_manga(mangauuid):
-    if not repository.database.delete_manga(mangauuid):
+@server.route("/manga/delete/<muuid>")
+def delete_manga(muuid):
+    if not repository.database.delete_manga(muuid):
         return {"status": "error", "response": "Could not delete manga"}
     return {"status": "ok"}, 200
 
@@ -378,7 +309,7 @@ def push_job_from_data(data: dict):
     return {"status": "success"}, 200
 
 
-@server.route("/manga/download/push-job", methods=["POST"])
+@server.route("/downloader/push-job", methods=["POST"])
 def push_job():
     try:
         data = request.get_json(force=True)
@@ -389,7 +320,7 @@ def push_job():
     return push_job_from_data(data)
 
 
-@server.route("/manga/download/pop-job", methods=["POST"])
+@server.route("/downloader/pop-job", methods=["POST"])
 def pop_job():
     try:
         data = request.get_json(force=True)
@@ -405,7 +336,7 @@ def pop_job():
     return {"status": "success", "response": "popped job"}, 200
 
 
-@server.route("/manga/download/contains", methods=["POST"])
+@server.route("/downloader/contains", methods=["POST"])
 def downloader_contains():
     try:
         data = request.get_json(force=True)
@@ -429,31 +360,31 @@ def downloader_contains():
     return {"status": "success", "data": {"contains": contains}}, 200
 
 
-@server.route("/manga/download/manager", methods=["GET"])
+@server.route("/downloader/manager", methods=["GET"])
 def download_manager():
     back = request.args.get('from', "/")
     return render_template("download-manager.html", darktheme=repository.settings.darkTheme, back=back), 200
 
 
-@server.route("/manga/download/start", methods=["GET"])
+@server.route("/downloader/start", methods=["GET"])
 def start_download():
     repository.downloader.start()
     return {"status": "success", "response": "started downloader"}, 200
 
 
-@server.route("/manga/download/stop", methods=["GET"])
+@server.route("/downloader/stop", methods=["GET"])
 def stop_download():
     repository.downloader.stop()
     return {"status": "success", "response": "stopped downloader"}, 200
 
 
-@server.route("/manga/download/get-state", methods=["GET"])
+@server.route("/downloader/get-state", methods=["GET"])
 def get_state():
     status = repository.downloader.get_downloader_state()
     return status, 200
 
 
-@server.route('/manga/download/stream')
+@server.route('/downloader/stream')
 def stream():
     def event_stream():
         last_stream = None
@@ -472,7 +403,7 @@ def stream():
     )
 
 
-@server.route("/manga/download/push-to-top", methods=["POST"])
+@server.route("/downloader/push-to-top", methods=["POST"])
 def push_to_top():
     try:
         data = request.get_json(force=True)
@@ -488,7 +419,7 @@ def push_to_top():
     return {"status": "success", "response": "pushed job to top"}, 200
 
 
-@server.route("/manga/library/data", methods=["GET"])
+@server.route("/library/data", methods=["GET"])
 def library_data():
     to_send = {}
     mangas = repository.database.all_manga_in_db()
@@ -497,8 +428,15 @@ def library_data():
     for manga in mangas:
         pages = repository.database.get_downloaded_chapters(manga[0])
         if pages:
+            # Sometimes titles are dict but just plain string of the name
+            try:
+                title = json.loads(manga[1])
+            except json.JSONDecodeError:
+                title = manga[1]
+
+
             to_send[manga[0]] = [
-                get_correct_language(json.loads(manga[1]), json.loads(manga[2]), repository.settings),
+                get_correct_language(title, json.loads(manga[2]), repository.settings),
                 get_correct_language(json.loads(manga[3]), None, repository.settings)
             ]
 
@@ -506,8 +444,9 @@ def library_data():
     return {"status": "success", "response": to_send}
 
 
-@server.route("/manga/library/update")
+@server.route("/library/update")
 def library_update():
+    # TODO: Make client interaction
     mangas = repository.database.all_manga_in_db()
     if not mangas:
         return {"status": "error", "response": "No downloaded manga"}
@@ -518,29 +457,9 @@ def library_update():
     return {"status": "success", "response": "Mangas addded to downloaded queue"}, 200
 
 
-@server.route("/manga/library", methods=["GET"])
+@server.route("/library", methods=["GET"])
 def library():
     return render_template("library.html", darktheme=repository.settings.darkTheme)
-
-
-@server.route("/popular-new-titles", methods=["GET"])
-def popular_new_titles():
-    popular = asyncio.run(repository.popular_new_titles())
-    if popular is None:
-        return {"status": "error", "message": "Could not fetch popular new titles"}, 400
-    new_popular = []
-    for manga in popular.data:
-        if not manga:
-            continue
-        new_manga = asdict(manga)
-        attrs = new_manga["attributes"]
-        attrs["title"] = get_correct_language(manga.attributes.title, manga.attributes.altTitles, repository.settings)
-        attrs["description"] = get_correct_language(manga.attributes.description, None, repository.settings)
-        for tag in attrs["tags"]:
-            tag["attributes"]["name"] = get_correct_language(tag["attributes"]["name"], None, repository.settings)
-
-        new_popular.append(new_manga)
-    return jsonify(new_popular), 200
 
 
 @server.route("/auth/check")
@@ -587,39 +506,6 @@ def updates():
     if auth["status"] != "ok":
         return {"status": "error", "response": "Credentials are not set properly. Updates require them"}, 401
     return render_template("updates.html", darktheme=repository.settings.darkTheme), 200
-
-
-@server.route("/updates/data")
-def updates_data():
-    limit = request.args.get('limit', 32)
-    offset = request.args.get('offset', 0)
-    _updates = repository.get_updates(limit, offset)
-    if not _updates:
-        repository.settings.logger.log(error, "couldn't get updates")
-        return {"status": "error", "response": "no updates found"}, 404
-    return jsonify(asdict(_updates)), 200
-
-
-@server.route("/latest-updated-chapters")
-def latest_updated_chapters():
-    chapters_datatype = repository.get_latest_updated_chapters()
-    if chapters_datatype is None:
-        return {"status": "error", "message": "Could not get latest updated chapters"}, 400
-    chapters = []
-    for chapter in chapters_datatype.data:
-        new_chapter = asdict(chapter)
-        attrs = new_chapter["attributes"]
-        attrs["title"] = get_correct_language(chapter.attributes.title, None, repository.settings)
-        for index, relationship in enumerate(chapter.relationships):
-            if relationship.type != "manga":
-                continue
-            new_chapter["relationships"][index]["attributes"]["title"] = get_correct_language(
-                new_chapter["relationships"][index]["attributes"]["title"],
-                new_chapter["relationships"][index]["attributes"]["altTitles"],
-                repository.settings
-            )
-        chapters.append(new_chapter)
-    return chapters
 
 
 @server.route("/local-port")
@@ -670,6 +556,158 @@ def config_data():
         return {"status": "ok", "response": "Settings saved"}, 200
 
 
+# /api/ Are routes that are mostly realiant on the mangadex api and are basically just interfaced and renamed
+# mdx api routes
+
+
+@server.route("/api/latest-updated-chapters")
+def latest_updated_chapters():
+    chapters_datatype = repository.get_latest_updated_chapters()
+    if chapters_datatype is None:
+        return {"status": "error", "message": "Could not get latest updated chapters"}, 400
+    chapters = []
+    for chapter in chapters_datatype.data:
+        new_chapter = asdict(chapter)
+        attrs = new_chapter["attributes"]
+        attrs["title"] = get_correct_language(chapter.attributes.title, None, repository.settings)
+        for index, relationship in enumerate(chapter.relationships):
+            if relationship.type != "manga":
+                continue
+            new_chapter["relationships"][index]["attributes"]["title"] = get_correct_language(
+                new_chapter["relationships"][index]["attributes"]["title"],
+                new_chapter["relationships"][index]["attributes"]["altTitles"],
+                repository.settings
+            )
+        chapters.append(new_chapter)
+    return chapters
+
+
+@server.route("/api/updates/data")
+def updates_data():
+    limit = request.args.get('limit', 32)
+    offset = request.args.get('offset', 0)
+    _updates = repository.get_updates(limit, offset)
+    if not _updates:
+        repository.settings.logger.log(error, "couldn't get updates")
+        return {"status": "error", "response": "no updates found"}, 404
+    return jsonify(asdict(_updates)), 200
+
+
+@server.route("/api/popular-new-titles", methods=["GET"])
+def popular_new_titles():
+    popular = asyncio.run(repository.popular_new_titles())
+    if popular is None:
+        return {"status": "error", "message": "Could not fetch popular new titles"}, 400
+    new_popular = []
+    for manga in popular.data:
+        if not manga:
+            continue
+        new_manga = asdict(manga)
+        attrs = new_manga["attributes"]
+        attrs["title"] = get_correct_language(manga.attributes.title, manga.attributes.altTitles, repository.settings)
+        attrs["description"] = get_correct_language(manga.attributes.description, None, repository.settings)
+        for tag in attrs["tags"]:
+            tag["attributes"]["name"] = get_correct_language(tag["attributes"]["name"], None, repository.settings)
+
+        new_popular.append(new_manga)
+    return jsonify(new_popular), 200
+
+
+@server.route('/api/search/manga', methods=['POST'])
+def search():
+    try:
+        request_data = request.get_json(force=True)
+    except Exception as e:
+        repository.settings.logger.log(error, f"Caught exception while search! {e}")
+        return jsonify({"status": "error", "response": "Invalid JSON body"}), 400
+
+    search_term = request_data.get("searchTerm")
+    if not search_term:
+        return jsonify({"status": "error", "response": "Missing or empty 'searchTerm'"}), 400
+
+    limit_arg = request.args.get("limit", 5)
+    try:
+        limit = int(limit_arg)
+    except ValueError:
+        return jsonify({"status": "error", "response": "Invalid limit"}), 400
+
+    if limit > 50:
+        return jsonify({"status": "error", "response": "Limit too high (max 50)"}), 400
+
+    try:
+        result = repository.connection.search_manga(search_term, limit=limit)
+        data = [asdict(manga) for manga in result.data]
+        for manga in data:
+            try:
+                manga["attributes"]["title"] = get_correct_language(
+                    manga["attributes"]["title"],
+                    manga["attributes"]["altTitles"],
+                    repository.settings
+                )
+                for i, tag in enumerate(manga["attributes"]["tags"]):
+                    manga["attributes"]["tags"][i]["attributes"]["name"] = get_correct_language(
+                        manga["attributes"]["tags"][i]["attributes"]["name"],
+                        None,
+                        repository.settings
+                    )
+            except KeyError as e:
+                repository.settings.log(error, f"Caught exception while choosing search translation! {e}")
+        return jsonify(data), 200
+    except Exception as e:
+        repository.settings.logger.log(error, f"Search failed: {e}")
+        return jsonify({"status": "error", "response": "Internal server error"}), 500
+
+
+@server.route("/api/manga/cover/<identifier>")
+def get_cover_art(identifier):
+    if not is_uuid4(identifier):
+        return jsonify({"status": "error", "response": "Invalid identifier"}), 400
+
+    try:
+        size = int(request.args.get("size", COVER_ART_256_SIZE))
+    except (TypeError, ValueError):
+        size = COVER_ART_MAX_SIZE
+
+    allowed_sizes = {COVER_ART_MAX_SIZE, COVER_ART_256_SIZE, COVER_ART_512_SIZE}
+    if size not in allowed_sizes:
+        size = COVER_ART_MAX_SIZE
+
+    image_binary = repository.get_cover_art(identifier, size)
+    if not image_binary:
+        return jsonify({"error": "No image found"}), 404
+
+    response = make_response(image_binary)
+    response.headers.set("Content-Type", "image/png")
+    response.headers.set("Content-Disposition", f"inline; filename={identifier}.png")
+    response.headers["Cache-Control"] = "public, max-age=86400"
+    return response, 200
+
+
+@server.route("/api/manga/<muuid>/recommendation")
+def recommendation(muuid):
+    recommendation: RecommendationList = repository.connection.get_recommendation(muuid)
+    # Sort by best matches
+    recommendation.data.sort(key=lambda rec: rec.attributes.score, reverse=True)
+    print(len(recommendation.data))
+    return asdict(recommendation)
+
+
+@server.route("/api/manga")
+def manga():
+    params = {}
+
+    if "ids[]" in request.args:
+        params["ids[]"] = request.args.getlist("ids[]")
+    if "limit" in request.args:
+        try:
+            params["limit"] = int(request.args.get("limit"))
+        except ValueError:
+            params["limit"] = 100
+    if "includes[]" in request.args:
+        params["includes[]"] = request.args.getlist("includes[]")
+
+    return asdict(repository.connection.get_manga(params))
+
 if __name__ == "__main__":
     use_actual_server = True
     try:
@@ -678,7 +716,7 @@ if __name__ == "__main__":
         else:
             from waitress import serve
 
-            serve(server, host="0.0.0.0", port=5000, threads=os.cpu_count())
+            serve(server, host="localhost", port=5000, threads=os.cpu_count())
     finally:
         # Wakeup and exit thread
         repository.downloader.exit()  # signals the thread for exit

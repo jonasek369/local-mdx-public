@@ -40,7 +40,7 @@ class MangaRepository:
 
     def get_manga_attributes(self, identifier: MangaIdentifier, local_only: bool = False) -> Optional[MangaAttributes]:
         if not local_only:
-            manga = self.connection.get_manga(identifier)
+            manga = self.connection.get_manga_from_muuid(identifier)
             if manga is not None:
                 self.database.set_manga_attributes(manga)
                 return manga.attributes
@@ -277,7 +277,7 @@ class MangaRepository:
         muuid_list = [manga[0] for manga in downloaded_mangas]
         attribute_map = {}
         for muuid in muuid_list:
-            manga = self.connection.get_manga(muuid)
+            manga = self.connection.get_manga_from_muuid(muuid)
             if manga is not None:
                 attribute_map[muuid] = manga.attributes
                 self.database.set_manga_attributes(manga)
@@ -323,6 +323,5 @@ class MangaRepository:
             return None
         return feed
 
-    def get_latest_updated_chapters(self) -> ChapterList | None:
-        updates = self.connection.get_latest_updated_chapters()
-        return updates
+    def get_latest_updated_chapters(self) -> Optional[ChapterList]:
+        return self.connection.get_latest_updated_chapters()
