@@ -24,6 +24,7 @@ from flask import Flask, jsonify, render_template, request, make_response, strea
     session, redirect
 from werkzeug.security import check_password_hash, generate_password_hash
 from datetime import timedelta
+from tkinter import filedialog
 
 template_dir = os.path.join(os.getcwd(), 'gui')
 
@@ -57,7 +58,7 @@ def require_auth():
             return
 
         if not session.get("authenticated"):
-            abort(401)
+            return redirect("/login")
 
 
 @server.route("/login")
@@ -104,7 +105,6 @@ def server_manga(muuid):
 
     if not is_uuid4(muuid):
         return {"status": "error", "message": "uuid is not a valid uuid4"}
-
     manga = repository.get_manga_attributes(muuid)
     if not manga:
         return jsonify({"status": "error", "response": "Manga could not be found"}), 404
@@ -515,7 +515,11 @@ def local_port():
     if not repository.credential_manager.validate_token(token):
         return {"status": "error", "response": "Invalid credentials"}, 403
     port = repository.connection.get_followed_manga()
+    downloaded_manga = repository.database.all_manga_in_db()
     for manga in port.data:
+        if any([i[0] == manga.id for i in downloaded_manga]):
+            repository.settings.logger.log(info, f"Skipping {manga.id}")
+            continue
         repository.downloader.queue.put(
             MangaDownloadJob(
                 manga.id,
@@ -545,15 +549,32 @@ def config_data():
         except Exception as e:
             return {"status": "error", "response": "Json is invalid"}, 400
 
+        old_database_path = repository.settings.databasePath
+
         repository.settings.cacheTokenToDisk = bool(request_data.get("cacheTokenToDisk", False))
         repository.settings.logLevel = max(min(7, int(request_data.get("logLevel", 1))), 1)
         repository.settings.logger.log_level = repository.settings.logLevel
         repository.settings.fileLogger = bool(request_data.get("fileLogger", False))
         repository.settings.logger.change_file_logger(repository.settings.fileLogger)
         repository.settings.darkTheme = bool(request_data.get("darkTheme", True))
+        repository.settings.databasePath = str(request_data.get("databasePath", "."))
 
         save_settings(repository.settings)
+
+        if old_database_path != repository.settings.databasePath:
+            repository.database.change_path(repository.settings.databasePath)
+
         return {"status": "ok", "response": "Settings saved"}, 200
+
+
+@server.route("/config/select-database-folder", methods=["GET", "POST"])
+def select_database_folder():
+    directory_path = filedialog.askdirectory(
+        title="Select a file"
+    )
+    if not directory_path:
+        return {"status": "ok", "path": repository.settings.databasePath}, 200
+    return {"status": "ok", "path": directory_path}, 200
 
 
 # /api/ Are routes that are mostly realiant on the mangadex api and are basically just interfaced and renamed
@@ -704,7 +725,7 @@ def manga():
         params["ids[]"] = request.args.getlist("ids[]")
     if "limit" in request.args:
         try:
-            params["limit"] = int(request.args.get("limit"))
+            params["limit"] = int(request.args.get("limit", 100))
         except ValueError:
             params["limit"] = 100
     if "includes[]" in request.args:

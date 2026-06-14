@@ -1,4 +1,5 @@
 import json
+import os
 import sqlite3
 import threading
 from dataclasses import asdict, dataclass
@@ -15,119 +16,216 @@ class MangaDownloadJobInDatabase:
     pages_in_db: Dict  # {"cuuid": [1, 2, 3, 4, 5], ...}
     records: Dict  # {"cuuid": 12, ...}
 
+def init_db(path) -> sqlite3.Connection:
+    conn = sqlite3.connect(os.path.join(path, "database.db"), check_same_thread=False, timeout=10)
+    cursor = conn.cursor()
+    conn.execute("PRAGMA foreign_keys = ON")
+    cursor.execute("""
+                   CREATE TABLE IF NOT EXISTS chapters
+                   (
+                       cuuid
+                       CHAR
+                   (
+                       36
+                   ) PRIMARY KEY,
+                       type TEXT,
+                       relationships TEXT
+                       );
+                   """)
+
+    cursor.execute("""
+                   CREATE TABLE IF NOT EXISTS chapter_attributes
+                   (
+                       cuuid
+                       CHAR
+                   (
+                       36
+                   ) PRIMARY KEY,
+                       muuid CHAR
+                   (
+                       36
+                   ) NOT NULL,
+                       title TEXT,
+                       volume TEXT,
+                       chapter TEXT,
+                       pages INTEGER NOT NULL,
+                       translatedLanguage TEXT NOT NULL,
+                       uploader TEXT,
+                       externalUrl TEXT,
+                       version INTEGER NOT NULL,
+                       createdAt TEXT NOT NULL,
+                       updatedAt TEXT NOT NULL,
+                       publishAt TEXT NOT NULL,
+                       readableAt TEXT NOT NULL,
+                       FOREIGN KEY
+                   (
+                       cuuid
+                   ) REFERENCES chapters
+                   (
+                       cuuid
+                   )
+                       );
+                   """)
+    cursor.execute("""CREATE TABLE IF NOT EXISTS manga_attributes
+    (
+        muuid
+        CHAR
+                      (
+        36
+                      ) NOT NULL PRIMARY KEY,
+        title TEXT NOT NULL,
+        altTitles TEXT NOT NULL, -- List[LocalizedString] as JSON
+        description TEXT NOT NULL,
+        isLocked BOOLEAN NOT NULL,
+        links TEXT NOT NULL, -- Links as JSON
+        originalLanguage TEXT NOT NULL,
+        lastVolume TEXT, -- Optional
+        lastChapter TEXT, -- Optional
+        publicationDemographic TEXT, -- Optional
+        status TEXT, -- Optional
+        year INTEGER, -- Optional
+        contentRating TEXT NOT NULL,
+        chapterNumbersResetOnNewVolume BOOLEAN NOT NULL,
+        availableTranslatedLanguages TEXT NOT NULL, -- List[str] as JSON
+        latestUploadedChapter TEXT,
+        tags TEXT NOT NULL, -- List[Tag] as JSON
+        state TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        createdAt TEXT NOT NULL, -- ISO 8601 Date-Time as TEXT
+        updatedAt TEXT NOT NULL -- ISO 8601 Date-Time as TEXT
+        );""")
+    cursor.execute("""CREATE TABLE IF NOT EXISTS chapter_page
+    (
+        page_number
+        INT
+        NOT
+        NULL,
+        page_content
+        BLOB
+        NOT
+        NULL,
+        cuuid
+        CHAR
+                      (
+        36
+                      ) NOT NULL,
+        FOREIGN KEY
+                      (
+                          cuuid
+                      ) REFERENCES chapter_attributes
+                      (
+                          cuuid
+                      ),
+        UNIQUE
+                      (
+                          cuuid,
+                          page_number
+                      )
+        );""")
+    cursor.execute("""CREATE TABLE IF NOT EXISTS cover_art
+    (
+        muuid
+        CHAR
+                      (
+        36
+                      ) NOT NULL,
+        size INTEGER NOT NULL,
+        data BLOB NOT NULL,
+        PRIMARY KEY
+                      (
+                          muuid,
+                          size
+                      )
+        )""")
+
+    cursor.execute("""CREATE TABLE IF NOT EXISTS latest_chapter
+    (
+        muuid
+        CHAR
+                      (
+        36
+                      ) NOT NULL primary key,
+        latest_chapter CHAR
+                      (
+                          36
+                      ) NOT NULL,
+        createdAt TEXT NOT NULL, -- ISO 8601 Date-Time as TEXT
+        updatedAt TEXT NOT NULL, -- ISO 8601 Date-Time as TEXT
+        volume TEXT,
+        chapter TEXT
+        )""")
+
+    cursor.execute("""CREATE TABLE IF NOT EXISTS manga_feed
+    (
+        muuid
+        CHAR
+                      (
+        36
+                      ) NOT NULL primary key,
+        feed BLOB NOT NULL
+        )""")
+
+    cursor.execute("""CREATE TABLE IF NOT EXISTS chapters_read
+    (
+        muuid
+        CHAR
+                      (
+        36
+                      ) NOT NULL,
+        cuuid CHAR
+                      (
+                          36
+                      ) NOT NULL,
+        PRIMARY KEY
+                      (
+                          muuid,
+                          cuuid
+                      )
+        )""")
+
+    cursor.execute("""CREATE TABLE IF NOT EXISTS manga_aggregate
+    (
+        muuid
+        CHAR
+                      (
+        36
+                      ) NOT NULL,
+        fetch_params TEXT NOT NULL,
+        json TEXT,
+        PRIMARY KEY
+                      (
+                          muuid,
+                          fetch_params
+                      )
+        )""")
+
+    cursor.execute("""
+                   CREATE INDEX IF NOT EXISTS idx_chapter_attributes_cuuid ON chapter_attributes(cuuid);
+                   """)
+    cursor.execute("""
+                   CREATE INDEX IF NOT EXISTS idx_chapter_page_chapter_id ON chapter_page(cuuid);
+                   """)
+    cursor.execute("""
+                   CREATE INDEX IF NOT EXISTS idx_muuid ON chapter_attributes (muuid);
+                   """)
+
+    # TODO: Make index from chapter to chapter attributes if performance begins to be a problem
+
+    conn.commit()
+    cursor.close()
+    return conn
+
 
 class Database:
-    def __init__(self):
-        self.conn = sqlite3.connect("database.db", check_same_thread=False, timeout=10)
-        cursor = self.conn.cursor()
-        self.conn.execute("PRAGMA foreign_keys = ON")
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS chapters (
-            cuuid CHAR(36) PRIMARY KEY,
-            type TEXT,
-            relationships TEXT
-        );
-        """)
+    def __init__(self, database_path):
+        self.conn = init_db(database_path)
 
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS chapter_attributes (
-            cuuid CHAR(36) PRIMARY KEY,
-            muuid CHAR(36) NOT NULL,
-            title TEXT,
-            volume TEXT,
-            chapter TEXT,
-            pages INTEGER NOT NULL,
-            translatedLanguage TEXT NOT NULL,
-            uploader TEXT,
-            externalUrl TEXT,
-            version INTEGER NOT NULL,
-            createdAt TEXT NOT NULL,
-            updatedAt TEXT NOT NULL,
-            publishAt TEXT NOT NULL,
-            readableAt TEXT NOT NULL,
-            FOREIGN KEY (cuuid) REFERENCES chapters(cuuid)
-        );
-        """)
-        cursor.execute("""CREATE TABLE IF NOT EXISTS manga_attributes (
-            muuid CHAR(36) NOT NULL PRIMARY KEY,
-            title TEXT NOT NULL,
-            altTitles TEXT NOT NULL, -- List[LocalizedString] as JSON
-            description TEXT NOT NULL,
-            isLocked BOOLEAN NOT NULL,
-            links TEXT NOT NULL, -- Links as JSON
-            originalLanguage TEXT NOT NULL,
-            lastVolume TEXT, -- Optional
-            lastChapter TEXT, -- Optional
-            publicationDemographic TEXT, -- Optional
-            status TEXT, -- Optional
-            year INTEGER, -- Optional
-            contentRating TEXT NOT NULL,
-            chapterNumbersResetOnNewVolume BOOLEAN NOT NULL,
-            availableTranslatedLanguages TEXT NOT NULL, -- List[str] as JSON
-            latestUploadedChapter TEXT,
-            tags TEXT NOT NULL, -- List[Tag] as JSON
-            state TEXT NOT NULL,
-            version INTEGER NOT NULL,
-            createdAt TEXT NOT NULL, -- ISO 8601 Date-Time as TEXT
-            updatedAt TEXT NOT NULL -- ISO 8601 Date-Time as TEXT
-        );""")
-        cursor.execute("""CREATE TABLE IF NOT EXISTS chapter_page (
-    page_number INT NOT NULL,
-    page_content BLOB NOT NULL,
-    cuuid CHAR(36) NOT NULL,
-    FOREIGN KEY (cuuid) REFERENCES chapter_attributes(cuuid),
-    UNIQUE (cuuid, page_number)
-);""")
-        cursor.execute("""CREATE TABLE IF NOT EXISTS cover_art(
-            muuid CHAR(36) NOT NULL,
-            size INTEGER NOT NULL,
-            data BLOB NOT NULL,
-            PRIMARY KEY(muuid, size)
-        )""")
-
-        cursor.execute("""CREATE TABLE IF NOT EXISTS latest_chapter (
-            muuid CHAR(36) NOT NULL primary key,
-            latest_chapter CHAR(36) NOT NULL,
-            createdAt TEXT NOT NULL, -- ISO 8601 Date-Time as TEXT
-            updatedAt TEXT NOT NULL, -- ISO 8601 Date-Time as TEXT
-            volume TEXT,
-            chapter TEXT
-        )""")
-
-        cursor.execute("""CREATE TABLE IF NOT EXISTS manga_feed (
-            muuid CHAR(36) NOT NULL primary key,
-            feed BLOB NOT NULL
-        )""")
-
-        cursor.execute("""CREATE TABLE IF NOT EXISTS chapters_read (
-            muuid CHAR(36) NOT NULL,
-            cuuid CHAR(36) NOT NULL,
-            PRIMARY KEY(muuid, cuuid)
-        )""")
-
-        cursor.execute("""CREATE TABLE IF NOT EXISTS manga_aggregate (
-            muuid CHAR(36) NOT NULL,
-            fetch_params TEXT NOT NULL,
-            json TEXT,
-            PRIMARY KEY (muuid, fetch_params)
-        )""")
-
-        cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_chapter_attributes_cuuid ON chapter_attributes(cuuid);
-        """)
-        cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_chapter_page_chapter_id ON chapter_page(cuuid);
-        """)
-        cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_muuid ON chapter_attributes (muuid);
-        """)
-
-        # TODO: Make index from chapter to chapter attributes if performance begins to be a problem
-
-        self.conn.commit()
-        cursor.close()
         # Sqlite3 dose not like access from multiple threads so we use lock to make sure to only access one at time
         self.lock = threading.Lock()
+
+    def change_path(self, path):
+        self.conn.close()
+        self.conn = init_db(path)
 
     def set_manga_aggregate(self, muuid: str, params: str, _json: str):
         with self.lock:

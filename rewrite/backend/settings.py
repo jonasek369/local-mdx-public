@@ -19,6 +19,7 @@ class Settings:
     darkTheme: bool
     requireAuth: bool
     authPassword: Optional[str]
+    databasePath: str
 
 
 @dataclass
@@ -46,13 +47,14 @@ def load_settings() -> Settings:
             Logger(json_settings.get('logLevel', 1), json_settings.get('fileLogger', False)),
             json_settings.get('darkTheme', True),
             json_settings.get("requireAuth", False),
-            json_settings.get("authPassword", None)
+            json_settings.get("authPassword", None),
+            json_settings.get("databasePath", ".")
         )
     except (FileNotFoundError, json.decoder.JSONDecodeError):
         Logger().log(warning, f"Could not find settings.json in {os.getcwd()} using default")
         # return default if we cant find the settings
         default = Settings(None, ["safe", "suggestive", "erotica"], ["en"], False, 1, False, Logger(1, False), True,
-                           False, None)
+                           False, None, ".")
         save_settings(default)
         default.logger.log(warning, "Create settings.json with default values")
         return default

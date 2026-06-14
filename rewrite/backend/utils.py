@@ -170,7 +170,6 @@ class Logger:
         self.enable_file_logger = enable_file_logger
         if self.enable_file_logger:
             self.setup_file_logger()
-        os.system("cls")
 
     def setup_file_logger(self):
         self.file_log = []

@@ -21,7 +21,7 @@ class MangaRepository:
         self.settings = load_settings()
         self.settings.onMangaDownloadFinishHandler = self.store_downloaded_pages
 
-        self.database = Database()
+        self.database = Database(self.settings.databasePath)
         self.credential_manager = CredentialManager(self.settings, load_credentials())
         self.connection = MangadexConnection(self.settings, self.credential_manager)
         self.downloader = MangaDownloader(self.settings)

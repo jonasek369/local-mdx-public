@@ -12,5 +12,6 @@
     "fileLogger": false,
     "darkTheme": true,
     "requireAuth": false,
-    "authPassword": null
+    "authPassword": null,
+    "databasePath": "."
 }

@@ -112,7 +112,6 @@
             gap: 12px;
             margin-top: 24px;
             padding-top: 24px;
-            border-top: 1px solid var(--md-border);
         }
 
         .button {
@@ -205,6 +204,40 @@
 				</div>
 			</div>
 
+            <div class="form-group">
+                <label class="form-label" for="databaseLocation">Database Location</label>
+                <span class="form-description">
+                    Choose the directory where the database file will be stored
+                </span>
+
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <input
+                        type="text"
+                        id="databaseLocation"
+                        name="databaseLocation"
+                        placeholder="Select a folder..."
+                        readonly
+                        style="
+                            flex:1;
+                            padding:10px 12px;
+                            background-color: var(--md-bg);
+                            border: 1px solid var(--md-border);
+                            border-radius: 4px;
+                            color: var(--md-text);
+                            font-size: 14px;
+                        "
+                    >
+
+                    <button
+                        type="button"
+                        class="button button-secondary"
+                        onclick="browseDatabaseLocation()"
+                    >
+                        Browse...
+                    </button>
+                </div>
+            </div>
+
 			<div class="button-group">
 				<button type="submit" class="button">Save Changes</button>
 				<button type="button" class="button button-secondary" onclick="resetForm()">Reset to Defaults</button>
@@ -220,6 +253,7 @@
 			document.getElementById('logLevel').value = settings.logLevel || 2;
 			document.getElementById('fileLogger').checked = settings.fileLogger === true;
 			document.getElementById('darkTheme').checked = settings.darkTheme === true;
+            document.getElementById('databaseLocation').value = settings.databasePath;
 		}).then(response => {
             updateTheme();
 		});
@@ -232,7 +266,8 @@
 			cacheTokenToDisk: document.getElementById('cacheToken').checked,
 			logLevel: parseInt(document.getElementById('logLevel').value),
 			fileLogger: document.getElementById('fileLogger').checked,
-			darkTheme: document.getElementById('darkTheme').checked
+			darkTheme: document.getElementById('darkTheme').checked,
+            databasePath: document.getElementById("databaseLocation").value
 		};
 
         fetch("/config/data", {method: "POST", body: JSON.stringify(settings)})
@@ -279,6 +314,18 @@
 			root.style.setProperty('--md-text-secondary', '#666666');
 		}
 	}
+
+    async function browseDatabaseLocation() {
+        const response = await fetch("/config/select-database-folder", {
+            method: "POST"
+        });
+
+        const result = await response.json();
+
+        if (result.path) {
+            document.getElementById('databaseLocation').value = result.path;
+        }
+    }
 </script>
 </body>
 

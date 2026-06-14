@@ -93,7 +93,7 @@ class MangaDownloadJob:
 @dataclass
 class MangaDownload:
     pages: int
-    data: [bytes]
+    data: List[bytes]
 
 
 async def async_get_chapter_page(
@@ -520,7 +520,7 @@ class MangadexConnection:
             self.logger.log(error, f"An error occurred: {e}")
             return None
 
-    def cache_cover_art_from_relationships(self, identifier: str, relationships: [Relationship]):
+    def cache_cover_art_from_relationships(self, identifier: str, relationships: List[Relationship]):
         for relationship in relationships:
             if relationship.type == "cover_art" and relationship.attributes is not None:
                 if identifier not in self.cover_file_name_cache:
@@ -656,7 +656,7 @@ class MangadexConnection:
 
         req = self.safe_request("GET", f"{self.API}/manga/{identifier}", params={"includes[]": ["cover_art"]})
 
-        if req and req.status_code != 200:
+        if not req or req and req.status_code != 200:
             return None
 
         query = req.json()
@@ -687,7 +687,7 @@ class MangadexConnection:
         }
         req = self.safe_request("GET", url=f"{self.API}/chapter", params=params)
 
-        if req and req.status_code != 200:
+        if not req or req and req.status_code != 200:
             return None
 
         query = req.json()
@@ -821,10 +821,14 @@ class MangadexConnection:
             return None
         return from_json(ChapterList, req.json())
 
-    def get_user_custom_lists(self) -> CustomListResponse:
+    def get_user_custom_lists(self) -> Optional[CustomListResponse]:
         data = self.safe_request("GET", url=f"{self.API}/user/list",
                                  headers=self.credentials_manager.get_header_token(), default_parameters=False,
                                  params={"limit": 100})
+
+        if data is None:
+            return None
+
         return from_json(CustomListResponse, data.json())
 
     def create_custom_list(self, mangas: List[str]) -> bool:
@@ -841,8 +845,10 @@ class MangadexConnection:
                                      )
         return response.status_code == 200
 
-    def get_sync_list(self) -> Tuple[str, CustomListResponse]:
+    def get_sync_list(self) -> Optional[Tuple[str, CustomListResponse]]:
         user_custom_lists = self.get_user_custom_lists()
+        if user_custom_lists is None:
+            return None
         sync_list_uuid = None
         for custom_list in user_custom_lists.data:
             if custom_list.attributes.name == "local-mangadex-sync":
@@ -850,6 +856,8 @@ class MangadexConnection:
                     self.logger.log(warning, "Multiple MDlists with name local-mangadex-sync")
                 else:
                     sync_list_uuid = custom_list.id
+        if sync_list_uuid is None:
+            return None
         return sync_list_uuid, user_custom_lists
 
     @perf_test
@@ -883,6 +891,9 @@ class MangadexConnection:
                                          "version": version
                                      }
                                      )
+        if response is None:
+            return False
+
         if response.status_code == 409:
             self.logger.log(warning, "Conflict! If you have opened the MDlist in your browser please close it")
         return response.status_code == 200

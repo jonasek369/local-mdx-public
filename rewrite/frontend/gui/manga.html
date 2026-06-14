@@ -828,7 +828,9 @@
         return chapterDiv;
     }
 
-    fetch("/manga/{{muuid}}/info").then(response => response.json()).then(data => {
+
+    function load_manga_info(reload_recommendation){
+        fetch("/manga/{{muuid}}/info").then(response => response.json()).then(data => {
         const contdiv = document.getElementById("content");
 
         while (contdiv.firstChild) {
@@ -895,8 +897,12 @@
         });
 
         check_queue();
-		get_recommendation();
+        if(reload_recommendation){
+		    get_recommendation();
+        }
     });
+    }
+
 
     function check_queue() {
         fetch("/downloader/contains", {
@@ -992,6 +998,20 @@
             hideDeleteWarning();
         }
     });
+
+    const source = new EventSource("/downloader/stream");
+
+    source.onmessage = (event) => {
+	    const data = JSON.parse(event.data);
+        if(data.currently_working_on === null){
+            return;
+        }
+	    if(data.currently_working_on.id === "{{ muuid }}") {
+            load_manga_info(false);
+        }
+	}
+
+    load_manga_info(true);
 </script>
 </body>
 </html>
