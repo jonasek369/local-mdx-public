@@ -521,7 +521,10 @@
         const lastPageBtn = document.getElementById("last-page");
 
         let nextChapter = null;
+        let nextChapterLocal = 1;
         let prevChapter = null;
+        let prevChapterLocal = 1;
+
         let relocated = false;
         let pageCount = {{pages}};
         let page = {{page}};
@@ -574,41 +577,87 @@
         });
 
         async function full_load() {
-            await fetch("/manga/read-status", {
-                method: "POST",
-                body: JSON.stringify({
-                    "cuuid": "{{ cuuid }}",
-                    "read_state": 1
-                })
-            });
+            if({{ local }} === 1){
+                await fetch("/manga/read-status", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        "cuuid": "{{ cuuid }}",
+                        "read_state": 1
+                    })
+                });
 
-            const totalPages = {{ pages }};
+                const totalPages = {{ pages }};
+                for (let i = 1; i <= totalPages; i++) {
+                    const img = document.createElement("img");
 
-            for (let i = 1; i <= totalPages; i++) {
-                const img = document.createElement("img");
-                img.src = `/page-image/{{cuuid}}/${i}`;
-                img.loading = "lazy";
-                img.decoding = "auto";
+                    img.src = `/page-image/{{cuuid}}/${i}`;
+                    img.loading = "lazy";
+                    img.decoding = "auto";
 
-                if (!isLongStrip) {
-                    img.classList.add("hidden");
-                    img.addEventListener("click", handle_click);
-                } else {
-                    img.addEventListener("click", handleLongStripClick);
+                    if (!isLongStrip) {
+                        img.classList.add("hidden");
+                        img.addEventListener("click", handle_click);
+                    } else {
+                        img.addEventListener("click", handleLongStripClick);
+                    }
+
+                    content.appendChild(img);
+
+                    updateProgress();
+                    updateNavButtons();
+
+                    // Hide loader after last page loads
+                    if (i === totalPages) {
+                        loading.style.display = 'none';
+                    }
                 }
-
-                content.appendChild(img);
-
-                updateProgress();
-                updateNavButtons();
-
-                // Hide loader after last page loads
-                if (i === totalPages) {
-                    loading.style.display = 'none';
-                }
+                set_page(page)
+                window.scrollTo({ top: 0, behavior: 'instant' });
             }
-            set_page(page)
-            window.scrollTo({ top: 0, behavior: 'instant' });
+            else{
+                let totalPages = 0;
+
+                fetch("https://api.mangadex.org/at-home/server/{{ cuuid }}")
+                    .then(response => response.json())
+                    .then(data => {
+                        // Sort pages by the number before the first "-"
+                        data.chapter.data.sort((a, b) => {
+                            const pageA = parseInt(a.split("-")[0], 10);
+                            const pageB = parseInt(b.split("-")[0], 10);
+                            return pageA - pageB;
+                        });
+
+                        totalPages = data.chapter.data.length;
+
+                        data.chapter.data.forEach((page, i) => {
+                            const img = document.createElement("img");
+
+                            img.src = `${data.baseUrl}/data/${data.chapter.hash}/${page}`;
+                            img.loading = "lazy";
+                            img.decoding = "auto";
+
+                            if (!isLongStrip) {
+                                img.classList.add("hidden");
+                                img.addEventListener("click", handle_click);
+                            } else {
+                                img.addEventListener("click", handleLongStripClick);
+                            }
+
+                            content.appendChild(img);
+
+                            updateProgress();
+                            updateNavButtons();
+
+                            // Hide loader after last page loads
+                            if (i === totalPages - 1) {
+                                loading.style.display = 'none';
+                            }
+                        });
+                    }).then(_ => {
+                        set_page(page)
+                        window.scrollTo({ top: 0, behavior: 'instant' });
+                    });
+            }
         }
 
 
@@ -672,7 +721,7 @@
 
             if (page >= pageCount) {
                 if (nextChapter !== null) {
-                    window.location.href = "/read/" + nextChapter + "/1";
+                    window.location.href = "/read/" + nextChapter + "/1?local="+nextChapterLocal;
                     relocated = true;
                 } else {
                     window.location.href = "/manga/{{muuid}}";
@@ -688,7 +737,7 @@
 
             if (page <= 1) {
                 if (prevChapter !== null) {
-                    window.location.href = "/read/" + prevChapter + "?end=true";
+                    window.location.href = "/read/" + prevChapter + "?end=true&local=" + prevChapterLocal;
                     relocated = true;
                 }
                 return;
@@ -723,11 +772,14 @@
 
         full_load();
 
-        fetch("/read/next-prev/{{cuuid}}")
+        fetch("/read/next-prev/{{cuuid}}?local={{ local }}")
             .then(response => response.json())
             .then(data => {
                 nextChapter = data["next"];
+                nextChapterLocal = data["next_local"];
                 prevChapter = data["prev"];
+                prevChapterLocal = data["prev_local"]
+
 
                 const prevBtn = document.getElementById('prev-chapter');
                 const nextBtn = document.getElementById('next-chapter');
@@ -737,24 +789,24 @@
                 if (prevChapter) {
                     prevBtn.style.display = 'inline-block';
                     prevBtn.onclick = () => {
-                        window.location.href = "/read/" + prevChapter + "?end=true";
+                        window.location.href = "/read/" + prevChapter + "?end=true&local="+prevChapterLocal;
                     };
 
                     longstripPrevBtn.classList.add('visible');
                     longstripPrevBtn.onclick = () => {
-                        window.location.href = "/read/" + prevChapter + "?end=true";
+                        window.location.href = "/read/" + prevChapter + "?end=true&local="+prevChapterLocal;
                     };
                 }
 
                 if (nextChapter) {
                     nextBtn.style.display = 'inline-block';
                     nextBtn.onclick = () => {
-                        window.location.href = "/read/" + nextChapter + "/1";
+                        window.location.href = "/read/" + nextChapter + "/1?local="+nextChapterLocal;
                     };
 
                     longstripNextBtn.classList.add('visible');
                     longstripNextBtn.onclick = () => {
-                        window.location.href = "/read/" + nextChapter + "/1";
+                        window.location.href = "/read/" + nextChapter + "/1?local="+nextChapterLocal;
                     };
                 }
 

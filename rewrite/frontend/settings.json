@@ -13,5 +13,5 @@
     "darkTheme": true,
     "requireAuth": false,
     "authPassword": null,
-    "databasePath": "."
+    "databasePath": "/mnt/old/lmdx"
 }

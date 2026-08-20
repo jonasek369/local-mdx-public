@@ -3,6 +3,8 @@ import os
 from dataclasses import dataclass, asdict, fields
 from typing import Optional, Callable, List
 
+from more_itertools.more import side_effect
+
 from rewrite.backend.utils import Logger, warning, error, info, settings_to_jsonable_dict
 import keyring
 

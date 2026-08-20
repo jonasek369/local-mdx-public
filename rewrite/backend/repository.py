@@ -160,7 +160,7 @@ class MangaRepository:
             self.database.set_manga_aggregate(muuid, str_params, json.dumps(connection_aggregate))
             return connection_aggregate
 
-    def get_next_prev(self, identifier: ChapterIdentifier) -> Tuple[Optional[str], Optional[str]]:
+    def get_next_prev(self, identifier: ChapterIdentifier, is_for_local: bool) -> Tuple[Optional[dict], Optional[dict]]:
         """
         This fucntion walks the aggregate provided from mangadex and gets next and prev chapter thanks to this
         of manga has multiple chapters it will go to next one with the bonus of keeping the same scanlation group
@@ -169,13 +169,21 @@ class MangaRepository:
         if my implementation is right it should be exact same function as mangadex
         """
         _next, prev = None, None
-        muuid = self.database.chapter_to_manga_identifier(identifier)
-        feed = self.get_manga_feed(muuid, force_latest=False)
+        if not is_for_local:
+            chapter_data = self.connection.get_chapter(identifier)
+            manga_relationship = get_relationships(chapter_data.relationships, "manga")[0]
+            muuid = manga_relationship.id
+            feed = self.get_manga_feed(muuid, force_latest=True)
+        else:
+            muuid = self.database.chapter_to_manga_identifier(identifier)
+            feed = self.get_manga_feed(muuid, force_latest=False)
+
         current_chapter_filtered = list(filter(lambda chap: chap.id == identifier, feed.data))
         if not current_chapter_filtered:
             return _next, prev
         current_chapter: Chapter = current_chapter_filtered[0]
         current_chapter_groups = get_relationships(current_chapter.relationships, "scanlation_group")
+
 
         params = {
             "translatedLanguage[]": self.settings.translatedLanguage
@@ -216,14 +224,9 @@ class MangaRepository:
             direction=1
         )
 
-        if not self.database.is_chapter_downloaded(_next):
-            _next = None
-        if not self.database.is_chapter_downloaded(prev):
-            prev = None
+        return {"uuid": _next, "local": self.database.is_chapter_downloaded(_next)}, {"uuid": prev, "local": self.database.is_chapter_downloaded(prev)}
 
-        return _next, prev
-
-    def get_manga_feed(self, identifier: MangaIdentifier, force_latest=False) -> ChapterList:
+    def get_manga_feed(self, identifier: MangaIdentifier, force_latest=False) -> Optional[ChapterList]:
         if not force_latest:
             feed = self.database.get_manga_feed(identifier)
             if feed is not None:

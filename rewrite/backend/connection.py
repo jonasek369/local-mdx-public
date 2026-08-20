@@ -762,7 +762,7 @@ class MangadexConnection:
         return chapter_list
 
     def get_chapter(self, identifier: ChapterIdentifier) -> Optional[Chapter]:
-        req = self.safe_request("GET", url=f"{self.API}/chapter/{identifier}")
+        req = self.safe_request("GET", url=f"{self.API}/chapter/{identifier}", params={"includes[]": ["scanlation_group", "user", "manga"]})
         if req and req.status_code != 200:
             return None
         chapter_info = req.json()

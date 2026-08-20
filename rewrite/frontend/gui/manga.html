@@ -634,6 +634,36 @@
                 padding: 1.5rem 0.75rem 0.75rem;
             }
         }
+
+        .cloud-status {
+            position: relative;
+            cursor: help;
+        }
+
+        .cloud-status .tooltip {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-bottom: 6px;
+
+            padding: 5px 8px;
+            border-radius: 4px;
+            background: #222;
+            color: white;
+            font-size: 12px;
+            white-space: nowrap;
+
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.15s ease;
+            pointer-events: none;
+        }
+
+        .cloud-status:hover .tooltip {
+            opacity: 1;
+            visibility: visible;
+        }
 	</style>
 </head>
 <body>
@@ -740,8 +770,8 @@
         })
     }
 
-    function navigateToChapter(chapterId) {
-        window.location.href = "/read/" + chapterId;
+    function navigateToChapter(chapterId, local) {
+        window.location.href = "/read/" + chapterId + "?local=" + (local ? 1 : 0);
     }
 
     function toggleChapterGroup(groupKey) {
@@ -767,10 +797,12 @@
     }
 
     function createChapterItem(chapter, isGrouped = false) {
+        const local = chapter.local;
+
         const chapterDiv = document.createElement("div");
         chapterDiv.className = "chapter-item" + (isGrouped ? " grouped" : "");
         chapterDiv.onclick = function () {
-            navigateToChapter(chapter.identifier);
+            navigateToChapter(chapter.identifier, local);
         };
 
         let titleText = "Volume " + chapter.volume + " Chapter " + chapter.chapter;
@@ -793,11 +825,21 @@
                 <div class="chapter-viewed-status">${read_status ? svg_crossed_eye : svg_eye}</div>
                 <div class="chapter-title">${titleText}</div>
                 <div class="chapter-meta">
+                    ${!local ? `
+                        <div class="meta-item cloud-status">
+                            <span class="meta-icon">🌐</span>
+                            <span class="tooltip">This chapter is not locally stored in database</span>
+                        </div>
+                        <div class="meta-divider"></div>
+                    ` : ''}
+
                     <div class="meta-item">
                         <span class="meta-icon">👤</span>
                         <a href="https://mangadex.org/user/${user_id}" class="meta-link">${user}</a>
                     </div>
+
                     <div class="meta-divider"></div>
+
                     <div class="meta-item">
                         <span class="meta-icon">👥</span>
                         <a href="https://mangadex.org/group/${group_id}" class="meta-link">${scanlationGroup}</a>

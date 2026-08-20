@@ -16,7 +16,8 @@ from dataclasses import asdict
 
 from rewrite.backend.connection import MangaDownloadJob
 from rewrite.backend.repository import MangaRepository
-from rewrite.backend.schemas import COVER_ART_MAX_SIZE, COVER_ART_256_SIZE, COVER_ART_512_SIZE, RecommendationList
+from rewrite.backend.schemas import COVER_ART_MAX_SIZE, COVER_ART_256_SIZE, COVER_ART_512_SIZE, RecommendationList, \
+    MangaAttributes, from_json
 from rewrite.backend.settings import credentials_from_json, save_credentials, save_settings, clear_keyring
 from rewrite.backend.utils import debug, info, error, get_correct_language, is_uuid4, critical, \
     settings_to_jsonable_dict, warning, get_relationships
@@ -132,6 +133,7 @@ def get_manga_info(muuid):
         if not feed:
             return {"status": "error", "message": "Could not get feed"}, 400
 
+
     chapters = []
 
     read_chapters = repository.database.get_manga_read_chapters(muuid)
@@ -140,17 +142,43 @@ def get_manga_info(muuid):
 
     for chapter in feed.data:
         lookup = downloaded_lookup.get(chapter.id, None)
-        if lookup is None:
-            continue
-        chapters.append({
-            "identifier": chapter.id,
-            "title": lookup[0],
-            "volume": lookup[1],
-            "chapter": lookup[2],
-            "user": user_and_groups[chapter.id]["user"],
-            "scanlation_group": user_and_groups[chapter.id]["scanlation_group"],
-            "read_status": True if chapter.id in read_chapters else False
-        })
+        if lookup is not None:
+            chapters.append({
+                "identifier": chapter.id,
+                "title": lookup[0],
+                "volume": lookup[1],
+                "chapter": lookup[2],
+                "user": user_and_groups[chapter.id]["user"],
+                "scanlation_group": user_and_groups[chapter.id]["scanlation_group"],
+                "read_status": True if chapter.id in read_chapters else False,
+                "local": True
+            })
+        else:
+            attrs  = chapter.attributes
+
+            user = get_relationships(chapter.relationships, "user")
+            scanlation_group = get_relationships(chapter.relationships, "scanlation_group")
+
+            if user is not None and len(user) > 0:
+                user_to_send = user[0].attributes |  {"id": user[0].id}
+            else:
+                user_to_send = {}
+
+            if scanlation_group is not None and len(scanlation_group) > 0:
+                scanlation_group_to_send = scanlation_group[0].attributes |  {"id": scanlation_group[0].id}
+            else:
+                scanlation_group_to_send = {}
+
+            chapters.append({
+                "identifier": chapter.id,
+                "title": attrs.title,
+                "volume": attrs.volume,
+                "chapter": attrs.chapter,
+                "user": user_to_send,
+                "scanlation_group": scanlation_group_to_send,
+                "read_status": True if chapter.id in read_chapters else False,
+                "local": False
+            })
     return jsonify(chapters), 200
 
 
@@ -240,21 +268,68 @@ def get_chapter_images(identifier):
 
 @server.route("/read/next-prev/<chapteruuid>")
 def chapter_next_previous(chapteruuid):
-    next_prev_tuple = repository.get_next_prev(chapteruuid)
+    try:
+        local = bool(int(request.args.get('local', 1)))
+    except Exception as e:
+        return {"status": "error", "response": "Could not fetch next chapter"}, 500
+    next_prev_tuple = repository.get_next_prev(chapteruuid, local)
     if next_prev_tuple:
-        next_prev = {"next": next_prev_tuple[0], "prev": next_prev_tuple[1]}
+        next_dict = next_prev_tuple[0]
+        prev_dict = next_prev_tuple[1]
+
+
+        next_prev = {}
+        if next_dict:
+            next_prev["next"] = next_dict["uuid"]
+            next_prev["next_local"] = 1 if next_dict["local"] else 0
+        if prev_dict:
+            next_prev["prev"] = prev_dict["uuid"]
+            next_prev["prev_local"] = 1 if prev_dict["local"] else 0
     else:
-        next_prev = {"next": None, "prev": None}
+        next_prev = {"next": None, "next_local": 1, "prev": None, "prev_local": 1}
     return jsonify(next_prev), 200
 
+
+
+def serve_external_manga(chapteruuid, page, from_end):
+    chapter = repository.connection.get_chapter(chapteruuid)
+
+    page_render = "NORMAL"
+
+    manga_relationship = get_relationships(chapter.relationships, "manga")[0]
+
+    manga_attributes = from_json(MangaAttributes, asdict(manga_relationship)["attributes"])
+
+    for tag in manga_attributes.tags:
+        if tag.attributes.group == "format" and tag.attributes.name["en"] == "Long Strip":
+            page_render = "LONG_STRIP"
+
+    if from_end:
+        page = chapter.attributes.pages
+
+    return render_template("read.html",
+                           cuuid=chapteruuid,
+                           pages=chapter.attributes.pages,
+                           muuid=manga_relationship.id,
+                           chapter_no=chapter.attributes.chapter,
+                           page=page,
+                           page_render=page_render,
+                           darktheme=repository.settings.darkTheme,
+                           local=0
+                           ), 200
 
 @server.route("/read/<chapteruuid>", methods=["GET"], defaults={"page": 1})
 @server.route("/read/<chapteruuid>/<page>", methods=["GET"])
 def read_manga(chapteruuid, page):
     try:
         from_end = bool(request.args.get('end', False))
-    except Exception:
-        return {"status": "error", "response": "Missing or empty 'end'"}, 400
+        local = bool(int(request.args.get('local', 1)))
+    except Exception :
+        return {"status": "error", "response": "Missing or empty 'end', or local is not boolean int (1 or 0)"}, 400
+
+    if not local:
+        return serve_external_manga(chapteruuid, page, from_end)
+
     ids = {}
     # ids are passed and filled with data in the functions
     attributes = repository.get_chapter_attributes(chapteruuid, ids)
@@ -281,7 +356,8 @@ def read_manga(chapteruuid, page):
                            chapter_no=attributes.chapter,
                            page=page,
                            page_render=page_render,
-                           darktheme=repository.settings.darkTheme
+                           darktheme=repository.settings.darkTheme,
+                           local = 1
                            ), 200
 
 
@@ -515,9 +591,9 @@ def local_port():
     if not repository.credential_manager.validate_token(token):
         return {"status": "error", "response": "Invalid credentials"}, 403
     port = repository.connection.get_followed_manga()
-    downloaded_manga = repository.database.all_manga_in_db()
+
     for manga in port.data:
-        if any([i[0] == manga.id for i in downloaded_manga]):
+        if len(repository.database.get_downloaded_chapters(manga.id)) > 0:
             repository.settings.logger.log(info, f"Skipping {manga.id}")
             continue
         repository.downloader.queue.put(
@@ -529,8 +605,7 @@ def local_port():
                 repository.settings
             )
         )
-
-        time.sleep(5)
+        time.sleep(1)
     return {"status": "ok"}, 200
 
 
@@ -570,7 +645,7 @@ def config_data():
 @server.route("/config/select-database-folder", methods=["GET", "POST"])
 def select_database_folder():
     directory_path = filedialog.askdirectory(
-        title="Select a file"
+        title="Select a folder to store the database in"
     )
     if not directory_path:
         return {"status": "ok", "path": repository.settings.databasePath}, 200
