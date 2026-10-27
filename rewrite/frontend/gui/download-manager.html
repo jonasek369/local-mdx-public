@@ -1,18 +1,42 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="{{ 'dark' if darktheme else 'light' }}">
 <head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Download Manager</title>
-	<link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
-	<link rel="stylesheet" href="{{ url_for('static', filename='css/download-manager.css') }}">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Download Manager</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/download-manager.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/nav.css') }}">
 </head>
 <body>
-<div class="header">
-    <h1>Download Manager</h1>
-    <div class="status-indicator">
-        <span class="status-dot" id="status-dot"></span>
-        <span id="downloader-state">Ready</span>
+<script src="{{ url_for('static', filename='js/login.js') }}"></script>
+<!-- Navbar -->
+<div class="navbar">
+    <div class="nav-left">
+        <div class="logo" onClick="window.location.href='/'">LMDX</div>
+        <button onClick="window.location.href ='/downloader/manager';" class="button button-secondary">Download
+            Manager
+        </button>
+        <button onClick="window.location.href ='/library';" class="button button-secondary">Library</button>
+        <button onClick="window.location.href ='/updates';" class="button button-secondary">Updates</button>
+    </div>
+    <div class="nav-middle">
+        <h1>Download Manager</h1>
+    </div>
+    <div class="nav-right">
+        <div class="status-indicator">
+            <span class="status-dot" id="status-dot"></span>
+            <span id="downloader-state">Ready</span>
+        </div>
+        {% block content %}
+            {% if login == 1 %}
+                <button id="login-button" class="button button-secondary">{{ name }}</button>
+            {% else %}
+                <button id="login-button" onClick="window.location.href = '/auth"
+                        class="button button-secondary">Login
+                </button>
+            {% endif %}
+        {% endblock content %}
     </div>
 </div>
 
@@ -54,12 +78,12 @@
 
     function stop_download() {
         fetch("/downloader/stop")
-	}
+    }
 
-    function update_state(data){
-		const queue = document.getElementById("queue");
+    function update_state(data) {
+        const queue = document.getElementById("queue");
 
-		// TODO: Dont remove all the cells
+        // TODO: Dont remove all the cells
         while (queue.firstChild) {
             queue.removeChild(queue.firstChild);
         }
@@ -114,42 +138,42 @@
         }
 
         const divUpdates = document.getElementById("currently-working-on");
-		while (divUpdates.firstChild) {
+        while (divUpdates.firstChild) {
             divUpdates.removeChild(divUpdates.firstChild);
-		}
+        }
 
 
-		const divRow = document.createElement("div");
+        const divRow = document.createElement("div");
         divRow.className = "row";
 
         const stateText = document.getElementById("downloader-state");
         const statusDot = document.getElementById("status-dot");
 
-		statusDot.classList.remove('paused', 'rate-limited');
+        statusDot.classList.remove('paused', 'rate-limited');
 
 
-		if (data.state === "DOWNLOADING") {
-		    stateText.innerHTML = "Downloading";
-		} else if (data.state === "Awaiting") {
-		    stateText.innerHTML = "Waiting";
-		    statusDot.classList.add('paused');
-		} else if (data.state === "RATELIMITED") {
-		    stateText.innerHTML = "Ratelimited";
-		    statusDot.classList.add('rate-limited');
-		} else {
-		    stateText.innerHTML = "Ready";
-		}
+        if (data.state === "DOWNLOADING") {
+            stateText.innerHTML = "Downloading";
+        } else if (data.state === "Awaiting") {
+            stateText.innerHTML = "Waiting";
+            statusDot.classList.add('paused');
+        } else if (data.state === "RATELIMITED") {
+            stateText.innerHTML = "Ratelimited";
+            statusDot.classList.add('rate-limited');
+        } else {
+            stateText.innerHTML = "Ready";
+        }
 
-        if(data.currently_working_on == null){
+        if (data.currently_working_on == null) {
             const emptyDiv = document.createElement("div");
             emptyDiv.className = "empty-state";
             emptyDiv.textContent = "No active downloads";
             divUpdates.appendChild(emptyDiv);
             return;
-		}
-		const a = document.createElement("div");
+        }
+        const a = document.createElement("div");
         a.className = "cell download-info"
-		a.id = "cwo"
+        a.id = "cwo"
         let chapter_perc = Math.round((100 * data.currently_working_on.chapter_status[0]) / data.currently_working_on.chapter_status[1]);
         a.innerHTML = `
             <div class="download-title">${data.currently_working_on.title}</div>
@@ -162,16 +186,15 @@
         `;
         divRow.appendChild(a);
         divUpdates.append(divRow);
-	}
+    }
 
 
-
-	const source = new EventSource("/downloader/stream");
+    const source = new EventSource("/downloader/stream");
 
     source.onmessage = (event) => {
-	    const data = JSON.parse(event.data);
-	    update_state(data);
-	}
+        const data = JSON.parse(event.data);
+        update_state(data);
+    }
 
 </script>
 </body>

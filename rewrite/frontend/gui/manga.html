@@ -6,8 +6,37 @@
 	<title>{{ name }}</title>
 	<link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
 	<link rel="stylesheet" href="{{ url_for('static', filename='css/manga.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/nav.css') }}">
 </head>
 <body>
+<script src="{{ url_for('static', filename='js/login.js') }}"></script>
+
+<div class="navbar">
+    <div class="nav-left">
+        <div class="logo" onClick="window.location.href='/'">LMDX</div>
+        <button onClick="window.location.href ='/downloader/manager';" class="button button-secondary">Download
+            Manager
+        </button>
+        <button onClick="window.location.href ='/library';" class="button button-secondary">Library</button>
+        <button onClick="window.location.href ='/updates';" class="button button-secondary">Updates</button>
+    </div>
+
+    <div class="nav-middle">
+
+    </div>
+
+    <div class="nav-right">
+        {% block content %}
+            {% if login == 1 %}
+                <button id="login-button" class="button button-secondary">{{ name }}</button>
+            {% else %}
+                <button id="login-button" onClick="window.location.href = '/auth'"
+                        class="button button-secondary">Login
+                </button>
+            {% endif %}
+        {% endblock content %}
+    </div>
+</div>
 <div class="header">
 	<div class="background-image"></div>
 	<div class="header-content">
@@ -299,7 +328,7 @@
                 const btn = document.getElementsByClassName("button-success")[0];
                 btn.innerHTML = "⬇ Manga already in queue";
                 btn.onclick = function () {
-                    window.location.href = "/downloader/manager?from=/manga/{{muuid}}";
+                    window.location.href = "/downloader/manager";
                 }
             }
         })

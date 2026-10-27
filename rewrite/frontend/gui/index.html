@@ -2,105 +2,101 @@
 <html lang="en" data-theme="{{ 'dark' if darktheme else 'light' }}">
 
 <head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Lmdx - Manga Reader</title>
-	<link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
-	<link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lmdx - Manga Reader</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/nav.css') }}">
+
 </head>
 
 <body>
+<script src="{{ url_for('static', filename='js/login.js') }}"></script>
 <!-- Navbar -->
 <div class="navbar">
-	<div class="nav-left">
-		<div class="logo">LMDX</div>
-		<button onClick="redirect_to_download_manager()" class="button button-secondary">Download Manager</button>
-		<button onClick="redirect_to_library()" class="button button-secondary">Library</button>
-		<button onClick="redirect_to_updates()" class="button button-secondary">Updates</button>
-	</div>
+    <div class="nav-left">
+        <div class="logo" onClick="window.location.href='/'">LMDX</div>
+        <button onClick="window.location.href ='/downloader/manager';" class="button button-secondary">Download
+            Manager
+        </button>
+        <button onClick="window.location.href ='/library';" class="button button-secondary">Library</button>
+        <button onClick="window.location.href ='/updates';" class="button button-secondary">Updates</button>
+    </div>
+    <div class="nav-middle">
+        <div class="search-container">
+            <div class="search-wrapper">
+                <div class="search-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                </div>
+                <input type="text" id="searchInput" placeholder="Search manga titles...">
+                <button class="clear-search" id="clearSearch">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+                <button type="submit" onclick="searchManga()">Search</button>
+            </div>
+            <div class="search-results-dropdown" id="searchResultsDropdown"></div>
+        </div>
 
-	<div class="search-container">
-		<div class="search-wrapper">
-			<div class="search-icon">
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-					<circle cx="11" cy="11" r="8"></circle>
-					<path d="m21 21-4.35-4.35"></path>
-				</svg>
-			</div>
-			<input type="text" id="searchInput" placeholder="Search manga titles...">
-			<button class="clear-search" id="clearSearch">
-				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-					<line x1="18" y1="6" x2="6" y2="18"></line>
-					<line x1="6" y1="6" x2="18" y2="18"></line>
-				</svg>
-			</button>
-			<button type="submit" onclick="searchManga()">Search</button>
-		</div>
-		<div class="search-results-dropdown" id="searchResultsDropdown"></div>
-	</div>
-
-	{% block content %}
-	{% if login == 1 %}
-	<button class="login-button">{{ name }}</button>
-	{% else %}
-	<button onClick="window.location.href = '/auth?from=/'" class="login-button">Login</button>
-	{% endif %}
-	{% endblock content %}
+    </div>
+    <div class="nav-right">
+        {% block content %}
+            {% if login == 1 %}
+                <button id="login-button" class="button button-secondary">{{ name }}</button>
+            {% else %}
+                <button id="login-button" onClick="window.location.href = '/auth'" class="button button-secondary">Login</button>
+            {% endif %}
+        {% endblock content %}
+    </div>
 </div>
 
 <!-- Main Content -->
 <div class="main-content">
-	<h2 class="section-title">Popular New Titles</h2>
+    <h2 class="section-title">Popular New Titles</h2>
 
-	<!-- Manga Card -->
-	<div class="manga-card" onclick="to_manga()">
-		<div class="manga-card-image">
-			<img src="" alt="Book Cover" id="cover-art" fetchpriority="high">
-		</div>
-		<div class="manga-card-content">
-			<h3 id="manga-title">Loading...</h3>
-			<div class="genre-tags" id="genre-tags">
-				<span class="tag">Action</span>
-				<span class="tag">Adventure</span>
-				<span class="tag">Fantasy</span>
-			</div>
-			<p class="description" id="description">
-				Loading manga information...
-			</p>
-			<p class="authors" id="authors"></p>
-		</div>
-	</div>
+    <!-- Manga Card -->
+    <div class="manga-card" onclick="to_manga()">
+        <div class="manga-card-image">
+            <img src="" alt="Book Cover" id="cover-art" fetchpriority="high">
+        </div>
+        <div class="manga-card-content">
+            <h3 id="manga-title">Loading...</h3>
+            <div class="genre-tags" id="genre-tags">
+                <span class="tag">Action</span>
+                <span class="tag">Adventure</span>
+                <span class="tag">Fantasy</span>
+            </div>
+            <p class="description" id="description">
+                Loading manga information...
+            </p>
+            <p class="authors" id="authors"></p>
+        </div>
+    </div>
 
-	<!-- Navigation Controls -->
-	<div class="navigation-controls">
-		<button id="manga-sub">← Previous</button>
-		<span id="number">NO. 1</span>
-		<button id="manga-add">Next →</button>
-	</div>
+    <!-- Navigation Controls -->
+    <div class="navigation-controls">
+        <button id="manga-sub">← Previous</button>
+        <span id="number">NO. 1</span>
+        <button id="manga-add">Next →</button>
+    </div>
 
-	<!-- Latest Updates -->
-	<h2 class="section-title">Latest Updates</h2>
-	<div class="latest-updates-grid">
-		<div class="latest-updates"></div>
-		<div class="latest-updates"></div>
-		<div class="latest-updates"></div>
-		<div class="latest-updates"></div>
-	</div>
+    <!-- Latest Updates -->
+    <h2 class="section-title">Latest Updates</h2>
+    <div class="latest-updates-grid">
+        <div class="latest-updates"></div>
+        <div class="latest-updates"></div>
+        <div class="latest-updates"></div>
+        <div class="latest-updates"></div>
+    </div>
 </div>
 
 <script>
-    function redirect_to_download_manager() {
-        window.location.href ="/downloader/manager";
-    }
-
-    function redirect_to_library() {
-        window.location.href = "/library";
-    }
-
-    function redirect_to_updates() {
-        window.location.href = "/updates";
-    }
-
     let currentIndex = 1;
     const title = document.getElementById("manga-title");
     const description = document.getElementById("description");
@@ -260,15 +256,6 @@
         }
     });
 
-	fetch("/auth/check").then(response => response.json()).then(data => {
-        const login_button = document.getElementsByClassName("login-button")[0]
-        if (data.status === "ok") {
-            login_button.innerText = "Logged in"
-        } else {
-            login_button.innerText = "Missing credentials"
-        }
-    })
-
 
     let popular_manga = null;
     fetch("/api/popular-new-titles").then(response => response.json()).then(data => {
@@ -277,61 +264,61 @@
     })
 
 
-	function get_relationship_type(relationships, type){
+    function get_relationship_type(relationships, type) {
         for (let i = 0; i < relationships.length; i++) {
-			if(relationships[i].type === type){
+            if (relationships[i].type === type) {
                 return relationships[i];
-			}
+            }
         }
-	}
+    }
 
     function timeAgo(isoString) {
-		const date = new Date(isoString);
-		const now = new Date();
-		const diffMs = now - date;
-		const diffSec = Math.floor(diffMs / 1000);
-		const diffMin = Math.floor(diffSec / 60);
-		const diffHr = Math.floor(diffMin / 60);
-		const diffDay = Math.floor(diffHr / 24);
+        const date = new Date(isoString);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffSec = Math.floor(diffMs / 1000);
+        const diffMin = Math.floor(diffSec / 60);
+        const diffHr = Math.floor(diffMin / 60);
+        const diffDay = Math.floor(diffHr / 24);
 
-		if (diffSec < 60) return "just now";
-		if (diffMin < 60) return `${diffMin} minute${diffMin !== 1 ? "s" : ""} ago`;
-		if (diffHr < 24) return `${diffHr} hour${diffHr !== 1 ? "s" : ""} ago`;
-		if (diffDay < 7) return `${diffDay} day${diffDay !== 1 ? "s" : ""} ago`;
+        if (diffSec < 60) return "just now";
+        if (diffMin < 60) return `${diffMin} minute${diffMin !== 1 ? "s" : ""} ago`;
+        if (diffHr < 24) return `${diffHr} hour${diffHr !== 1 ? "s" : ""} ago`;
+        if (diffDay < 7) return `${diffDay} day${diffDay !== 1 ? "s" : ""} ago`;
 
-		return date.toLocaleDateString();
-	}
+        return date.toLocaleDateString();
+    }
 
-	fetch("/api/latest-updated-chapters")
-	    .then(response => response.json())
-	    .then(data => {
-        const latestUpdatedContainers = document.getElementsByClassName("latest-updates");
-        let chapterIndex = 0;
+    fetch("/api/latest-updated-chapters")
+        .then(response => response.json())
+        .then(data => {
+            const latestUpdatedContainers = document.getElementsByClassName("latest-updates");
+            let chapterIndex = 0;
 
-        for (let containerIdx = 0; containerIdx < latestUpdatedContainers.length; containerIdx++) {
-            let container = latestUpdatedContainers[containerIdx];
-            let htmlContent = "";
+            for (let containerIdx = 0; containerIdx < latestUpdatedContainers.length; containerIdx++) {
+                let container = latestUpdatedContainers[containerIdx];
+                let htmlContent = "";
 
-            for (let chaptersPerElement = 0; chaptersPerElement < 6; chaptersPerElement++) {
-                if (chapterIndex >= data.length) break;
+                for (let chaptersPerElement = 0; chaptersPerElement < 6; chaptersPerElement++) {
+                    if (chapterIndex >= data.length) break;
 
-                let mangaRl = get_relationship_type(data[chapterIndex].relationships, "manga");
-                let groupRl = get_relationship_type(data[chapterIndex].relationships, "scanlation_group");
+                    let mangaRl = get_relationship_type(data[chapterIndex].relationships, "manga");
+                    let groupRl = get_relationship_type(data[chapterIndex].relationships, "scanlation_group");
 
-                let volChap = "";
-                if (data[chapterIndex].attributes.volume) volChap += `Vol. ${data[chapterIndex].attributes.volume} `;
-                if (data[chapterIndex].attributes.chapter) volChap += `Ch. ${data[chapterIndex].attributes.chapter}`;
+                    let volChap = "";
+                    if (data[chapterIndex].attributes.volume) volChap += `Vol. ${data[chapterIndex].attributes.volume} `;
+                    if (data[chapterIndex].attributes.chapter) volChap += `Ch. ${data[chapterIndex].attributes.chapter}`;
 
-                let groupHTML = "No group";
-                let groupClass = "group";
-                let groupOnClick = "";
-                if (groupRl) {
-                    groupHTML = groupRl.attributes.name;
-                    groupClass = "group-clickable";
-                    groupOnClick = `onclick="event.stopPropagation(); window.location.href ='https://mangadex.org/group/${groupRl.id}';"`;
-                }
+                    let groupHTML = "No group";
+                    let groupClass = "group";
+                    let groupOnClick = "";
+                    if (groupRl) {
+                        groupHTML = groupRl.attributes.name;
+                        groupClass = "group-clickable";
+                        groupOnClick = `onclick="event.stopPropagation(); window.location.href ='https://mangadex.org/group/${groupRl.id}';"`;
+                    }
 
-                htmlContent += `
+                    htmlContent += `
                     <div class="latest-updates-item" onclick="window.location.href = '/manga/${mangaRl.id}'">
                         <img src="/api/manga/cover/${mangaRl.id}?size=256" alt="${mangaRl.attributes.title || 'Untitled'}" loading="lazy" decoding="async">
                         <div class="latest-updates-content">
@@ -343,12 +330,12 @@
                     </div>
                 `;
 
-                chapterIndex++;
-            }
+                    chapterIndex++;
+                }
 
-            container.innerHTML = htmlContent;
-        }
-    });
+                container.innerHTML = htmlContent;
+            }
+        });
 
     document.getElementById('manga-sub').addEventListener('click', (event) => {
         event.stopPropagation();
@@ -371,7 +358,7 @@
     })
 
     function to_manga() {
-		window.location.href = "/manga/" + popular_manga[currentIndex - 1].id;
+        window.location.href = "/manga/" + popular_manga[currentIndex - 1].id;
     }
 
     function updatePopularManga() {
@@ -382,8 +369,8 @@
             genreTags.removeChild(genreTags.firstChild);
         }
         image.src = "/api/manga/cover/" + popular_manga[currentIndex - 1].id + "?size=512";
-        image.loading="eager"
-        image.decoding="async"
+        image.loading = "eager"
+        image.decoding = "async"
         title.innerText = popular_manga[currentIndex - 1].attributes.title;
         description.innerText = popular_manga[currentIndex - 1].attributes.description;
 

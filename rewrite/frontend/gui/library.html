@@ -4,28 +4,50 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Library</title>
-	<link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
-	<link rel="stylesheet" href="{{ url_for('static', filename='css/library.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/library.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/nav.css') }}">
 </head>
 <body>
-    <div class="header">
-        <div class="header-left">
-            <h1 class="page-title">My Library</h1>
-            <span class="library-count" id="library-count">0 manga</span>
-        </div>
-        <div class="view-toggle">
-            <button class="view-button active" id="grid-view" onclick="setView('grid')">Grid</button>
-            <button class="view-button" id="compact-view" onclick="setView('compact')">Compact</button>
-        </div>
+<script src="{{ url_for('static', filename='js/login.js') }}"></script>
+
+<div class="navbar">
+    <div class="nav-left">
+        <div class="logo" onClick="window.location.href='/'">LMDX</div>
+        <button onClick="window.location.href ='/downloader/manager';" class="button button-secondary">Download
+            Manager
+        </button>
+        <button onClick="window.location.href ='/library';" class="button button-secondary">Library</button>
+        <button onClick="window.location.href ='/updates';" class="button button-secondary">Updates</button>
     </div>
 
-    <div class="main-content">
-        <div id="content" class="library-grid">
-            <div class="loading-state">
-                <div class="loading-spinner"></div>
-            </div>
+    <div class="nav-middle">
+        <h1 class="page-title">My Library</h1>
+        <span class="library-count" id="library-count">0 manga</span>
+    </div>
+
+    <div class="nav-right">
+        <button class="button button-secondary active" id="grid-view" onclick="setView('grid')">Grid</button>
+        <button class="button button-secondary" id="compact-view" onclick="setView('compact')">Compact</button>
+        {% block content %}
+            {% if login == 1 %}
+                <button id="login-button" class="button button-secondary">{{ name }}</button>
+            {% else %}
+                <button id="login-button" onClick="window.location.href = '/auth'"
+                        class="button button-secondary">Login
+                </button>
+            {% endif %}
+        {% endblock content %}
+    </div>
+</div>
+
+<div class="main-content">
+    <div id="content" class="library-grid">
+        <div class="loading-state">
+            <div class="loading-spinner"></div>
         </div>
     </div>
+</div>
 
 <script>
     window.token = '{{ token }}';
@@ -87,7 +109,7 @@
             const img = document.createElement("img");
             img.setAttribute("alt", value[0] + " cover art");
             img.src = "/api/manga/cover/" + key + "?size=256";
-            img.onerror = function() {
+            img.onerror = function () {
                 this.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='150'%3E%3Crect width='100' height='150' fill='%23333'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' fill='%23666' font-size='12'%3ENo Cover%3C/text%3E%3C/svg%3E";
             };
 
@@ -119,7 +141,7 @@
             card.appendChild(content);
 
             card.onclick = function () {
-                window.location.href = "/manga/" + key + "?from=/library";
+                window.location.href = "/manga/" + key;
             }
 
             elem.appendChild(card);
@@ -133,9 +155,9 @@
     }
 
 
-    function updateLibrary(){
+    function updateLibrary() {
         fetch("/library/update")
-	}
+    }
 
     fetch("/library/data")
         .then(response => response.json())

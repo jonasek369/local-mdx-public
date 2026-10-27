@@ -38,25 +38,6 @@ body {
     border-radius: 12px;
 }
 
-.button {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 16px;
-    font-size: 14px;
-    font-weight: 500;
-    text-decoration: none;
-    background-color: transparent;
-    color: var(--md-text);
-    border: 1px solid var(--md-border);
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.button:hover {
-    background-color: var(--md-surface-hover);
-}
 
 .main-content {
     max-width: 1400px;

@@ -1,0 +1,123 @@
+
+.logo {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--md-accent);
+    margin-right: 12px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.navbar {
+    background-color: var(--md-surface);
+    border-bottom: 1px solid var(--md-border);
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 24px;
+    position: static;
+    top: 0;
+    z-index: 1000;
+}
+
+.nav-left {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+
+.nav-middle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+
+    min-width: 0;
+    white-space: nowrap;
+}
+
+
+.nav-right {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+
+
+/* Tablet */
+@media (max-width: 1100px) {
+    .navbar {
+        gap: 16px;
+        padding: 12px 16px;
+    }
+
+    .nav-left {
+        gap: 8px;
+    }
+
+    .nav-middle {
+        gap: 8px;
+    }
+
+    .page-title {
+        font-size: 18px;
+    }
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+    .navbar {
+        flex-wrap: wrap;
+        gap: 12px;
+        padding: 12px 16px;
+    }
+
+    .nav-left {
+        order: 1;
+        width: 100%;
+        justify-content: space-between;
+        flex-wrap: wrap;
+    }
+
+    .nav-middle {
+        position: static;
+        transform: none;
+        order: 2;
+        flex: 1;
+        justify-content: flex-start;
+        white-space: normal;
+    }
+
+    .nav-right {
+        order: 3;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+}
+
+/* Small mobile */
+@media (max-width: 480px) {
+    .nav-middle {
+        flex: 1 1 100%;
+        justify-content: flex-start;
+    }
+
+    .page-title {
+        font-size: 17px;
+    }
+
+    .nav-right {
+        width: 100%;
+        justify-content: flex-start;
+    }
+}

@@ -87,10 +87,13 @@ def load_credentials() -> MangadexCredentials:
 
 
 def clear_keyring():
-    keyring.delete_password("LocalMangaDex", "username"),
-    keyring.delete_password("LocalMangaDex", "password"),
-    keyring.delete_password("LocalMangaDex", "client_id"),
-    keyring.delete_password("LocalMangaDex", "client_secret"),
+    try:
+        keyring.delete_password("LocalMangaDex", "username")
+        keyring.delete_password("LocalMangaDex", "password")
+        keyring.delete_password("LocalMangaDex", "client_id")
+        keyring.delete_password("LocalMangaDex", "client_secret")
+    except keyring.errors.PasswordDeleteError:
+        Logger().log(warning, "Keyring not found")
 
 
 def credentials_from_json(_json):

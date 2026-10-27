@@ -163,10 +163,10 @@ def get_manga_info(muuid):
             user = get_relationships(chapter.relationships, "user")
             scanlation_group = get_relationships(chapter.relationships, "scanlation_group")
 
-            if user is not None and len(user) > 0:
+            user_to_send = {}
+
+            if user is not None and len(user) > 0 and user[0].attributes is not None:
                 user_to_send = user[0].attributes |  {"id": user[0].id}
-            else:
-                user_to_send = {}
 
             if scanlation_group is not None and len(scanlation_group) > 0:
                 scanlation_group_to_send = scanlation_group[0].attributes |  {"id": scanlation_group[0].id}
@@ -792,7 +792,8 @@ def recommendation(muuid):
     for rec in recommendation.data:
         for manga_relationship in get_relationships(rec.relationships, "manga"):
             if manga_relationship.id != muuid:
-                recommendation_map[manga_relationship.id] = get_correct_language(manga_relationship.attributes["title"], manga_relationship.attributes["altTitles"], repository.settings)
+                if manga_relationship.attributes is not None:
+                    recommendation_map[manga_relationship.id] = get_correct_language(manga_relationship.attributes["title"], manga_relationship.attributes["altTitles"], repository.settings)
     return recommendation_map
 
 
@@ -813,10 +814,10 @@ def manga():
     return asdict(repository.connection.get_manga(params))
 
 if __name__ == "__main__":
-    use_actual_server = True
+    use_actual_server = False
     try:
         if not use_actual_server:
-            server.run(threaded=True)
+            server.run(threaded=True, debug=True)
         else:
             from waitress import serve
 

@@ -111,20 +111,6 @@ body {
     flex-wrap: wrap;
 }
 
-.button {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 20px;
-    font-size: 14px;
-    font-weight: 600;
-    text-decoration: none;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
 
 .button-success {
     background-color: var(--md-success);
