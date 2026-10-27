@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ 'dark' if darktheme else 'light' }}">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>LMDX - Login</title>
+	<link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+	<link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h2>Login</h2>
+        <form onsubmit="handle_login(); return false;">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required autofocus>
+
+            <input type="submit" value="Login">
+        </form>
+	</div>
+
+<script>
+    function handle_login() {
+        const password = document.getElementById("password").value;
+
+        fetch('/login/check', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: password })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'ok') {
+                window.location.href = '/';
+            } else {
+                alert('Login failed. Please check your password.');
+            }
+        })
+        .catch(() => alert('An error occurred during login.'));
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Config</title>
+	<link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+	<link rel="stylesheet" href="{{ url_for('static', filename='css/config.css') }}">
+</head>
+
+<body>
+
+<div class="main-content">
+	<h2 class="section-title">Settings</h2>
+
+	<div class="config-card">
+		<form id="configForm">
+			<div class="form-group">
+				<label class="form-label">Cache Token</label>
+				<span class="form-description">Save authentication token to disk (stored in plaintext on your device with password)</span>
+				<div class="checkbox-wrapper">
+					<input type="checkbox" id="cacheToken" name="cacheToken">
+					<label for="cacheToken" class="checkbox-label">Enable token caching</label>
+				</div>
+			</div>
+
+			<div class="form-group">
+				<label class="form-label" for="logLevel">Logging Level</label>
+				<span class="form-description">Set the verbosity of application logs (1 = debug, 7 = traceback)</span>
+				<input type="number" id="logLevel" name="logLevel" min="1" max="7" value="2">
+			</div>
+
+			<div class="form-group">
+				<label class="form-label">File Logger</label>
+				<span class="form-description">Write logs to a file on disk</span>
+				<div class="checkbox-wrapper">
+					<input type="checkbox" id="fileLogger" name="fileLogger">
+					<label for="fileLogger" class="checkbox-label">Enable file logging</label>
+				</div>
+			</div>
+
+			<div class="form-group">
+				<label class="form-label">Theme</label>
+				<span class="form-description">Toggle between light and dark mode</span>
+				<div class="checkbox-wrapper">
+					<input type="checkbox" id="darkTheme" name="darkTheme" checked>
+					<label for="darkTheme" class="checkbox-label">Dark theme</label>
+				</div>
+			</div>
+
+            <div class="form-group">
+                <label class="form-label" for="databaseLocation">Database Location</label>
+                <span class="form-description">
+                    Choose the directory where the database file will be stored
+                </span>
+
+                <div class="input-row">
+                    <input
+                        type="text"
+                        id="databaseLocation"
+                        name="databaseLocation"
+                        placeholder="Select a folder..."
+                        readonly
+                    >
+
+                    <button
+                        type="button"
+                        class="button button-secondary"
+                        onclick="browseDatabaseLocation()"
+                    >
+                        Browse...
+                    </button>
+                </div>
+            </div>
+
+			<div class="button-group">
+				<button type="submit" class="button">Save Changes</button>
+				<button type="button" class="button button-secondary" onclick="resetForm()">Reset to Defaults</button>
+			</div>
+		</form>
+	</div>
+</div>
+
+<script>
+	window.addEventListener('DOMContentLoaded', () => {
+		fetch("/config/data", {method: "GET"}).then(response => response.json()).then(settings => {
+            document.getElementById('cacheToken').checked = settings.cacheTokenToDisk === true;
+			document.getElementById('logLevel').value = settings.logLevel || 2;
+			document.getElementById('fileLogger').checked = settings.fileLogger === true;
+			document.getElementById('darkTheme').checked = settings.darkTheme === true;
+            document.getElementById('databaseLocation').value = settings.databasePath;
+		}).then(response => {
+            updateTheme();
+		});
+	});
+
+	document.getElementById('configForm').addEventListener('submit', (e) => {
+		e.preventDefault();
+
+		const settings = {
+			cacheTokenToDisk: document.getElementById('cacheToken').checked,
+			logLevel: parseInt(document.getElementById('logLevel').value),
+			fileLogger: document.getElementById('fileLogger').checked,
+			darkTheme: document.getElementById('darkTheme').checked,
+            databasePath: document.getElementById("databaseLocation").value
+		};
+
+        fetch("/config/data", {method: "POST", body: JSON.stringify(settings)})
+
+		// Show success feedback
+		const btn = e.target.querySelector('button[type="submit"]');
+		const originalText = btn.textContent;
+		btn.textContent = 'Saved!';
+		btn.style.backgroundColor = '#4caf50';
+
+		setTimeout(() => {
+			btn.textContent = originalText;
+			btn.style.backgroundColor = '';
+		}, 2000);
+	});
+
+	function resetForm() {
+		document.getElementById('cacheToken').checked = false;
+		document.getElementById('logLevel').value = 2;
+		document.getElementById('fileLogger').checked = false;
+		document.getElementById('darkTheme').checked = true;
+		updateTheme();
+	}
+
+	document.getElementById('darkTheme').addEventListener('change', updateTheme);
+
+	function updateTheme() {
+		const isDark = document.getElementById('darkTheme').checked;
+		const root = document.documentElement;
+
+		if (isDark) {
+			root.style.setProperty('--md-bg', '#1a1a1a');
+			root.style.setProperty('--md-surface', '#242424');
+			root.style.setProperty('--md-surface-hover', '#2a2a2a');
+			root.style.setProperty('--md-border', '#3a3a3a');
+			root.style.setProperty('--md-text', '#e8e8e8');
+			root.style.setProperty('--md-text-secondary', '#a0a0a0');
+		} else {
+			root.style.setProperty('--md-bg', '#f5f5f5');
+			root.style.setProperty('--md-surface', '#ffffff');
+			root.style.setProperty('--md-surface-hover', '#f9f9f9');
+			root.style.setProperty('--md-border', '#e0e0e0');
+			root.style.setProperty('--md-text', '#1a1a1a');
+			root.style.setProperty('--md-text-secondary', '#666666');
+		}
+	}
+
+    async function browseDatabaseLocation() {
+        const response = await fetch("/config/select-database-folder", {
+            method: "POST"
+        });
+
+        const result = await response.json();
+
+        if (result.path) {
+            document.getElementById('databaseLocation').value = result.path;
+        }
+    }
+</script>
+</body>
+
+</html>

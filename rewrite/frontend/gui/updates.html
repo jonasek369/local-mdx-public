@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ 'dark' if darktheme else 'light' }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Updates</title>
+	<link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+	<link rel="stylesheet" href="{{ url_for('static', filename='css/updates.css') }}">
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <h1 class="header-title">Latest Updates</h1>
+        </div>
+    </div>
+
+    <div class="container">
+        <div id="loading" class="loading">
+            <div class="loading-spinner"></div>
+            <div>Loading updates...</div>
+        </div>
+        <div id="updates-container"></div>
+        <div class="pagination">
+            <button class="page-btn" id="prev-page" onclick="changePage(-1)">← Previous</button>
+            <span class="page-number" id="page-counter">Page 1</span>
+            <button class="page-btn" id="next-page" onclick="changePage(1)">Next →</button>
+        </div>
+    </div>
+
+    <script>
+        window.token = '{{ token }}';
+        let currentPage = 1;
+        const itemsPerPage = 20;
+
+        function changePage(direction) {
+            if (direction === -1 && currentPage <= 1) return;
+            currentPage += direction;
+            updatePage();
+        }
+
+        async function updatePage() {
+            const loading = document.getElementById('loading');
+            const container = document.getElementById('updates-container');
+            const pageCounter = document.getElementById('page-counter');
+            const prevBtn = document.getElementById('prev-page');
+            const nextBtn = document.getElementById('next-page');
+
+            loading.style.display = 'block';
+            container.innerHTML = '';
+
+            try {
+                const offset = (currentPage - 1) * itemsPerPage;
+                const response = await fetch(`/api/updates/data?limit=${itemsPerPage}&offset=${offset}`);
+                const data = await response.json();
+
+                loading.style.display = 'none';
+
+                if (!data.data || data.data.length === 0) {
+                    container.innerHTML = '<div class="loading">No updates found.</div>';
+                    return;
+                }
+
+                await createUpdateElements(data);
+
+                pageCounter.textContent = `Page ${currentPage}`;
+                prevBtn.disabled = currentPage === 1;
+                nextBtn.disabled = data.data.length < itemsPerPage;
+
+            } catch (error) {
+                loading.style.display = 'none';
+                container.innerHTML = '<div class="loading">Error loading updates.</div>';
+                console.error('Error loading updates:', error);
+            }
+        }
+
+        function getMuuidFromChapter(chapter) {
+            for (let relationship of chapter.relationships) {
+                if (relationship.type === "manga") {
+                    return relationship.id;
+                }
+            }
+            throw Error(`Chapter ${chapter.id} manga not found`);
+        }
+
+        function formatTimeAgo(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const seconds = Math.floor((now - date) / 1000);
+
+            if (seconds < 60) return 'just now';
+            const minutes = Math.floor(seconds / 60);
+            if (minutes < 60) return `${minutes}m ago`;
+            const hours = Math.floor(minutes / 60);
+            if (hours < 24) return `${hours}h ago`;
+            const days = Math.floor(hours / 24);
+            if (days < 7) return `${days}d ago`;
+            const weeks = Math.floor(days / 7);
+            if (weeks < 4) return `${weeks}w ago`;
+            const months = Math.floor(days / 30);
+            if (months < 12) return `${months}mo ago`;
+            const years = Math.floor(days / 365);
+            return `${years}y ago`;
+        }
+
+        function downloadUpdates(muuid) {
+            fetch("/manga/download/push-job", {
+            	method: "POST",
+            	headers: {
+            	    "Content-Type": "application/json",
+            	},
+            	body: JSON.stringify({
+            	    id: muuid
+            	})
+        	})
+        }
+
+        async function createUpdateElements(chapterList) {
+            const chaptersByManga = {};
+
+            chapterList.data.forEach(chapter => {
+                const muuid = getMuuidFromChapter(chapter);
+                if (!chaptersByManga[muuid]) {
+                    chaptersByManga[muuid] = [];
+                }
+                chaptersByManga[muuid].push(chapter);
+            });
+
+            const container = document.getElementById('updates-container');
+
+            for (const muuid in chaptersByManga) {
+                const chapters = chaptersByManga[muuid];
+
+                try {
+                    const response = await fetch("/manga/" + muuid + "/attributes");
+                    const attributes = await response.json();
+
+                    const mangaDiv = document.createElement('div');
+                    mangaDiv.className = 'manga-update';
+
+                    const headerDiv = document.createElement('div');
+                    headerDiv.className = 'manga-header';
+                    headerDiv.onclick = () => window.location.href = `/manga/${muuid}`;
+
+                    const cover = document.createElement('img');
+                    cover.className = 'manga-cover';
+                    cover.src = `/api/manga/cover/${muuid}?small=1`;
+                    cover.alt = attributes.title.en || 'Manga Cover';
+
+                    const infoDiv = document.createElement('div');
+                    infoDiv.className = 'manga-info';
+
+                    const title = document.createElement('a');
+                    title.className = 'manga-title';
+                    title.href = `/manga/${muuid}`;
+                    title.textContent = attributes.title || 'Unknown Title';
+                    title.onclick = (e) => e.stopPropagation();
+
+                    const stats = document.createElement('div');
+                    stats.className = 'manga-stats';
+                    stats.innerHTML = `
+                        <span>${chapters.length} new chapter${chapters.length > 1 ? 's' : ''}</span>
+                        <span>•</span>
+                        <span>${formatTimeAgo(chapters[0].attributes.createdAt)}</span>
+                    `;
+
+                    infoDiv.appendChild(title);
+                    infoDiv.appendChild(stats);
+
+                    const downloadBtn = document.createElement('button');
+                    downloadBtn.className = 'download-btn';
+                    downloadBtn.textContent = 'Download Updates';
+                    downloadBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        downloadUpdates(muuid);
+                    };
+
+                    headerDiv.appendChild(cover);
+                    headerDiv.appendChild(infoDiv);
+                    headerDiv.appendChild(downloadBtn);
+
+                    const chaptersList = document.createElement('div');
+                    chaptersList.className = 'chapters-list';
+                    chaptersList.id = `chapters-${muuid}`;
+
+                    const displayLimit = 3;
+                    chapters.forEach((chapter, index) => {
+                        const chapterLink = document.createElement('a');
+                        chapterLink.className = 'chapter-item';
+                        chapterLink.href = `/read/${chapter.id}/1`;
+
+                        const leftDiv = document.createElement('div');
+                        leftDiv.className = 'chapter-left';
+
+                        // TODO: Change to view status
+                        const flag = document.createElement('div');
+                        flag.className = 'chapter-flag';
+                        flag.textContent = (chapter.attributes.translatedLanguage || 'en').toUpperCase().slice(0, 2);
+
+                        const chapterInfo = document.createElement('div');
+                        chapterInfo.className = 'chapter-info';
+
+                        const titleLine = document.createElement('div');
+                        titleLine.className = 'chapter-title-line';
+                        const volText = chapter.attributes.volume ? `Vol. ${chapter.attributes.volume} ` : '';
+                        const chText = chapter.attributes.chapter ? `Ch. ${chapter.attributes.chapter}` : '';
+                        const chTitle = chapter.attributes.title ? ` - ${chapter.attributes.title}` : '';
+                        titleLine.textContent = `${volText}${chText}${chTitle}`;
+
+                        const meta = document.createElement('div');
+                        meta.className = 'chapter-meta';
+                        meta.textContent = `${chapter.attributes.uploader || 'Unknown'} • ${formatTimeAgo(chapter.attributes.createdAt)}`;
+
+                        chapterInfo.appendChild(titleLine);
+                        chapterInfo.appendChild(meta);
+
+                        const rightDiv = document.createElement('div');
+                        rightDiv.className = 'chapter-right';
+
+                        const pages = document.createElement('div');
+                        pages.className = 'chapter-pages';
+                        pages.innerHTML = `<span>📄</span><span>${chapter.attributes.pages}</span>`;
+
+                        rightDiv.appendChild(pages);
+                        leftDiv.appendChild(flag);
+                        leftDiv.appendChild(chapterInfo);
+                        chapterLink.appendChild(leftDiv);
+                        chapterLink.appendChild(rightDiv);
+
+                        chaptersList.appendChild(chapterLink);
+                    });
+
+                    mangaDiv.appendChild(headerDiv);
+                    mangaDiv.appendChild(chaptersList);
+
+                    if (chapters.length > displayLimit) {
+                        const expandBtn = document.createElement('button');
+                        expandBtn.className = 'expand-btn';
+                        expandBtn.textContent = `Show all ${chapters.length} chapters ▼`;
+                        let isExpanded = false;
+
+                        expandBtn.onclick = () => {
+                            isExpanded = !isExpanded;
+                            chaptersList.classList.toggle('expanded');
+                            expandBtn.textContent = isExpanded
+                                ? `Show less ▲`
+                                : `Show all ${chapters.length} chapters ▼`;
+                        };
+
+                        mangaDiv.appendChild(expandBtn);
+                    } else {
+                        chaptersList.classList.add('expanded');
+                    }
+
+                    container.appendChild(mangaDiv);
+
+                } catch (error) {
+                    console.error(`Error loading manga ${muuid}:`, error);
+                }
+            }
+        }
+
+        updatePage();
+    </script>
+</body>
+</html>

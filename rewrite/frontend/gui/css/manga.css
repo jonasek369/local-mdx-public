@@ -1,0 +1,633 @@
+/* manga.html — page-specific styles. Shared reset, theme variables and body defaults live in base.css. */
+
+/* This page uses a different shadow strength than the base theme */
+:root[data-theme="dark"] {
+    --md-shadow: rgba(0, 0, 0, 0.5);
+}
+:root[data-theme="light"] {
+    --md-shadow: rgba(0, 0, 0, 0.15);
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    color: var(--md-text);
+}
+
+.header {
+    position: relative;
+    min-height: 400px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    background: var(--md-surface);
+}
+
+.background-image {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: var(--cover-url);
+    background-size: cover;
+    background-position: center;
+    filter: blur(20px) brightness(0.3);
+    transform: scale(1.1);
+    z-index: 0;
+}
+
+.header-content {
+    position: relative;
+    z-index: 1;
+    max-width: 1400px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 40px 24px;
+    display: flex;
+    gap: 32px;
+    align-items: flex-start;
+}
+
+.back-button {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    background-color: var(--md-surface);
+    color: var(--md-text);
+    border: 1px solid var(--md-border);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    z-index: 2;
+}
+
+.back-button:hover {
+    background-color: var(--md-surface-hover);
+}
+
+.cover-image {
+    flex-shrink: 0;
+    width: 240px;
+    height: 360px;
+    background-image: var(--cover-url);
+    background-size: cover;
+    background-position: center;
+    border-radius: 6px;
+    box-shadow: 0 8px 24px var(--md-shadow);
+    transition: transform 0.3s ease;
+}
+
+.cover-image:hover {
+    transform: translateY(-4px);
+}
+
+.manga-info {
+    flex: 1;
+    color: white;
+}
+
+.manga-name {
+    font-size: 36px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8);
+}
+
+.manga-description {
+    font-size: 16px;
+    line-height: 1.7;
+    margin-bottom: 24px;
+    text-shadow: 1px 1px 4px rgba(0, 0, 0, 0.8);
+    max-width: 800px;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.button-success {
+    background-color: var(--md-success);
+}
+
+.button-success:hover {
+    background-color: #45a049;
+    transform: translateY(-2px);
+}
+
+.button-danger {
+    background-color: var(--md-danger);
+}
+
+.button-danger:hover {
+    background-color: #d32f2f;
+    transform: translateY(-2px);
+}
+
+.main-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 32px 24px;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.section-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--md-text);
+}
+
+.section-actions {
+    display: flex;
+    gap: 12px;
+    margin-left: auto; /* pushes buttons to the right */
+}
+
+.sort-button {
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    background-color: var(--md-surface);
+    color: var(--md-text);
+    border: 1px solid var(--md-border);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.sort-button:hover {
+    background-color: var(--md-surface-hover);
+    border-color: var(--md-accent);
+}
+
+.chapters-list {
+    display: grid;
+    gap: 12px;
+}
+
+.chapter-group {
+    background-color: var(--md-surface);
+    border: 1px solid var(--md-border);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.chapter-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-bottom: 1px solid var(--md-border);
+}
+
+.toggle-section-button {
+    padding: 8px 12px;
+    font-size: 14px;
+    font-weight: 500;
+    background-color: var(--md-surface);
+    color: var(--md-text);
+    border: 1px solid var(--md-border);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.toggle-section-button:hover {
+    background-color: var(--md-surface-hover);
+    border-color: var(--md-accent);
+}
+
+.toggle-icon {
+    transition: transform 0.3s ease;
+    font-size: 12px;
+}
+
+.toggle-icon.collapsed {
+    transform: rotate(-90deg);
+}
+
+.collapsible-section {
+    max-height: 500px;
+    overflow: hidden;
+    transition: max-height 0.3s ease, opacity 0.3s ease, margin 0.3s ease;
+    opacity: 1;
+    margin-bottom: 32px;
+}
+
+.collapsible-section.collapsed {
+    max-height: 0;
+    opacity: 0;
+    margin-bottom: 0;
+}
+
+.chapter-item:last-child {
+    border-bottom: none;
+}
+
+.chapter-item:hover {
+    background-color: var(--md-surface-hover);
+    transform: translateX(4px);
+}
+
+.chapter-item.read {
+    opacity: 0.5;
+}
+
+.chapter-item.read:hover {
+    opacity: 0.7;
+}
+
+.chapter-item.grouped {
+    background-color: var(--md-bg);
+}
+
+.chapter-item.grouped:hover {
+    background-color: var(--md-surface-hover);
+}
+
+.chapter-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background-color: var(--md-surface);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.chapter-header:hover {
+    background-color: var(--md-surface-hover);
+}
+
+.chapter-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
+.chapter-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+}
+
+.chapter-title {
+    flex: 1;
+    color: var(--md-text);
+    font-size: 15px;
+    font-weight: 500;
+}
+
+.chapter-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--md-accent);
+    color: white;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 12px;
+    min-width: 24px;
+}
+
+.expand-icon {
+    color: var(--md-text-secondary);
+    font-size: 18px;
+    transition: transform 0.3s ease;
+}
+
+.expand-icon.expanded {
+    transform: rotate(180deg);
+}
+
+.chapter-versions {
+    display: none;
+    border-top: 1px solid var(--md-border);
+}
+
+.chapter-versions.expanded {
+    display: block;
+}
+
+.chapter-meta {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    font-size: 13px;
+    color: var(--md-text-secondary);
+    flex-shrink: 0;
+}
+
+.meta-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.meta-icon {
+    opacity: 0.7;
+}
+
+.meta-divider {
+    width: 1px;
+    height: 14px;
+    background-color: var(--md-border);
+}
+
+.warning-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+}
+
+.warning-modal.active {
+    display: flex;
+}
+
+.warning-content {
+    background-color: var(--md-surface);
+    border: 1px solid var(--md-border);
+    border-radius: 8px;
+    padding: 32px;
+    max-width: 400px;
+    text-align: center;
+}
+
+.warning-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+}
+
+.warning-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--md-text);
+    margin-bottom: 12px;
+}
+
+.warning-text {
+    color: var(--md-text-secondary);
+    margin-bottom: 24px;
+    line-height: 1.5;
+}
+
+.warning-buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--md-text-secondary);
+}
+
+.empty-state-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+@media (max-width: 1024px) {
+    .header-content {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+    }
+
+    .manga-info {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .manga-description {
+        text-align: center;
+    }
+
+    .chapter-main {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .chapter-meta {
+        width: 100%;
+    }
+}
+
+@media (max-width: 768px) {
+    .header {
+        min-height: 300px;
+    }
+
+    .header-content {
+        padding: 30px 16px;
+        gap: 20px;
+    }
+
+    .cover-image {
+        width: 180px;
+        height: 270px;
+    }
+
+    .manga-name {
+        font-size: 28px;
+    }
+
+    .manga-description {
+        font-size: 14px;
+    }
+
+    .main-content {
+        padding: 24px 16px;
+    }
+
+    .section-title {
+        font-size: 20px;
+    }
+
+    .action-buttons {
+        width: 100%;
+    }
+
+    .button {
+        flex: 1;
+        justify-content: center;
+        min-width: 140px;
+    }
+
+    .chapter-meta {
+        flex-wrap: wrap;
+    }
+}
+
+.meta-link {
+    color: inherit;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.meta-link:hover {
+    text-decoration: underline;
+}
+
+.recommendations {
+    display: flex;
+    gap: 20px;
+    overflow-x: auto;
+    padding: 16px 0;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+}
+
+.recommendations::-webkit-scrollbar {
+    height: 8px;
+}
+
+.recommendations::-webkit-scrollbar-track {
+    background: var(--md-surface);
+    border-radius: 4px;
+}
+
+.recommendations::-webkit-scrollbar-thumb {
+    background: var(--md-accent);
+    border-radius: 4px;
+}
+
+.recommendations::-webkit-scrollbar-thumb:hover {
+    background: var(--md-accent-hover);
+}
+
+.recommendations-item {
+    position: relative;
+    flex: 0 0 auto;
+    cursor: pointer;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px var(--md-shadow);
+    transition: all 0.3s ease;
+}
+
+.recommendations-item:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 8px 24px var(--md-shadow);
+}
+
+.recommendations-item img {
+    display: block;
+    width: 196px;
+    height: 276px;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.recommendations-item:hover img {
+    transform: scale(1.05);
+}
+
+.subtitle {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    color: #fff;
+    padding: 2rem 1rem 1rem;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.7) 50%, transparent 100%);
+    font-size: 14px;
+    font-weight: 600;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+    transition: padding 0.3s ease;
+}
+
+.recommendations-item:hover .subtitle {
+    padding-bottom: 1.25rem;
+}
+
+@media (max-width: 768px) {
+    .recommendations {
+        gap: 16px;
+        padding: 12px 0;
+    }
+
+    .recommendations-item img {
+        width: 160px;
+        height: 225px;
+    }
+
+    .subtitle {
+        font-size: 13px;
+        padding: 1.5rem 0.75rem 0.75rem;
+    }
+}
+
+.cloud-status {
+    position: relative;
+    cursor: help;
+}
+
+.cloud-status .tooltip {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-bottom: 6px;
+
+    padding: 5px 8px;
+    border-radius: 4px;
+    background: #222;
+    color: white;
+    font-size: 12px;
+    white-space: nowrap;
+
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s ease;
+    pointer-events: none;
+}
+
+.cloud-status:hover .tooltip {
+    opacity: 1;
+    visibility: visible;
+}

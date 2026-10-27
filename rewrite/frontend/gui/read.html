@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ 'dark' if darktheme else 'light' }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ page }} | Chapter {{ chapter_no }}</title>
+	<link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+	<link rel="stylesheet" href="{{ url_for('static', filename='css/read.css') }}">
+</head>
+<body>
+    <!-- Loading overlay -->
+    <div class="loading-overlay" id="loading">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Loading chapter...</div>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="progress-bar">
+        <div class="progress-fill" id="progress"></div>
+    </div>
+
+    <!-- Top navigation bar -->
+    <div class="top-bar">
+        <div class="top-bar-left">
+            <a href="/manga/{{muuid}}" class="back-btn">← Back</a>
+            <span class="chapter-title">Chapter {{ chapter_no }}</span>
+        </div>
+
+        <div class="top-bar-center">
+            <div class="page-nav">
+                <button class="nav-btn" id="first-page" onclick="goToFirstPage()">⟪</button>
+                <button class="nav-btn" id="prev-page" onclick="page_back()">‹</button>
+                <div class="page-input-container">
+                    <input type="number" class="page-input" id="page-input" value="{{page}}" min="1" max="{{pages}}">
+                    <span class="page-total">/ {{pages}}</span>
+                </div>
+                <button class="nav-btn" id="next-page" onclick="page_next()">›</button>
+                <button class="nav-btn" id="last-page" onclick="goToLastPage()">⟫</button>
+            </div>
+        </div>
+
+        <div class="top-bar-right">
+            <button class="chapter-nav-btn" id="prev-chapter">← Previous</button>
+            <button class="chapter-nav-btn" id="next-chapter">Next →</button>
+        </div>
+    </div>
+
+    <!-- Side navigation zones -->
+    <div class="nav-zone left" onclick="page_back()">
+        <div class="nav-zone-icon">‹</div>
+    </div>
+    <div class="nav-zone right" onclick="page_next()">
+        <div class="nav-zone-icon">›</div>
+    </div>
+
+    <!-- Main content -->
+    <div class="content-wrapper">
+        <div class="page-container" id="content"></div>
+    </div>
+
+    <!-- Long strip footer navigation -->
+    <div class="longstrip-footer">
+        <div class="longstrip-footer-content">
+            <div class="longstrip-chapter-info">
+                End of Chapter {{ chapter_no }}
+            </div>
+            <div class="longstrip-nav-buttons">
+                <button class="longstrip-chapter-btn" id="longstrip-prev-chapter">← Previous Chapter</button>
+                <button class="longstrip-chapter-btn" id="longstrip-next-chapter">Next Chapter →</button>
+            </div>
+            <button class="longstrip-back-btn" onclick="window.location.href='/manga/{{muuid}}'">
+                Back to Manga
+            </button>
+        </div>
+    </div>
+
+    <script>
+        window.token = '{{ token }}';
+        const pageRenderMode = '{{ page_render }}';
+        const isLongStrip = pageRenderMode === 'LONG_STRIP';
+
+        const content = document.getElementById('content');
+        const loading = document.getElementById("loading");
+        const progress = document.getElementById("progress");
+        const pageInput = document.getElementById("page-input");
+        const firstPageBtn = document.getElementById("first-page");
+        const prevPageBtn = document.getElementById("prev-page");
+        const nextPageBtn = document.getElementById("next-page");
+        const lastPageBtn = document.getElementById("last-page");
+
+        let nextChapter = null;
+        let nextChapterLocal = 1;
+        let prevChapter = null;
+        let prevChapterLocal = 1;
+
+        let relocated = false;
+        let pageCount = {{pages}};
+        let page = {{page}};
+
+        // Apply long strip mode styling
+        if (isLongStrip) {
+            document.body.classList.add('long-strip');
+            document.querySelector('.content-wrapper').classList.add('long-strip');
+            content.classList.add('long-strip');
+        }
+
+        function updateProgress() {
+            const percentage = (page / pageCount) * 100;
+            progress.style.width = percentage + '%';
+        }
+
+        function updateNavButtons() {
+            firstPageBtn.disabled = page === 1;
+            prevPageBtn.disabled = page === 1 && prevChapter === null;
+            nextPageBtn.disabled = page === pageCount && nextChapter === null;
+            lastPageBtn.disabled = page === pageCount;
+        }
+
+        function goToFirstPage() {
+            if (page !== 1) {
+                set_page(1);
+            }
+        }
+
+        function goToLastPage() {
+            if (page !== pageCount) {
+                set_page(pageCount);
+            }
+        }
+
+        pageInput.addEventListener('change', (e) => {
+            let newPage = parseInt(e.target.value);
+            if (isNaN(newPage) || newPage < 1) newPage = 1;
+            if (newPage > pageCount) newPage = pageCount;
+            pageInput.value = newPage;
+            if (newPage !== page) {
+                set_page(newPage);
+            }
+        });
+
+        pageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                pageInput.blur();
+            }
+        });
+
+        async function full_load() {
+            if({{ local }} === 1){
+                await fetch("/manga/read-status", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        "cuuid": "{{ cuuid }}",
+                        "read_state": 1
+                    })
+                });
+
+                const totalPages = {{ pages }};
+                for (let i = 1; i <= totalPages; i++) {
+                    const img = document.createElement("img");
+
+                    img.src = `/page-image/{{cuuid}}/${i}`;
+                    img.loading = "lazy";
+                    img.decoding = "auto";
+
+                    if (!isLongStrip) {
+                        img.classList.add("hidden");
+                        img.addEventListener("click", handle_click);
+                    } else {
+                        img.addEventListener("click", handleLongStripClick);
+                    }
+
+                    content.appendChild(img);
+
+                    updateProgress();
+                    updateNavButtons();
+
+                    // Hide loader after last page loads
+                    if (i === totalPages) {
+                        loading.style.display = 'none';
+                    }
+                }
+                set_page(page)
+                window.scrollTo({ top: 0, behavior: 'instant' });
+            }
+            else{
+                let totalPages = 0;
+
+                fetch("https://api.mangadex.org/at-home/server/{{ cuuid }}")
+                    .then(response => response.json())
+                    .then(data => {
+                        // Sort pages by the number before the first "-"
+                        data.chapter.data.sort((a, b) => {
+                            const pageA = parseInt(a.split("-")[0], 10);
+                            const pageB = parseInt(b.split("-")[0], 10);
+                            return pageA - pageB;
+                        });
+
+                        totalPages = data.chapter.data.length;
+
+                        data.chapter.data.forEach((page, i) => {
+                            const img = document.createElement("img");
+
+                            img.src = `${data.baseUrl}/data/${data.chapter.hash}/${page}`;
+                            img.loading = "lazy";
+                            img.decoding = "auto";
+
+                            if (!isLongStrip) {
+                                img.classList.add("hidden");
+                                img.addEventListener("click", handle_click);
+                            } else {
+                                img.addEventListener("click", handleLongStripClick);
+                            }
+
+                            content.appendChild(img);
+
+                            updateProgress();
+                            updateNavButtons();
+
+                            // Hide loader after last page loads
+                            if (i === totalPages - 1) {
+                                loading.style.display = 'none';
+                            }
+                        });
+                    }).then(_ => {
+                        set_page(page)
+                        window.scrollTo({ top: 0, behavior: 'instant' });
+                    });
+            }
+        }
+
+
+        function set_page(to_page) {
+            if (isLongStrip || content.children.length === 0) return;
+
+            let current_page = content.children.item(page - 1);
+            let _set_page = content.children.item(to_page - 1);
+
+            if (current_page) current_page.classList.add("hidden");
+            if (_set_page) _set_page.classList.remove("hidden");
+
+            pageInput.value = to_page;
+            document.title = `${to_page} | Chapter {{ chapter_no }}`;
+
+            // Only scroll down on page changes, not on initial load
+            if (page !== to_page) {
+                const topBar = document.querySelector('.top-bar');
+                window.scrollTo({ top: topBar.offsetHeight, behavior: 'instant' });
+            }
+
+            page = to_page;
+            updateProgress();
+            updateNavButtons();
+        }
+
+        function handle_click(event) {
+            const image = event.target;
+            const boundingRect = image.getBoundingClientRect();
+            const clickX = event.clientX - boundingRect.left;
+            const imageWidth = boundingRect.width;
+            const midpoint = imageWidth / 2;
+
+            if (clickX < midpoint) {
+                page_back();
+            } else {
+                page_next();
+            }
+        }
+
+        function handleLongStripClick(event) {
+            const image = event.target;
+            const boundingRect = image.getBoundingClientRect();
+            const clickX = event.clientX - boundingRect.left;
+            const imageWidth = boundingRect.width;
+            const midpoint = imageWidth / 2;
+
+            const scrollAmount = window.innerHeight;
+
+            if (clickX < midpoint) {
+                // Scroll up
+                window.scrollBy({ top: -scrollAmount, behavior: 'smooth' });
+            } else {
+                // Scroll down
+                window.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+            }
+        }
+
+        function page_next() {
+            if (isLongStrip || relocated) return;
+
+            if (page >= pageCount) {
+                if (nextChapter !== null) {
+                    window.location.href = "/read/" + nextChapter + "/1?local="+nextChapterLocal;
+                    relocated = true;
+                } else {
+                    window.location.href = "/manga/{{muuid}}";
+                }
+                return;
+            }
+
+            set_page(page + 1);
+        }
+
+        function page_back() {
+            if (isLongStrip || relocated) return;
+
+            if (page <= 1) {
+                if (prevChapter !== null) {
+                    window.location.href = "/read/" + prevChapter + "?end=true&local=" + prevChapterLocal;
+                    relocated = true;
+                }
+                return;
+            }
+
+            set_page(page - 1);
+        }
+
+        document.addEventListener('keydown', (event) => {
+            if (document.activeElement === pageInput || isLongStrip) return;
+
+            switch (event.key) {
+                case "ArrowRight":
+                    page_next();
+                    break;
+                case "ArrowLeft":
+                    page_back();
+                    break;
+                case "Home":
+                    goToFirstPage();
+                    break;
+                case "End":
+                    goToLastPage();
+                    break;
+            }
+        });
+
+        // Update progress bar on scroll for long strip mode
+        if (isLongStrip) {
+            window.addEventListener('scroll', updateProgress);
+        }
+
+        full_load();
+
+        fetch("/read/next-prev/{{cuuid}}?local={{ local }}")
+            .then(response => response.json())
+            .then(data => {
+                nextChapter = data["next"];
+                nextChapterLocal = data["next_local"];
+                prevChapter = data["prev"];
+                prevChapterLocal = data["prev_local"]
+
+
+                const prevBtn = document.getElementById('prev-chapter');
+                const nextBtn = document.getElementById('next-chapter');
+                const longstripPrevBtn = document.getElementById('longstrip-prev-chapter');
+                const longstripNextBtn = document.getElementById('longstrip-next-chapter');
+
+                if (prevChapter) {
+                    prevBtn.style.display = 'inline-block';
+                    prevBtn.onclick = () => {
+                        window.location.href = "/read/" + prevChapter + "?end=true&local="+prevChapterLocal;
+                    };
+
+                    longstripPrevBtn.classList.add('visible');
+                    longstripPrevBtn.onclick = () => {
+                        window.location.href = "/read/" + prevChapter + "?end=true&local="+prevChapterLocal;
+                    };
+                }
+
+                if (nextChapter) {
+                    nextBtn.style.display = 'inline-block';
+                    nextBtn.onclick = () => {
+                        window.location.href = "/read/" + nextChapter + "/1?local="+nextChapterLocal;
+                    };
+
+                    longstripNextBtn.classList.add('visible');
+                    longstripNextBtn.onclick = () => {
+                        window.location.href = "/read/" + nextChapter + "/1?local="+nextChapterLocal;
+                    };
+                }
+
+                updateNavButtons();
+            });
+    </script>
+</body>
+</html>

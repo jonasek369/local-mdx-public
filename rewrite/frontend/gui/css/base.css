@@ -1,0 +1,69 @@
+/*
+ * base.css — styles shared by every page.
+ *
+ * Loaded first on every page, followed by that page's own stylesheet
+ * (css/<page>.css) which holds everything specific to that page.
+ *
+ * Theming: each page sets data-theme="dark" or data-theme="light" on <html>
+ * (server-side, from the `darktheme` setting). Light is the default.
+ */
+
+/* ---------- Reset ---------- */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* ---------- Theme variables ---------- */
+:root {
+    --md-bg: #f5f5f5;
+    --md-surface: #ffffff;
+    --md-surface-hover: #f9f9f9;
+    --md-border: #e0e0e0;
+    --md-text: #1a1a1a;
+    --md-text-secondary: #666666;
+    --md-accent: #ff6740;
+    --md-accent-hover: #ff7d5c;
+    --md-success: #4caf50;
+    --md-danger: #f44336;
+    --md-shadow: rgba(0, 0, 0, 0.1);
+}
+
+:root[data-theme="dark"] {
+    --md-bg: #1a1a1a;
+    --md-surface: #242424;
+    --md-surface-hover: #2a2a2a;
+    --md-border: #3a3a3a;
+    --md-text: #e8e8e8;
+    --md-text-secondary: #a0a0a0;
+    --md-accent: #ff6740;
+    --md-accent-hover: #ff7d5c;
+    --md-success: #4caf50;
+    --md-danger: #f44336;
+    --md-shadow: rgba(0, 0, 0, 0.3);
+}
+
+/* ---------- Body defaults ---------- */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
+    background-color: var(--md-bg);
+}
+
+/* ---------- Shared animations ---------- */
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

@@ -1,0 +1,28 @@
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE files
+.idea/
+.vscode/
+
+# Database files
+*.db
+
+# System files
+.DS_Store
+
+# Other
+.env
+
+# Logs
+/rewrite/frontend/logs
+
+# For updates
+/rewrite/frontend/mangadex_account.json
+*.token
+.token
+
+# venv
+/venv/

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ 'dark' if darktheme else 'light' }}">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>LMDX - Login</title>
+	<link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+	<link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h2>Mangadex App Credentials</h2>
+        <form onsubmit="handle_login(); return false;">
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" required>
+
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required>
+
+            <label for="client-id">Client ID</label>
+            <input type="text" id="client-id" name="client-id" required>
+
+            <label for="client-secret">Client Secret</label>
+            <input type="password" id="client-secret" name="client-secret" required>
+
+            <input type="submit" value="Save Credentials">
+			<input type="button" value="Clear keyring" onclick="clear_keyring()">
+        </form>
+	</div>
+
+<script>
+    window.token = '{{ token }}';
+	const redirect = "{{ back_redirect }}";
+
+    function clear_keyring() {
+        fetch("/auth/null-credentials")
+	}
+
+    function handle_login() {
+        const payload = {
+            username: document.getElementById("username").value,
+            password: document.getElementById("password").value,
+            client_id: document.getElementById("client-id").value,
+            client_secret: document.getElementById("client-secret").value
+        };
+
+        fetch('auth/set-credentials', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'ok') {
+                window.location.href = redirect;
+            } else {
+                alert('Login failed. Please check your credentials.');
+            }
+        })
+        .catch(() => alert('An error occurred while saving credentials.'));
+    }
+</script>
+</body>
+</html>

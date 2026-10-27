@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ 'dark' if darktheme else 'light' }}">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Download Manager</title>
+	<link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+	<link rel="stylesheet" href="{{ url_for('static', filename='css/download-manager.css') }}">
+</head>
+<body>
+<div class="header">
+    <h1>Download Manager</h1>
+    <div class="status-indicator">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="downloader-state">Ready</span>
+    </div>
+</div>
+
+<div class="container">
+    <!-- Queue Section -->
+    <div class="section">
+        <div class="section-header">
+            <h2 class="section-title">Queue</h2>
+            <div class="controls">
+                <button onclick="start_download()" class="button">Start Download</button>
+                <button onclick="stop_download()" class="button button-secondary">Stop Download</button>
+            </div>
+        </div>
+        <div id="queue" class="card">
+            <div class="table-header">
+                <div>Title</div>
+                <div>Actions</div>
+            </div>
+            <div class="empty-state">No items in queue</div>
+        </div>
+    </div>
+
+
+    <!-- Currently Downloading Section -->
+    <div class="section">
+        <h2 class="section-title">Currently Downloading</h2>
+        <div id="currently-working-on" class="card">
+            <div class="empty-state">No active downloads</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    window.token = '{{ token }}';
+
+    function start_download() {
+        fetch("/downloader/start")
+    }
+
+    function stop_download() {
+        fetch("/downloader/stop")
+	}
+
+    function update_state(data){
+		const queue = document.getElementById("queue");
+
+		// TODO: Dont remove all the cells
+        while (queue.firstChild) {
+            queue.removeChild(queue.firstChild);
+        }
+
+        // Add header
+        const headerDiv = document.createElement("div");
+        headerDiv.className = "table-header";
+        headerDiv.innerHTML = `
+            <div>Title</div>
+            <div>Actions</div>
+        `;
+        queue.appendChild(headerDiv);
+
+        if (Object.keys(data.queue).length === 0) {
+            const emptyDiv = document.createElement("div");
+            emptyDiv.className = "empty-state";
+            emptyDiv.textContent = "No items in queue";
+            queue.appendChild(emptyDiv);
+        } else {
+            Object.keys(data.queue).forEach((key, index) => {
+                const EntryDiv = document.createElement("div");
+                EntryDiv.className = "row";
+
+                const EntryText = document.createElement("div");
+                EntryText.className = "cell cell-title";
+                EntryText.innerHTML = data.queue[key]
+
+                const ActionsCell = document.createElement("div");
+                ActionsCell.className = "cell cell-actions";
+
+                const PushToTopButton = document.createElement("button");
+                PushToTopButton.className = "button button-small button-success";
+                PushToTopButton.innerHTML = "↑ Push to top";
+                PushToTopButton.addEventListener("click", function () {
+                    fetch("/downloader/push-to-top", {method: "POST", body: JSON.stringify({"identifier": key})});
+                });
+
+                const RemoveButton = document.createElement("button");
+                RemoveButton.className = "button button-small button-danger";
+                RemoveButton.innerHTML = "Remove";
+                RemoveButton.addEventListener("click", function () {
+                    fetch("/downloader/pop-job", {method: "POST", body: JSON.stringify({"identifier": key})});
+                });
+
+                ActionsCell.appendChild(PushToTopButton);
+                ActionsCell.appendChild(RemoveButton);
+
+                EntryDiv.appendChild(EntryText);
+                EntryDiv.appendChild(ActionsCell);
+                queue.append(EntryDiv);
+            });
+        }
+
+        const divUpdates = document.getElementById("currently-working-on");
+		while (divUpdates.firstChild) {
+            divUpdates.removeChild(divUpdates.firstChild);
+		}
+
+
+		const divRow = document.createElement("div");
+        divRow.className = "row";
+
+        const stateText = document.getElementById("downloader-state");
+        const statusDot = document.getElementById("status-dot");
+
+		statusDot.classList.remove('paused', 'rate-limited');
+
+
+		if (data.state === "DOWNLOADING") {
+		    stateText.innerHTML = "Downloading";
+		} else if (data.state === "Awaiting") {
+		    stateText.innerHTML = "Waiting";
+		    statusDot.classList.add('paused');
+		} else if (data.state === "RATELIMITED") {
+		    stateText.innerHTML = "Ratelimited";
+		    statusDot.classList.add('rate-limited');
+		} else {
+		    stateText.innerHTML = "Ready";
+		}
+
+        if(data.currently_working_on == null){
+            const emptyDiv = document.createElement("div");
+            emptyDiv.className = "empty-state";
+            emptyDiv.textContent = "No active downloads";
+            divUpdates.appendChild(emptyDiv);
+            return;
+		}
+		const a = document.createElement("div");
+        a.className = "cell download-info"
+		a.id = "cwo"
+        let chapter_perc = Math.round((100 * data.currently_working_on.chapter_status[0]) / data.currently_working_on.chapter_status[1]);
+        a.innerHTML = `
+            <div class="download-title">${data.currently_working_on.title}</div>
+            <div class="progress-container">
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${chapter_perc}%"></div>
+                </div>
+                <div class="progress-text">${chapter_perc}% complete</div>
+            </div>
+        `;
+        divRow.appendChild(a);
+        divUpdates.append(divRow);
+	}
+
+
+
+	const source = new EventSource("/downloader/stream");
+
+    source.onmessage = (event) => {
+	    const data = JSON.parse(event.data);
+	    update_state(data);
+	}
+
+</script>
+</body>
+</html>

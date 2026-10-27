@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ 'dark' if darktheme else 'light' }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Library</title>
+	<link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+	<link rel="stylesheet" href="{{ url_for('static', filename='css/library.css') }}">
+</head>
+<body>
+    <div class="header">
+        <div class="header-left">
+            <h1 class="page-title">My Library</h1>
+            <span class="library-count" id="library-count">0 manga</span>
+        </div>
+        <div class="view-toggle">
+            <button class="view-button active" id="grid-view" onclick="setView('grid')">Grid</button>
+            <button class="view-button" id="compact-view" onclick="setView('compact')">Compact</button>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div id="content" class="library-grid">
+            <div class="loading-state">
+                <div class="loading-spinner"></div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    window.token = '{{ token }}';
+    let currentView = 'grid';
+
+    function setView(view) {
+        currentView = view;
+        const grid = document.getElementById('content');
+        const gridBtn = document.getElementById('grid-view');
+        const compactBtn = document.getElementById('compact-view');
+
+        if (view === 'grid') {
+            grid.classList.remove('compact');
+            gridBtn.classList.add('active');
+            compactBtn.classList.remove('active');
+        } else {
+            grid.classList.add('compact');
+            compactBtn.classList.add('active');
+            gridBtn.classList.remove('active');
+        }
+
+        // Save preference
+        localStorage.setItem('libraryView', view);
+    }
+
+    function set_library(data) {
+        const elem = document.getElementById("content");
+        const countElem = document.getElementById("library-count");
+
+        // Clear loading state
+        while (elem.firstChild) {
+            elem.removeChild(elem.firstChild);
+        }
+
+        const entries = Object.entries(data);
+
+        // Update count
+        countElem.textContent = `${entries.length} manga`;
+
+        if (entries.length === 0) {
+            const emptyState = document.createElement("div");
+            emptyState.className = "empty-state";
+            emptyState.innerHTML = `
+                <div class="empty-state-icon">📚</div>
+                <div class="empty-state-title">Your library is empty</div>
+                <div class="empty-state-text">Start adding manga to build your collection</div>
+            `;
+            elem.appendChild(emptyState);
+            return;
+        }
+
+        for (const [key, value] of entries) {
+            const card = document.createElement("div");
+            card.className = "manga-card";
+
+            const cover = document.createElement("div");
+            cover.className = "manga-card-cover";
+
+            const img = document.createElement("img");
+            img.setAttribute("alt", value[0] + " cover art");
+            img.src = "/api/manga/cover/" + key + "?size=256";
+            img.onerror = function() {
+                this.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='150'%3E%3Crect width='100' height='150' fill='%23333'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' fill='%23666' font-size='12'%3ENo Cover%3C/text%3E%3C/svg%3E";
+            };
+
+            cover.appendChild(img);
+
+            const content = document.createElement("div");
+            content.className = "manga-card-content";
+
+            const title = document.createElement("div");
+            title.className = "manga-card-title";
+            title.textContent = value[0];
+
+            const desc = document.createElement("div");
+            desc.className = "manga-card-description";
+
+            let description = value[1] || "No description available.";
+
+            // Clean up description
+            if (description.indexOf("\n") !== -1) {
+                description = description.substring(0, description.indexOf("\n"));
+            }
+
+            desc.textContent = description;
+
+            content.appendChild(title);
+            content.appendChild(desc);
+
+            card.appendChild(cover);
+            card.appendChild(content);
+
+            card.onclick = function () {
+                window.location.href = "/manga/" + key + "?from=/library";
+            }
+
+            elem.appendChild(card);
+        }
+    }
+
+    // Load saved view preference
+    const savedView = localStorage.getItem('libraryView');
+    if (savedView) {
+        setView(savedView);
+    }
+
+
+    function updateLibrary(){
+        fetch("/library/update")
+	}
+
+    fetch("/library/data")
+        .then(response => response.json())
+        .then(data => set_library(data.response))
+        .catch(error => {
+            console.error('Error loading library:', error);
+            const elem = document.getElementById("content");
+            while (elem.firstChild) {
+                elem.removeChild(elem.firstChild);
+            }
+            const errorState = document.createElement("div");
+            errorState.className = "empty-state";
+            errorState.innerHTML = `
+                <div class="empty-state-icon">⚠️</div>
+                <div class="empty-state-title">Failed to load library</div>
+                <div class="empty-state-text">Please try refreshing the page</div>
+            `;
+            elem.appendChild(errorState);
+        });
+</script>
+</body>
+</html>
