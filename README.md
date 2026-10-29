@@ -34,3 +34,4 @@ It allows you to download manga to your local drive and read them offline.
 
 - [x] Redundant API calls for cover art
 - [ ] Downloader rate-limit timeouts send extra requests
+- [ ] External mangas wont work if your not running on localhost (because of CORS) FIX: make the local app a proxy
